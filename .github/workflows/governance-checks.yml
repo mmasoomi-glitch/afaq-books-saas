@@ -1,0 +1,174 @@
+name: governance-checks
+
+# Sprint 000 / bootstrap CI. Verifies what we can verify *right now*:
+# governance docs, hook scripts, and the absence of obvious secrets.
+# Replaced by the full pipeline in sprint 001 once Next.js / TS /
+# Prisma / Vitest / Playwright are installed.
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  hooks-parse:
+    name: Hook scripts parse cleanly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n every hook script
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          for f in .claude/hooks/*.sh; do
+            if ! bash -n "$f"; then
+              echo "::error file=$f::syntax error"
+              fail=1
+            else
+              echo "OK $f"
+            fi
+          done
+          exit "$fail"
+
+  hooks-functional:
+    name: Hook scripts block what they should
+    runs-on: ubuntu-latest
+    needs: hooks-parse
+    steps:
+      - uses: actions/checkout@v4
+      - name: install jq (already present on ubuntu-latest, sanity-check)
+        run: jq --version
+      - name: block-dangerous-git rejects push to develop
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin develop"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: block-dangerous-git rejects --no-verify
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git commit --no-verify -m x"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: block-dangerous-git rejects force push
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --force origin x"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: block-dangerous-git allows feature-branch push
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push -u origin agent/04-ledger-core-sprint-001"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=0'
+      - name: check-agent-ownership blocks cross-owner write
+        run: |
+          set -e
+          out=$(AFAQ_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo x > prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: check-agent-ownership allows owner write
+        run: |
+          set -e
+          out=$(AFAQ_AGENT=ledger-core bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo x > prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=0'
+
+  governance-docs-present:
+    name: Governance documents exist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: required files
+        run: |
+          set -e
+          required=(
+            CLAUDE.md
+            .gitignore
+            .gitattributes
+            .claude/settings.json
+            .claude/hooks/block-dangerous-git.sh
+            .claude/hooks/check-agent-ownership.sh
+            .claude/hooks/README.md
+            .claude/rules/git-collaboration.md
+            .claude/rules/accounting-integrity.md
+            .claude/rules/security-tenancy.md
+            .claude/rules/no-mocks-no-stubs.md
+            .claude/rules/ai-hallucination-memory.md
+            .claude/rules/testing-release-gates.md
+            docs/coordination/PROJECT_BRIEF.md
+            docs/coordination/ARCHITECTURE_DECISIONS.md
+            docs/coordination/adr/0001-stack-nextjs15-prisma-postgres-authjs.md
+            docs/coordination/OWNERSHIP.md
+            docs/coordination/SPRINT_BOARD.md
+            docs/coordination/BLOCKERS.md
+            docs/coordination/INTEGRATION_LOG.md
+            docs/coordination/GITHUB_BRANCH_PROTECTION_REQUIRED.md
+            docs/IMPLEMENTATION_STATUS.md
+            .github/PULL_REQUEST_TEMPLATE.md
+            .github/CONTRIBUTING.md
+          )
+          fail=0
+          for f in "${required[@]}"; do
+            if [[ ! -f "$f" ]]; then
+              echo "::error file=$f::required governance file is missing"
+              fail=1
+            else
+              echo "OK $f"
+            fi
+          done
+          # 12 agent prompts
+          n=$(ls docs/coordination/agent-prompts/[0-9][0-9]-*.md 2>/dev/null | wc -l)
+          if [[ "$n" -ne 12 ]]; then
+            echo "::error::expected 12 agent-prompt files, found $n"
+            fail=1
+          fi
+          exit "$fail"
+
+  yaml-syntax:
+    name: YAML files parse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: python yaml round-trip every .yml/.yaml
+        run: |
+          python - <<'PY'
+          import glob, sys
+          try:
+              import yaml
+          except ImportError:
+              import subprocess; subprocess.check_call([sys.executable, "-m", "pip", "install", "pyyaml"])
+              import yaml
+          fail = 0
+          for f in glob.glob("**/*.yml", recursive=True) + glob.glob("**/*.yaml", recursive=True):
+              try:
+                  list(yaml.safe_load_all(open(f, "r", encoding="utf-8")))
+                  print("OK", f)
+              except Exception as e:
+                  print(f"::error file={f}::{e}")
+                  fail = 1
+          sys.exit(fail)
+          PY
+
+  secret-scan:
+    name: gitleaks (no secrets in diff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Soft-fail not used; a real secret should hard-fail the PR.

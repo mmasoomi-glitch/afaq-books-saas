@@ -1,0 +1,71 @@
+# --- Node / npm / pnpm / yarn ---
+node_modules/
+.pnp
+.pnp.js
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnpm-store/
+
+# --- Next.js ---
+.next/
+out/
+build/
+dist/
+next-env.d.ts
+
+# --- TypeScript ---
+*.tsbuildinfo
+
+# --- Prisma ---
+# committed: prisma/schema.prisma, prisma/migrations/
+# ignored: any local-only dev artifacts
+prisma/migrations/dev.db*
+prisma/*.db
+prisma/*.db-journal
+
+# --- Environment files ---
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# --- Test coverage / artifacts ---
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+.vitest-cache/
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Editor / OS ---
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json.example
+!.vscode/extensions.json
+.idea/
+
+# --- Local Claude state ---
+.claude/local/
+.claude/sessions/
+.claude/settings.local.json
+
+# --- Local memory dumps (never commit memory snapshots) ---
+memory/
+*.memory.json
+
+# --- Misc ---
+*.pem
+*.key
+*.crt
+.turbo/
+.vercel/

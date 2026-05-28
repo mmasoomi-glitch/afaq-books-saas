@@ -114,6 +114,7 @@ jobs:
             docs/coordination/BLOCKERS.md
             docs/coordination/INTEGRATION_LOG.md
             docs/coordination/GITHUB_BRANCH_PROTECTION_REQUIRED.md
+            docs/coordination/agent-prompts/00-README.md
             docs/IMPLEMENTATION_STATUS.md
             .github/PULL_REQUEST_TEMPLATE.md
             .github/CONTRIBUTING.md
@@ -127,11 +128,14 @@ jobs:
               echo "OK $f"
             fi
           done
-          # 12 agent prompts
-          n=$(ls docs/coordination/agent-prompts/[0-9][0-9]-*.md 2>/dev/null | wc -l)
+          # 12 numbered agent prompts: 01..12 (00-README is checked above)
+          n=$(ls docs/coordination/agent-prompts/0[1-9]-*.md \
+                 docs/coordination/agent-prompts/1[0-2]-*.md 2>/dev/null | wc -l)
           if [[ "$n" -ne 12 ]]; then
-            echo "::error::expected 12 agent-prompt files, found $n"
+            echo "::error::expected 12 numbered agent-prompt files (01..12), found $n"
             fail=1
+          else
+            echo "OK 12 numbered agent-prompt files present"
           fi
           exit "$fail"
 

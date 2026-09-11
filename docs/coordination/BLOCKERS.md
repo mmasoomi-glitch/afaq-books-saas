@@ -405,6 +405,64 @@ for this stage." Code review is a person, and people merge things at 2am.
 
 ---
 
+### B-20260911-06 — No rate limiting on sign-in, sign-up or password reset
+
+- **Filed by:** Lead Orchestrator, on the independent judge's verdict
+- **Date:** 2026-09-11
+- **Status:** open
+- **Type:** blocker — **hard precondition on the HTTP layer**
+
+**What I need**
+
+The owner to choose a rate-limiting strategy, and PLATFORM-GUARDIAN or
+AUTH-TENANCY to implement it, **before any HTTP surface exists**.
+
+**Judge's verdict, recorded verbatim**
+
+> "Rate limiting strategy and implementation for sign-in/sign-up/reset ||
+> MEANWHILE: Implement the rate limiter and integrate it into the auth
+> endpoints before enabling the HTTP layer."
+
+**Why this is needed**
+
+`.claude/rules/security-tenancy.md` requires sign-in, sign-up and
+password-reset to be rate limited. The session layer merged in PR #7
+implements none of it.
+
+What exists is not a substitute. argon2id at the pinned parameters costs
+roughly 19 MiB and a few tens of milliseconds per attempt, which raises the
+price of guessing but does not cap it. The dummy-verify timing defence
+addresses a different attack entirely — it stops an attacker learning *which
+addresses are registered*; it does nothing against someone who simply tries
+many passwords against one address.
+
+Registration compounds it: `registerUser` must tell a caller their email is
+already taken, so it is an account-enumeration oracle by design. That is
+acceptable only when paired with rate limiting and email confirmation, and
+neither exists.
+
+**Why it does not block the merge of PR #7**
+
+Nothing is deployed. There is no HTTP surface, no cookie handling, no route
+that an attacker could reach. The judge's condition is explicitly scoped to
+"before enabling the HTTP layer", and that is when this must be satisfied.
+
+**Asks**
+
+- Repository owner: choose the strategy. The realistic options are a fixed
+  window or token bucket in Postgres (no new infrastructure, adequate at this
+  scale), or Redis (better under load, new operational dependency).
+- Whoever implements it: limit per source address AND per account, because
+  those defend against different attacks — spraying many accounts from one
+  address, versus grinding one account from many addresses.
+- Record failed attempts in the security audit trail, which
+  `security-tenancy.md` already requires.
+- GITKEEPER: do not approve any pull request that introduces an HTTP route to
+  the auth surface until this is closed.
+
+---
+
+
 ## Resolved
 
 - **`B-20260911-01`** — ownership hook now gates `Write`/`Edit` and knows the

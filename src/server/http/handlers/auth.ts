@@ -181,26 +181,34 @@ export function signInHandler(
     if (req.method !== "POST") return methodNotAllowed("POST");
 
     try {
-      // Sign-in does NOT call verifyCsrf, and the reason is structural rather
-      // than an oversight: the client has no CSRF cookie yet, because the thing
-      // that issues one is the very request being made. Double-submit has
-      // nothing to compare.
-      //
-      // The residual exposure is login CSRF — a hostile page making a victim's
-      // browser sign in as the ATTACKER, so that the invoices and journal
-      // entries the victim then creates land in the attacker's organization and
-      // are readable by them. In an accounting product that is a real loss, not
-      // a curiosity.
-      //
-      // So the Origin check, which is only a second layer on other endpoints,
-      // is the primary control here. It is not complete: a caller that omits
-      // Origin passes it (see assertSameOrigin for why absence cannot be
-      // treated as hostile). Closing it properly needs a pre-session token
-      // issued by the sign-in page itself and echoed on submit — which requires
-      // a page, and there is not one yet. Recorded as follow-up in
-      // BLOCKERS.md#B-20260912-01.
       const expectedOrigin = config?.expectedOrigin;
       if (expectedOrigin !== undefined) assertSameOrigin(req, expectedOrigin);
+
+      // Sign-in IS csrf-protected now, which it could not be before.
+      //
+      // The old circularity was real: the token cookie was issued BY the
+      // sign-in response, so there was nothing to submit twice. `src/middleware.ts`
+      // breaks it by committing the cookie one request earlier, on the page that
+      // carries the form, and handing the same value to the renderer to embed.
+      //
+      // What this closes is login CSRF — a hostile page making a victim's
+      // browser sign in as the ATTACKER, so the invoices and journal entries the
+      // victim then creates land in the attacker's organization and are readable
+      // by them. In an accounting product that is a real loss of confidential
+      // data, not a curiosity.
+      //
+      // Worth recording honestly: `SameSite=Lax` already blocks cookies on a
+      // cross-site POST, so the forged request arrives with no cookie and is
+      // refused on that ground alone. This check is therefore defence in depth
+      // rather than the only thing standing there — it covers clients that do
+      // not implement SameSite, and it fails closed if the cookie's attributes
+      // are ever loosened. See B-20260912-01.
+      //
+      // The cost, stated: a non-browser client must now fetch the sign-in page
+      // for a token before it can authenticate. That is the correct trade for a
+      // browser-facing product; a machine-to-machine path would want API keys,
+      // not this.
+      verifyCsrf(req);
 
       const credentials = readCredentials(req.body);
       if (credentials === undefined) {
@@ -313,10 +321,16 @@ export function registerHandler(
     if (req.method !== "POST") return methodNotAllowed("POST");
 
     try {
-      // No CSRF check, for the same structural reason as sign-in: there is no
-      // session and therefore no cookie to double-submit.
       const expectedOrigin = config?.expectedOrigin;
       if (expectedOrigin !== undefined) assertSameOrigin(req, expectedOrigin);
+
+      // Protected for the same reason and by the same mechanism as sign-in:
+      // the middleware issues the token on the registration page. A forged
+      // registration is a lesser harm than a forged sign-in — it creates an
+      // account rather than capturing the victim's work — but it is still an
+      // account created in someone's name, and the cost of covering it is one
+      // line.
+      verifyCsrf(req);
 
       const credentials = readCredentials(req.body);
       if (credentials === undefined) {

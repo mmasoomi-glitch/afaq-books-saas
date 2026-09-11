@@ -39,6 +39,13 @@ function newEmail(): string {
   return `${randomUUID()}@example.test`;
 }
 
+/**
+ * Sign-in and registration now verify a CSRF pair, so a request that is meant
+ * to reach the handler has to carry one — the same pair a browser gets from the
+ * sign-in page. Tests that are ABOUT the absence build their Request directly.
+ */
+const CSRF = "csrf-token-for-tests-0123456789";
+
 function request(
   method: string,
   init?: { path?: string; headers?: Record<string, string>; body?: unknown },
@@ -48,6 +55,8 @@ function request(
     method,
     headers: {
       ...(hasBody ? { "content-type": "application/json" } : {}),
+      cookie: `${CSRF_COOKIE}=${CSRF}`,
+      "x-csrf-token": CSRF,
       ...init?.headers,
     },
     ...(hasBody ? { body: JSON.stringify(init.body) } : {}),
@@ -227,6 +236,9 @@ test("A13: the cookies the adapter emits are the ones it can read back", async (
     }),
   );
   expect(out.status).toBe(204);
+  // The pair that came back from sign-in is the one that worked — not the
+  // fixture default, which the explicit headers above replaced.
+  expect(csrf).not.toBe(CSRF);
 });
 
 test("A14: an unsupported method reaches the client as 405, not 500", async () => {

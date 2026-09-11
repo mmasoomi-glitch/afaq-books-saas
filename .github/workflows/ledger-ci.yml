@@ -107,6 +107,18 @@ jobs:
       - name: Accounting-invariant tests
         run: pnpm test
 
+      # The typecheck above runs `tsc --noEmit`, which is NOT the same question
+      # as "does this build". `moduleResolution: "bundler"` tells the type
+      # checker to behave as a bundler would; it does not configure the bundler,
+      # and the two disagreed on the `.js` import suffixes — tsc passed while
+      # `next build` could not resolve a single route file. See ADR-0002.
+      #
+      # So the build is its own gate. Without it, a resolution or a server/client
+      # boundary error reaches whoever runs `next build` next, with no hint that
+      # CI ever had an opinion.
+      - name: Production build
+        run: pnpm build
+
 
       - name: Assert nothing bypasses the authorization gate
         run: |

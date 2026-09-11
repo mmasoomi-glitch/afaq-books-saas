@@ -61,7 +61,7 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 | 002-1 | AUTH-TENANCY | Hand-rolled session layer: argon2id, sha256-stored tokens, membership re-resolved per request | done | PR #9 merged |
 | 002-2 | AUTH-TENANCY | Rate limiting on sign-in and sign-up, Postgres fixed window, both dimensions | done | PR #9 merged. `B-20260911-06` closed |
 | 002-3 | AUTH-TENANCY | Branded `LedgerScope` so an unauthorized caller does not compile | done | PR #10 merged. `B-20260911-05` closed |
-| 002-4 | AUTH-TENANCY | Framework-agnostic HTTP layer, `__Host-` cookies, double-submit CSRF, sliding session renewal | done, awaiting review | `agent/03-http-layer-sprint-002` @ `7cd306d`. `B-20260911-10` closed; `B-20260912-01`/`-02` filed |
+| 002-4 | AUTH-TENANCY | Framework-agnostic HTTP layer, `__Host-` cookies, double-submit CSRF, sliding session renewal | done, reviewed | `agent/03-http-layer-sprint-002` @ `6795417`, 209 tests. `B-20260911-10` closed; `B-20260912-01`/`-02`/`-03` filed. Review found one real defect (email case), fixed in the same branch |
 | 002-5 | PLATFORM-GUARDIAN | Next.js 15 scaffold; route handlers that delegate to `src/server/http/` | not started | blocked on nothing — the handler layer is ready to adapt |
 | 002-6 | ARCHITECT | Row Level Security | not started | `B-20260911-04` |
 
@@ -81,21 +81,22 @@ $ npx vitest run
  ✓ tests/integration/auth/rate-limit.test.ts (17 tests)
  ✓ tests/integration/auth/scope.test.ts (11 tests)
  ✓ tests/integration/auth/guarded.test.ts (10 tests)
- ✓ tests/integration/auth/session.test.ts (14 tests)
+ ✓ tests/integration/auth/session.test.ts (17 tests)
  ✓ tests/integration/auth/session-renewal.test.ts (8 tests)
  ✓ tests/integration/reports/guarded-reports.test.ts (7 tests)
 
  Test Files  12 passed (12)
-      Tests  206 passed (206)
+      Tests  209 passed (209)
 
 $ npx prisma migrate diff --from-migrations prisma/migrations     --to-schema-datamodel prisma/schema.prisma --exit-code
 No difference detected.
 ```
 
-All 206 tests pass on `agent/03-http-layer-sprint-002` @ `7cd306d`.
-Previous total was 143, so 63 are new: 30 covering cookie serialisation,
+All 209 tests pass on `agent/03-http-layer-sprint-002` @ `6795417`.
+Previous total was 143, so 66 are new: 30 covering cookie serialisation,
 parsing and the CSRF comparison; 24 covering the auth handlers end to end
 against a real database; 8 covering sliding renewal and the absolute ceiling;
+3 covering email normalisation after review found a case-sensitivity defect;
 1 added to the rate-limit suite asserting `enforce` returns promptly.
 
 **Known limitations, stated rather than discovered later.** Nothing serves

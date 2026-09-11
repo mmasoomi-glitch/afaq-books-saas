@@ -1,0 +1,31 @@
+/**
+ * A truthful placeholder.
+ *
+ * `.claude/rules/no-mocks-no-stubs.md` forbids a page that implies working
+ * functionality it does not have — no fake dashboard cards, no "$12,438 owed"
+ * with nothing behind it, no navigation into features that do not exist. So
+ * this page says exactly what is true: the API is real, the interface is not
+ * built, and it names where the work is tracked.
+ *
+ * FRONTEND-UX replaces this with the actual shell.
+ */
+export default function Home() {
+  return (
+    <main>
+      <h1>Afaq Books</h1>
+      <p>
+        The accounting API is running. There is no user interface yet — the
+        sign-in, ledger and reporting screens have not been built.
+      </p>
+      <p>
+        Available endpoints: <code>POST /api/auth/register</code>,{" "}
+        <code>POST /api/auth/signin</code>,{" "}
+        <code>POST /api/auth/signout</code>, <code>GET /api/auth/session</code>.
+      </p>
+      <p>
+        Progress is tracked in <code>docs/coordination/SPRINT_BOARD.md</code>{" "}
+        and known gaps in <code>docs/coordination/BLOCKERS.md</code>.
+      </p>
+    </main>
+  );
+}

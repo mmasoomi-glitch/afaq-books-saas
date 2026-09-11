@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "../db/client.js";
 import { hashPassword, verifyAgainstDummy, verifyPassword } from "./password.js";
 import { AuthError } from "./errors.js";
+import { enforce, recordSecurityEvent } from "./rate-limit.js";
 import type { OrgScope } from "./scope.js";
 import { resolveOrgScope } from "./scope.js";
 
@@ -72,10 +73,21 @@ export interface SignInResult {
   expires: Date;
 }
 
+export interface AuthRequestContext {
+  /** Source address, when the caller knows one. Undefined off the HTTP path. */
+  ip?: string;
+}
+
 export async function signIn(
   email: string,
   password: string,
+  context: AuthRequestContext = {},
 ): Promise<SignInResult> {
+  // Rate limiting runs BEFORE the credential check, so a blocked attempt never
+  // reaches argon2 and never touches the user table. Both the source address
+  // and the account are counted; see rate-limit.ts for why both.
+  await enforce("signin", context.ip, email.toLowerCase());
+
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (user === null || user.passwordHash === null) {
@@ -83,10 +95,20 @@ export async function signIn(
     // whether the address exists. A user row with no passwordHash is an
     // OAuth-only account and is treated identically.
     await verifyAgainstDummy(password);
+    await recordSecurityEvent("auth.signin.failed", {
+      ...(context.ip === undefined ? {} : { ip: context.ip }),
+      email,
+      detail: "no such user",
+    });
     throw new InvalidCredentialsError();
   }
 
   if (!(await verifyPassword(user.passwordHash, password))) {
+    await recordSecurityEvent("auth.signin.failed", {
+      ...(context.ip === undefined ? {} : { ip: context.ip }),
+      email,
+      detail: "bad password",
+    });
     throw new InvalidCredentialsError();
   }
 
@@ -99,6 +121,11 @@ export async function signIn(
       sessionToken: hashSessionToken(rawToken),
       expires,
     },
+  });
+
+  await recordSecurityEvent("auth.signin.succeeded", {
+    ...(context.ip === undefined ? {} : { ip: context.ip }),
+    email,
   });
 
   return { rawToken, userId: user.id, expires };
@@ -162,7 +189,13 @@ export async function registerUser(
   email: string,
   password: string,
   name?: string,
+  context: AuthRequestContext = {},
 ): Promise<{ userId: string }> {
+  // Registration is rate limited harder than sign-in (3 per hour) precisely
+  // because it has to reveal whether an email is taken. Without this it is an
+  // account-enumeration oracle that anyone can query at will.
+  await enforce("signup", context.ip, email.toLowerCase());
+
   const passwordHash = await hashPassword(password);
 
   try {
@@ -181,6 +214,10 @@ export async function registerUser(
       "code" in e &&
       (e as { code: unknown }).code === "P2002"
     ) {
+      await recordSecurityEvent("auth.signup.duplicate", {
+        ...(context.ip === undefined ? {} : { ip: context.ip }),
+        email,
+      });
       throw new EmailAlreadyRegisteredError();
     }
     throw e;

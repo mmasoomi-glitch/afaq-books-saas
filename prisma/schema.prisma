@@ -287,3 +287,36 @@ model VerificationToken {
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
+
+// ── Rate limiting and security events (AUTH-TENANCY) ────────────────
+// Strategy decided by independent review: Postgres-backed fixed window,
+// limited on both source address and account, progressive delay rather
+// than lockout, failing open. See B-20260911-06.
+
+/// One fixed-window counter. `key` encodes action, dimension and value,
+/// e.g. "signin:ip:203.0.113.7" or "signin:account:a@b.test".
+model RateLimit {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  count       Int
+  windowStart DateTime @map("window_start") @db.Timestamptz(6)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@index([expiresAt])
+  @@map("rate_limits")
+}
+
+/// Separate from audit_logs on purpose: that table requires a non-null
+/// organization_id and actor_id, and a failed sign-in usually has neither.
+model SecurityEvent {
+  id        String   @id @default(uuid()) @db.Uuid
+  eventType String   @map("event_type")
+  ip        String?
+  email     String?
+  detail    String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([eventType, createdAt])
+  @@index([email, createdAt])
+  @@map("security_events")
+}

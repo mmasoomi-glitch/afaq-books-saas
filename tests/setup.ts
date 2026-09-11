@@ -1,4 +1,6 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { Pool } from "pg";
 import { loadEnv } from "./load-env.js";
 
@@ -9,10 +11,41 @@ if (!testDbUrl) {
   throw new Error("TEST_DATABASE_URL is not set");
 }
 
-execSync("npx prisma migrate deploy", {
-  env: { ...process.env, DATABASE_URL: testDbUrl },
-  stdio: "ignore",
-});
+// Apply the real migration — including the raw SQL that carries every
+// database-level invariant — to the test database before the suite runs.
+//
+// Resolve the Prisma binary from node_modules rather than shelling out to
+// `npx`: under pnpm, `npx prisma` is not reliably on PATH and fails in CI.
+// Fall back to `pnpm exec` only if the binary is genuinely absent.
+function applyMigrations(databaseUrl: string): void {
+  const env = { ...process.env, DATABASE_URL: databaseUrl };
+  const local = resolve(
+    process.cwd(),
+    "node_modules",
+    ".bin",
+    process.platform === "win32" ? "prisma.cmd" : "prisma",
+  );
+  const [cmd, args] = existsSync(local)
+    ? ([local, ["migrate", "deploy"]] as const)
+    : (["pnpm", ["exec", "prisma", "migrate", "deploy"]] as const);
+
+  try {
+    // Capture output instead of discarding it. `stdio: "ignore"` turns any
+    // migration failure into "Command failed" with no cause, which is the
+    // worst possible message to debug from a CI log.
+    execFileSync(cmd, [...args], { env, stdio: "pipe", encoding: "utf8" });
+  } catch (e) {
+    const err = e as { stdout?: string; stderr?: string; message?: string };
+    throw new Error(
+      `prisma migrate deploy failed against the test database.\n` +
+        `stdout:\n${err.stdout ?? "(none)"}\n` +
+        `stderr:\n${err.stderr ?? "(none)"}\n` +
+        `cause: ${err.message ?? String(e)}`,
+    );
+  }
+}
+
+applyMigrations(testDbUrl);
 
 const pool = new Pool({ connectionString: testDbUrl });
 

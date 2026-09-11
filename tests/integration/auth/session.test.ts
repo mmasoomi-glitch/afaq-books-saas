@@ -5,7 +5,7 @@ import { prisma } from "../../../src/server/db/client.js";
 import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
-  SESSION_TTL_MS,
+  SESSION_IDLE_TTL_MS,
   SessionExpiredError,
   SessionNotFoundError,
   hashSessionToken,
@@ -196,16 +196,19 @@ test("T13: revoking a membership takes effect on the next request", async () => 
     where: { userId, organizationId: org.id },
   });
 
-  // Same token, still well within its 14 days.
+  // Same token, still well within its idle window.
   await expect(
     resolveScopeFromSession(rawToken, org.slug),
   ).rejects.toBeInstanceOf(NotAMemberError);
 });
 
-test("T14: a session expires roughly SESSION_TTL_MS from now", async () => {
+test("T14: a session expires roughly SESSION_IDLE_TTL_MS from now", async () => {
+  // The IDLE clock, not the absolute one. A fresh session is good for a day of
+  // inactivity; sliding renewal is what carries an active user past that, up to
+  // the absolute ceiling. See S1-S6 in http/session-renewal.test.ts.
   const { expires } = await signedIn();
   const remaining = expires.getTime() - Date.now();
 
-  expect(remaining).toBeGreaterThan(SESSION_TTL_MS - 60_000);
-  expect(remaining).toBeLessThanOrEqual(SESSION_TTL_MS);
+  expect(remaining).toBeGreaterThan(SESSION_IDLE_TTL_MS - 60_000);
+  expect(remaining).toBeLessThanOrEqual(SESSION_IDLE_TTL_MS);
 });

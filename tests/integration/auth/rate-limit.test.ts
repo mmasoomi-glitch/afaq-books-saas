@@ -216,6 +216,9 @@ test("L15: a successful sign-in is recorded", async () => {
 test("L16: the sixth bad password is rate limited, not merely refused", async () => {
   // The whole point of the blocker this closes. Five wrong passwords are a
   // user having a bad day; the sixth is someone guessing, and it costs them.
+  //
+  // enforce() no longer sleeps before throwing, so this test is fast now: the
+  // penalty is reported as retryAfterMs for the caller to surface as a 429.
   const email = newEmail();
   await registerUser(email, PASSWORD);
 
@@ -231,4 +234,24 @@ test("L16: the sixth bad password is rate limited, not merely refused", async ()
   if (blocked instanceof RateLimitedError) {
     expect(blocked.retryAfterMs).toBe(1000);
   }
+});
+
+test("L17: enforce returns promptly rather than holding the caller", async () => {
+  // The delay is advisory, carried on the error, not spent by the server. If
+  // enforce slept, a flood of blocked attempts would occupy tasks instead of
+  // being shed - the throttle would become the load.
+  const ip = randomUUID();
+  await consume("ip", ip, SIGNIN.limit + 4); // deep into the backoff curve
+
+  const startedAt = Date.now();
+  const error = await enforce("signin", ip, undefined).catch((e: unknown) => e);
+  const elapsed = Date.now() - startedAt;
+
+  expect(error).toBeInstanceOf(RateLimitedError);
+  if (error instanceof RateLimitedError) {
+    // A real penalty is reported...
+    expect(error.retryAfterMs).toBeGreaterThanOrEqual(8000);
+  }
+  // ...but the server did not wait it out.
+  expect(elapsed).toBeLessThan(1000);
 });

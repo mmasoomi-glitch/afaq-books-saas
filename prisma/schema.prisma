@@ -249,10 +249,15 @@ model Session {
   sessionToken String   @unique @map("session_token")
   userId       String   @map("user_id") @db.Uuid
   expires      DateTime @db.Timestamptz(6)
+  // Sliding renewal moves `expires` forward on use. `createdAt` is the anchor
+  // for the ABSOLUTE ceiling, which renewal may never cross — without it a
+  // session that is merely touched often enough would live for ever.
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expires])
   @@map("sessions")
 }
 

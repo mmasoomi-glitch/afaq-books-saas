@@ -65,6 +65,7 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 | 002-5 | PLATFORM-GUARDIAN | Next.js 15 scaffold; route handlers that delegate to `src/server/http/` | done, awaiting review | `agent/02b-scaffold-sprint-002`. 239 tests, `pnpm build` green, ADR-0002 records the resolution decision and its correction |
 | 002-6 | ARCHITECT | Row Level Security | not started | `B-20260911-04` |
 | 002-7 | AUTH-TENANCY | Web adapter: `Request`/`Response` at the edge, body cap, forwarded-header policy | done | PR #12 merged, 231 tests |
+| 002-8 | AUTH-TENANCY + FRONTEND-UX | Sign-in page and a page-issued CSRF token; `B-20260912-01` closed | done, awaiting review | `agent/10-signin-page-sprint-002`, 245 tests, build green, verified against the running server |
 
 ### 002-5 evidence
 

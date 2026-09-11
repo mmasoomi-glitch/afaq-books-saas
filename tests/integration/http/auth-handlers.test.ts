@@ -33,7 +33,32 @@ function newEmail(): string {
   return `${randomUUID()}@example.test`;
 }
 
+/**
+ * A token value shared by the cookie and the header. Its content is irrelevant
+ * -- double-submit compares the two halves against each other, never against
+ * anything stored -- so a fixed string is as meaningful here as a random one
+ * and is far easier to read in a failure.
+ */
+const CSRF = "csrf-token-for-tests-0123456789";
+
+/**
+ * A request already carrying a matched CSRF pair, which is what a browser
+ * coming from the sign-in page has. Overrides merge INTO the pair rather than
+ * replacing the whole object, so a test can add a cookie without silently
+ * dropping the token and then wonder why it got a 403.
+ */
 function req(method: HttpMethod, over?: Partial<HttpRequest>): HttpRequest {
+  return {
+    method,
+    path: "/",
+    ...over,
+    headers: { [CSRF_HEADER]: CSRF, ...over?.headers },
+    cookies: { [CSRF_COOKIE]: CSRF, ...over?.cookies },
+  };
+}
+
+/** A request with NO CSRF pair, for the tests that are about its absence. */
+function bareReq(method: HttpMethod, over?: Partial<HttpRequest>): HttpRequest {
   return { method, path: "/", headers: {}, cookies: {}, ...over };
 }
 
@@ -255,15 +280,15 @@ test("H10: an authenticated session request returns the user", async () => {
 });
 
 test("H11: a request with no session cookie is 401", async () => {
-  const res = await sessionHandler()(req("GET"));
+  const res = await sessionHandler()(bareReq("GET"));
   expect(res.status).toBe(401);
 });
 
 test("H12: a forged token is 401 and reads identically to no token", async () => {
   const handler = sessionHandler();
-  const absent = await handler(req("GET"));
+  const absent = await handler(bareReq("GET"));
   const forged = await handler(
-    req("GET", { cookies: { [SESSION_COOKIE]: "not-a-real-token" } }),
+    bareReq("GET", { cookies: { [SESSION_COOKIE]: "not-a-real-token" } }),
   );
 
   expect(forged.status).toBe(absent.status);
@@ -276,7 +301,7 @@ test("H13: sign-out without a csrf header is 403 and leaves the session alive", 
   const { session, csrf } = await signedIn();
 
   const refused = await signOutHandler()(
-    req("POST", {
+    bareReq("POST", {
       cookies: { [SESSION_COOKIE]: session, [CSRF_COOKIE]: csrf },
     }),
   );
@@ -474,4 +499,69 @@ test("H24: a matching Origin is allowed", async () => {
   );
 
   expect(res.status).toBe(200);
+});
+
+test("H25: sign-in without a csrf pair is 403 and sets no cookies", async () => {
+  // This is what closes login CSRF (`B-20260912-01`). Before the middleware
+  // issued a token on the sign-in PAGE, this request could not be checked at
+  // all -- the cookie was issued by the sign-in RESPONSE, so there was nothing
+  // to submit twice.
+  const email = newEmail();
+  await registerUser(email, PASSWORD);
+
+  const res = await signInHandler()(
+    bareReq("POST", { body: { email, password: PASSWORD } }),
+  );
+
+  expect(res.status).toBe(403);
+  expect(errorCode(res)).toBe("CSRF_INVALID");
+  // The credentials were correct. A 403 that still handed back a session would
+  // mean the check ran and changed nothing.
+  expect(res.cookies ?? []).toHaveLength(0);
+  expect(await prisma.session.count()).toBe(0);
+});
+
+test("H26: sign-in with a mismatched csrf pair is 403", async () => {
+  const email = newEmail();
+  await registerUser(email, PASSWORD);
+
+  const res = await signInHandler()(
+    bareReq("POST", {
+      body: { email, password: PASSWORD },
+      cookies: { [CSRF_COOKIE]: "one-value" },
+      headers: { [CSRF_HEADER]: "a-different-value" },
+    }),
+  );
+
+  expect(res.status).toBe(403);
+  expect(await prisma.session.count()).toBe(0);
+});
+
+test("H27: registration without a csrf pair is 403 and creates no user", async () => {
+  const email = newEmail();
+
+  const res = await registerHandler()(
+    bareReq("POST", { body: { email, password: PASSWORD } }),
+  );
+
+  expect(res.status).toBe(403);
+  expect(await prisma.user.count({ where: { email } })).toBe(0);
+});
+
+test("H28: the csrf failure body never says which half was wrong", async () => {
+  // Telling a probe whether the cookie or the header was missing tells it which
+  // half of the double-submit to work on next. All three read identically.
+  const bodies = await Promise.all(
+    [
+      bareReq("POST", { body: {} }),
+      bareReq("POST", { body: {}, cookies: { [CSRF_COOKIE]: CSRF } }),
+      bareReq("POST", { body: {}, headers: { [CSRF_HEADER]: CSRF } }),
+    ].map(async (r) => {
+      const res = await signInHandler()(r);
+      expect(res.status).toBe(403);
+      return JSON.stringify(res.body);
+    }),
+  );
+
+  expect(new Set(bodies).size).toBe(1);
 });

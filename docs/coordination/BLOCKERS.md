@@ -819,6 +819,89 @@ the exception, document it".
 
 ---
 
+### B-20260912-04 — Membership changes write no audit-log row
+
+- **Filed by:** AUTH-TENANCY
+- **Date:** 2026-09-12
+- **Branch:** `agent/03-org-membership-sprint-002`
+- **Status:** open
+- **Type:** **rule violation**, not merely a gap
+
+**What the rules say**
+
+`accounting-integrity.md` I9 lists "role grant" among the material actions that
+must write to the immutable audit log, with actor, organization, timestamp,
+action, entity and before/after. `security-tenancy.md` repeats it under security
+events: "Role grant / revoke. Membership add / remove."
+
+**What the code does**
+
+`grantMembership`, `changeRole` and `removeMember` write nothing. A member can be
+promoted to ADMIN, use that access, and be demoted again, and the only trace is
+the current value of one column.
+
+**Why it was not done in the same PR**
+
+`audit_logs.organization_id` and `actor_id` are both `NOT NULL`, which is fine
+here — both are known. The obstacle is that the existing audit helper is shaped
+around ledger entities and expects an entity type and id from the journal
+domain. Membership actions need either a widened entity vocabulary or their own
+writer. Choosing between those is a schema decision, and bundling it into a PR
+about authorization would have buried it.
+
+**What would close it**
+
+Decide whether `audit_logs.entity_type` gains membership values or whether
+`security_events` grows structured columns and takes these. The former keeps one
+trail; the latter keeps the ledger audit log purely financial. Then write the
+row inside the same transaction as the membership change — an audit entry
+committed separately can be missing for the one change anybody asks about.
+
+**Owner:** AUTH-TENANCY with LEDGER-CORE, who owns the audit schema.
+
+---
+
+### B-20260912-05 — Ownership cannot be transferred
+
+- **Filed by:** AUTH-TENANCY
+- **Date:** 2026-09-12
+- **Branch:** `agent/03-org-membership-sprint-002`
+- **Status:** open
+- **Type:** gap opened deliberately by the escalation rule
+
+**The situation this creates**
+
+`assertGrantable` refuses `OWNER` from every caller, on the grounds that
+promoting a co-owner and handing over an organization are different intentions
+that should not share a code path or an audit entry. That reasoning holds. The
+consequence is that there is now **no route to ownership transfer at all**.
+
+An owner who wants to step down cannot. `changeRole` refuses to touch a role at
+or above the caller's own, which includes their own, and `removeMember` on the
+last owner is refused by the database trigger. Both refusals are correct
+individually; together they mean the founder of an organization is its owner
+permanently unless a database operator intervenes.
+
+**What would close it**
+
+A `transferOwnership(scope, targetUserId)` action, OWNER-only, that in ONE
+transaction promotes the target to OWNER and demotes the caller. The trigger is
+`DEFERRABLE` precisely so this is expressible — `M23` in
+`tests/integration/auth/membership.test.ts` already performs exactly that
+sequence by hand and passes.
+
+It needs a new action key (`ownership.transfer`) so it is auditable as its own
+thing rather than as a role change, which was the whole argument for excluding
+OWNER from `role.grant`.
+
+**Priority:** before the membership UI ships. A screen that shows roles and
+offers no way to hand over ownership will be read as a bug, and the workaround
+people will ask for is to relax the escalation rule.
+
+**Owner:** AUTH-TENANCY.
+
+---
+
 
 ## Resolved
 

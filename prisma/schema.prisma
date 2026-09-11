@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
+}
+
+enum PeriodLockAction {
+  LOCK
+  UNLOCK
+}
+
+model Account {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  code           String
+  name           String
+  type           AccountType
+  currency       String       @db.Char(3)
+  parentId       String?      @map("parent_id") @db.Uuid
+  isActive       Boolean      @default(true) @map("is_active")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  journalLines   JournalLine[]
+  parent         Account?     @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children       Account[]    @relation("AccountHierarchy")
+
+  @@unique([organizationId, code])
+  @@index([organizationId, type])
+  @@map("accounts")
+}
+
+model AccountingConfig {
+  id                   String       @id @default(uuid()) @db.Uuid
+  organizationId       String       @map("organization_id") @db.Uuid
+  baseCurrency         String       @map("base_currency") @db.Char(3)
+  fiscalYearStartMonth Int          @map("fiscal_year_start_month")
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId])
+  @@map("accounting_configs")
+}
+
+model Period {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String
+  startDate      DateTime     @map("start_date") @db.Date
+  endDate        DateTime     @map("end_date") @db.Date
+  status         PeriodStatus @default(OPEN)
+  lockedAt       DateTime?    @map("locked_at") @db.Timestamptz(6)
+  lockedBy       String?      @map("locked_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  journalEntries JournalEntry[]
+  periodLocks    PeriodLock[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("periods")
+}
+
+model PeriodLock {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  periodId       String         @map("period_id") @db.Uuid
+  action         PeriodLockAction
+  reason         String
+  actorId        String         @map("actor_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  period         Period         @relation(fields: [periodId], references: [id])
+
+  @@index([organizationId, periodId])
+  @@map("period_locks")
+}
+
+model JournalEntry {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  periodId       String       @map("period_id") @db.Uuid
+  journalNumber  Int?         @map("journal_number")
+  entryDate      DateTime     @map("entry_date") @db.Date
+  description    String
+  sourceModule   String       @map("source_module") @default("manual")
+  sourceId       String?      @map("source_id")
+  currency       String       @db.Char(3)
+  postedAt       DateTime?    @map("posted_at") @db.Timestamptz(6)
+  postedBy       String?      @map("posted_by") @db.Uuid
+  reversalOfId   String?      @map("reversal_of_id") @db.Uuid
+  reversedById   String?      @map("reversed_by_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  journalLines   JournalLine[]
+  period         Period       @relation(fields: [periodId], references: [id])
+
+  @@unique([organizationId, periodId, journalNumber])
+  @@index([organizationId, periodId])
+  @@index([organizationId, postedAt])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id              String        @id @default(uuid()) @db.Uuid
+  organizationId  String        @map("organization_id") @db.Uuid
+  journalEntryId  String        @map("journal_entry_id") @db.Uuid
+  accountId       String        @map("account_id") @db.Uuid
+  lineNumber      Int           @map("line_number")
+  debit           Decimal       @default(0) @db.Decimal(18, 4)
+  credit          Decimal       @default(0) @db.Decimal(18, 4)
+  currency        String        @db.Char(3)
+  fxRate          Decimal       @default(1) @map("fx_rate") @db.Decimal(18, 8)
+  reportingAmount Decimal       @map("reporting_amount") @db.Decimal(18, 4)
+  memo            String?
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  journalEntry    JournalEntry  @relation(fields: [journalEntryId], references: [id])
+  account         Account       @relation(fields: [accountId], references: [id])
+
+  @@unique([journalEntryId, lineNumber])
+  @@index([organizationId, accountId])
+  @@map("journal_lines")
+}
+
+model JournalCounter {
+  organizationId String       @map("organization_id") @db.Uuid
+  periodId       String       @map("period_id") @db.Uuid
+  lastNumber     Int          @map("last_number") @default(0)
+  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@id([organizationId, periodId])
+  @@map("journal_counters")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  actorId        String   @map("actor_id") @db.Uuid
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String   @map("entity_id") @db.Uuid
+  before         Json?
+  after          Json?
+  requestId      String?  @map("request_id")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_logs")
+}

@@ -162,7 +162,160 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-11 (session layer merged)
+## State — last hydrated 2026-09-12 (HTTP layer in review)
+
+**PR #11 open** from `agent/03-http-layer-sprint-002` @ `04e710e`, against the
+base branch @ `4ec44af`. **209 tests green**, typecheck clean, no migration
+drift — all verified on the Sophia pod against a real PostgreSQL 14.
+
+### The chain now reaches HTTP
+
+`HttpRequest` → `signInHandler` → `signIn` → session row storing only a sha256
+of the token → `__Host-session` cookie → `sessionHandler` → `resolveSession` +
+`touchSession` → `resolveOrgScope` (membership re-checked per request) →
+`assertCanDo` → `guarded.ts` → ledger services → database invariants.
+
+**What is still missing is a socket.** The handlers exist and are tested; no
+Next.js scaffold serves them, so no endpoint is reachable by a browser. That is
+now the single thing standing between tested modules and an application.
+
+### Merged, and what each layer actually guarantees
+
+- **Ledger** — invariants enforced by PostgreSQL: deferred balance trigger at
+  COMMIT, posted-row immutability, period non-overlap, org consistency.
+- **Tenancy** — real foreign keys on all eight ledger tables.
+- **Authorization** — 12 guarded wrappers; a branded `LedgerScope` makes
+  accidental bypass a compile error (`B-20260911-05`, PR #10).
+- **Statements** — trial balance, P&L, balance sheet, identity exact.
+- **Sessions** — argon2id at OWASP parameters, tokens stored only as sha256,
+  unknown email indistinguishable from wrong password, revocation effective on
+  the next request.
+- **Rate limiting** — Postgres fixed window on both address and account,
+  progressive delay not lockout, fails **open** deliberately (PR #9).
+
+### In review (PR #11)
+
+- **HTTP layer** — plain object in, plain object out, no framework import,
+  enforced by a CI grep.
+- **Cookies** — `__Host-session` / `__Host-csrf`. The prefix is load-bearing:
+  it is what makes a browser refuse a shadowing cookie set by a sibling
+  subdomain. Accepted cost — the cookie cannot span subdomains.
+- **CSRF** — double-submit plus an exact-match Origin check.
+- **Two session clocks** — idle 24h (slides on use), absolute 14d anchored on
+  `sessions.created_at` (renewal may not cross it). Without the second,
+  sliding renewal means a stolen token lives forever if the thief keeps using
+  it.
+
+### Open blockers
+
+| Id | Subject | Owner | Gate |
+|----|---------|-------|------|
+| `B-20260911-03` | `main` behind the base branch, and still the public default | owner | — |
+| `B-20260911-04` | No Row Level Security | ARCHITECT | — |
+| `B-20260911-07` | No reaper scheduler for expired rate-limit rows | AUTH-TENANCY | — |
+| `B-20260911-08` | Nothing reads `security_events` | AUTH-TENANCY | — |
+| `B-20260911-09` | `block-dangerous-git.sh` matches substrings | PLATFORM-GUARDIAN | fires on prose |
+| `B-20260912-01` | Sign-in/registration cannot be double-submit protected | AUTH-TENANCY + FRONTEND-UX | needs a sign-in page |
+| `B-20260912-02` | CSRF token not bound to the session | AUTH-TENANCY | — |
+| `B-20260912-03` | Email uniqueness enforced by the service, not the DB | AUTH-TENANCY + LEDGER-CORE | needs a drift-gate decision |
+
+Closed since the last hydration: `-05`, `-06`, `-10`.
+
+**`B-20260911-09` fired twice this session, both times on prose.** A
+feature-branch push was denied because unrelated documentation text in the same
+command line contained the word "subdomain" — which contains "main" — next to
+the words describing the guard itself. The guard was not bypassed either time;
+the commands were split, and the file was written with an editor tool instead
+of a shell heredoc. Worth fixing, because a guard that cries wolf is a guard
+people learn to route around.
+
+### Verdict history
+
+| Subject | Verdict | Outcome |
+|---------|---------|---------|
+| Ledger + tenancy + authz + statements (106 tests) | PASS_WITH_CONDITIONS ×2 | see below |
+| Condition 2: report authorization gate (113 tests) | PASS | satisfied |
+| Condition 1: Row Level Security | deferred | `B-20260911-04` |
+| Session layer (127 tests) | PASS_WITH_CONDITIONS | `B-20260911-06`, now closed |
+| HTTP transport decisions (asked in advance) | DECIDED | `B-20260911-10`, implemented |
+| Cookie Max-Age vs 14-day session | DECIDED: sliding renewal + `__Host-` | implemented |
+| HTTP layer security (209 tests) | **1 real defect found** | email case; fixed in-branch |
+
+### GOTCHA — a judge that answers about the wrong repository
+
+`sophia_review` was called with `project: "/root/afaq-A"` and an explicit
+`paths` list. It returned:
+
+```
+[review http-sec-review  project sophia_app  base main  model qwen3-coder]
+FINDINGS: NONE
+```
+
+It silently reviewed **a different codebase entirely** and reported a clean
+bill of health for code it had never opened. Had that been accepted, PR #11
+would carry "independent review: no findings" while containing a live
+account-confusion defect.
+
+**Rule: read the echoed project and base on every verdict.** A `NONE` from the
+wrong input is worse than no verdict, because it looks like evidence. When the
+target cannot be confirmed, paste the source into `sophia_infer` directly —
+that is what found the defect, within one call.
+
+This also matters for the owner's standing constraint that nothing here may
+cross into other projects. `sophia_review` reaching another project unasked is
+exactly the boundary that was ruled out, so it is not to be used for this
+repository until it honours the project argument.
+
+### Tooling, as measured
+
+**Forge, this round: good first drafts, predictable defects.** Four files
+authored from precise specifications. Every one needed the same three classes
+of fix and nothing worse:
+
+1. `exactOptionalPropertyTypes` — it writes `{ cookies: res.cookies }` where
+   the property is optional and the value may be `undefined`. Needs a
+   conditional spread.
+2. `noUncheckedIndexedAccess` — it indexes and then uses the result as a
+   definite value (`value[i]`, `match[1]`).
+3. Dropped arguments and wrong shapes in tests — `assertSameOrigin(req)`
+   missing its expected origin; asserting `body.code` where the body is
+   `{ error: { code } }`.
+
+It also emitted a self-import (`import type { HttpMethod } from "./types.js"`
+inside `types.ts`) and one comment whose *reasoning* was wrong while the code
+was right: it claimed taking the first of two same-named cookies wins because
+that one is "the most recently set", which browsers do not guarantee — they
+order by path specificity. Corrected to say the choice is arbitrary and the
+`__Host-` prefix is the real defence.
+
+**This confirms the earlier rule from the other direction.** Every one of these
+was fixed by local edits, and every file converged. No file was sent back for a
+rewrite, and nothing regressed. Forge is a first-draft generator; the editing
+stays here.
+
+**Sophia as judge still earns its place — when given real input.** Fed the
+actual source, it found in one pass a defect that 206 passing tests did not:
+`enforce` lowercased the email for its rate-limit key while `signIn` looked the
+user up by the raw string, so `Admin@corp.com` and `admin@corp.com` were two
+separate accounts. Its output is verbose and visibly argues with itself; the
+signal is there, but it has to be read rather than skimmed.
+
+## Next actions, in order
+
+1. **Next.js 15 scaffold (`002-5`).** The only thing between tested modules and
+   an application. Route handlers delegate to `src/server/http/` — the adapter
+   is the only place framework types are allowed, and CI enforces that.
+2. **`B-20260912-01`** once a sign-in page exists: a pre-session token, closing
+   login CSRF.
+3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
+   database objects Prisma cannot model, then add the `lower(email)` index. The
+   same question already applies to every trigger in the init migration.
+4. `B-20260911-04` — ARCHITECT decides on RLS.
+5. Then SALES-AR: the first module that posts *through* the ledger.
+
+---
+
+## Superseded — hydrated 2026-09-11 (session layer merged)
 
 **`develop` @ `2f73126`. No open PRs. 127 tests green** on a real `postgres:14`
 container. Five PRs merged today: #3, #4, #5, #6, #7.

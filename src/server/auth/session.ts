@@ -52,7 +52,37 @@ export class EmailAlreadyRegisteredError extends AuthError {
   }
 }
 
-export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
+/**
+ * Two clocks, not one, and they answer different questions.
+ *
+ * `SESSION_IDLE_TTL_MS` is how long a session survives WITHOUT being used. It
+ * slides forward every time the session is presented, so an active user never
+ * meets it. A day is short for a web app and ordinary for financial software:
+ * a laptop left open in an office overnight should not still be signed into
+ * someone's books in the morning.
+ *
+ * `SESSION_ABSOLUTE_TTL_MS` is the ceiling from creation that renewal may never
+ * cross. Without it, sliding renewal means a stolen token is valid forever
+ * provided the thief keeps using it — the renewal would work just as well for
+ * them as for the real user. This is the clock that eventually stops them.
+ *
+ * Previously there was one fixed 14-day expiry set at sign-in. That is now the
+ * absolute ceiling, and the idle timeout is the new, tighter bound. Sliding
+ * renewal decided by independent review; see B-20260911-10.
+ */
+export const SESSION_IDLE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
+export const SESSION_ABSOLUTE_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
+
+/**
+ * How stale `expires` must be before renewal bothers writing.
+ *
+ * Renewing on every request would turn every authenticated read into a write,
+ * and a busy organization's reporting page would contend on one session row.
+ * The user-visible effect of the threshold is nil: the session is extended a
+ * full idle-window ahead, so lagging by up to an hour changes nothing anyone
+ * can observe.
+ */
+export const SESSION_RENEW_AFTER_MS = 1000 * 60 * 60; // 1 hour
 
 /**
  * Only the hash of a session token is stored. The raw token is what the client
@@ -65,6 +95,29 @@ export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
  */
 export function hashSessionToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
+}
+
+/**
+ * Email addresses are normalised HERE, in the layer that persists and reads
+ * them, not only at the HTTP edge.
+ *
+ * This was a real defect, found by independent review. `enforce` already
+ * lowercased the address to build its rate-limit key, but the user lookup and
+ * the insert used the string as given. Two consequences, both bad:
+ *
+ *  - `users.email` is unique on the RAW string, so `Admin@corp.com` and
+ *    `admin@corp.com` were two different accounts. Anyone could register a
+ *    case variant of an existing colleague's address.
+ *  - Registering as `User@x.com` and signing in as `user@x.com` failed with
+ *    "invalid email or password", because the lookup was case-sensitive while
+ *    the user reasonably assumed it was not.
+ *
+ * The HTTP handler normalises too. That is not redundancy worth removing: it
+ * keeps the rate-limit key and the lookup in agreement for every caller,
+ * including tests and any future service path that never touches HTTP.
+ */
+export function normaliseEmail(email: string): string {
+  return email.trim().toLowerCase();
 }
 
 export interface SignInResult {
@@ -83,12 +136,14 @@ export async function signIn(
   password: string,
   context: AuthRequestContext = {},
 ): Promise<SignInResult> {
+  const address = normaliseEmail(email);
+
   // Rate limiting runs BEFORE the credential check, so a blocked attempt never
   // reaches argon2 and never touches the user table. Both the source address
   // and the account are counted; see rate-limit.ts for why both.
-  await enforce("signin", context.ip, email.toLowerCase());
+  await enforce("signin", context.ip, address);
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email: address } });
 
   if (user === null || user.passwordHash === null) {
     // Spend comparable time before failing, so the response does not reveal
@@ -97,7 +152,7 @@ export async function signIn(
     await verifyAgainstDummy(password);
     await recordSecurityEvent("auth.signin.failed", {
       ...(context.ip === undefined ? {} : { ip: context.ip }),
-      email,
+      email: address,
       detail: "no such user",
     });
     throw new InvalidCredentialsError();
@@ -106,14 +161,14 @@ export async function signIn(
   if (!(await verifyPassword(user.passwordHash, password))) {
     await recordSecurityEvent("auth.signin.failed", {
       ...(context.ip === undefined ? {} : { ip: context.ip }),
-      email,
+      email: address,
       detail: "bad password",
     });
     throw new InvalidCredentialsError();
   }
 
   const rawToken = randomBytes(32).toString("base64url");
-  const expires = new Date(Date.now() + SESSION_TTL_MS);
+  const expires = new Date(Date.now() + SESSION_IDLE_TTL_MS);
 
   await prisma.session.create({
     data: {
@@ -125,7 +180,7 @@ export async function signIn(
 
   await recordSecurityEvent("auth.signin.succeeded", {
     ...(context.ip === undefined ? {} : { ip: context.ip }),
-    email,
+    email: address,
   });
 
   return { rawToken, userId: user.id, expires };
@@ -142,7 +197,16 @@ export async function resolveSession(
     throw new SessionNotFoundError();
   }
 
-  if (session.expires.getTime() <= Date.now()) {
+  const now = Date.now();
+
+  // Two ways to be dead, and both are checked. The idle clock is `expires`; the
+  // absolute clock is creation plus the ceiling. A session that has been kept
+  // alive by renewal for a fortnight fails the second test while passing the
+  // first, which is the entire point of having the second one.
+  const absoluteDeadline =
+    session.createdAt.getTime() + SESSION_ABSOLUTE_TTL_MS;
+
+  if (session.expires.getTime() <= now || absoluteDeadline <= now) {
     // Removed on sight rather than left to accumulate. A sweeper job can still
     // exist later for sessions nobody ever presents again.
     await prisma.session.delete({ where: { id: session.id } });
@@ -150,6 +214,56 @@ export async function resolveSession(
   }
 
   return { userId: session.userId, expires: session.expires };
+}
+
+/**
+ * Slide a live session forward. Returns the expiry the caller should reflect
+ * in the cookie — the existing one when no write was needed.
+ *
+ * This is separate from `resolveSession` on purpose. Resolution is a read that
+ * must work identically everywhere, including in tests that assert expiry
+ * behaviour; renewal is a write with a policy attached. Folding the write into
+ * the read would mean no caller could ever check a session without also
+ * extending it, and the absolute-ceiling test below could not be written at
+ * all.
+ *
+ * The renewal is CAPPED at the absolute deadline rather than refused near it.
+ * Refusing would sign an active user out an idle-window early; capping lets
+ * them work right up to the ceiling and then stop, which is what the ceiling
+ * is supposed to mean.
+ */
+export async function touchSession(rawToken: string): Promise<Date> {
+  const tokenHash = hashSessionToken(rawToken);
+  const session = await prisma.session.findUnique({
+    where: { sessionToken: tokenHash },
+  });
+
+  if (session === null) throw new SessionNotFoundError();
+
+  const now = Date.now();
+  const absoluteDeadline =
+    session.createdAt.getTime() + SESSION_ABSOLUTE_TTL_MS;
+
+  if (session.expires.getTime() <= now || absoluteDeadline <= now) {
+    await prisma.session.delete({ where: { id: session.id } });
+    throw new SessionExpiredError();
+  }
+
+  const target = Math.min(now + SESSION_IDLE_TTL_MS, absoluteDeadline);
+
+  // Only write when the gain is material. `target` can also be BELOW the stored
+  // expiry once the ceiling binds, and moving expiry backwards here would
+  // shorten a session for no reason, so the comparison is one-directional.
+  if (target - session.expires.getTime() < SESSION_RENEW_AFTER_MS) {
+    return session.expires;
+  }
+
+  const expires = new Date(target);
+  await prisma.session.update({
+    where: { sessionToken: tokenHash },
+    data: { expires },
+  });
+  return expires;
 }
 
 /**
@@ -191,17 +305,19 @@ export async function registerUser(
   name?: string,
   context: AuthRequestContext = {},
 ): Promise<{ userId: string }> {
+  const address = normaliseEmail(email);
+
   // Registration is rate limited harder than sign-in (3 per hour) precisely
   // because it has to reveal whether an email is taken. Without this it is an
   // account-enumeration oracle that anyone can query at will.
-  await enforce("signup", context.ip, email.toLowerCase());
+  await enforce("signup", context.ip, address);
 
   const passwordHash = await hashPassword(password);
 
   try {
     const user = await prisma.user.create({
       data: {
-        email,
+        email: address,
         passwordHash,
         ...(name === undefined ? {} : { name }),
       },
@@ -216,7 +332,7 @@ export async function registerUser(
     ) {
       await recordSecurityEvent("auth.signup.duplicate", {
         ...(context.ip === undefined ? {} : { ip: context.ip }),
-        email,
+        email: address,
       });
       throw new EmailAlreadyRegisteredError();
     }

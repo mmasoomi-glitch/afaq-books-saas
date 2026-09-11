@@ -145,8 +145,7 @@ export async function checkAndConsume(
  * the account counter. Skipping the second check would leave one of those
  * counters undercounted and exploitable.
  *
- * The delay is awaited SERVER-SIDE rather than returned for the client to
- * honour, because a client under an attacker's control simply would not.
+ * The penalty is REPORTED, not spent. See the comment at the throw.
  */
 export async function enforce(
   action: RateLimitAction,
@@ -167,7 +166,21 @@ export async function enforce(
   // The LARGER of the two delays, not the first one found: if an address is 1
   // over but the account is 5 over, the account's penalty is the real one.
   const delayMs = Math.max(...blocked.map((r) => r.delayMs));
-  await new Promise((resolve) => setTimeout(resolve, delayMs));
+
+  // Throws IMMEDIATELY rather than sleeping first.
+  //
+  // An earlier version awaited the delay server-side, reasoning that a hostile
+  // client would otherwise just ignore it. That reasoning was right about the
+  // client and wrong about the cost: holding a task open for up to ten seconds
+  // per blocked attempt turns the throttle itself into a resource-exhaustion
+  // vector, and a flood of blocked attackers would occupy the server rather
+  // than being shed by it.
+  //
+  // So the wait is now advisory — surfaced as HTTP 429 with Retry-After — and
+  // the deterrent lives in the counter instead. A client that ignores
+  // Retry-After and retries immediately still advances the window and keeps
+  // climbing the backoff curve, so ignoring it buys the attacker nothing while
+  // costing us nothing. Decided by independent review; see B-20260911-07.
   throw new RateLimitedError(delayMs);
 }
 

@@ -137,15 +137,19 @@ export async function balanceSheet(
   // Retained earnings is the cumulative net profit of every income and expense
   // account up to asOf. Without it the identity cannot hold: those postings had
   // a balance-sheet counterpart, and nothing else in this report accounts for it.
+  // Retained earnings is credits minus debits across ALL profit-and-loss
+  // accounts, with no per-type sign flip.
+  //
+  // The profit-and-loss report flips the sign for expenses so it can show them
+  // as positive numbers in their own section and subtract the total. Reusing
+  // that flip here is wrong and produces income PLUS expenses: a 1234.5678 sale
+  // against a 987.6543 cost came out as 2222.2221 instead of 246.9135, and the
+  // balance sheet then failed its own identity check by exactly twice the
+  // expenses. Expenses are debits, so credit - debit makes them negative on
+  // their own, which is precisely what retained earnings needs.
   const earnings = await prisma.$queryRaw<Array<{ retained_earnings: unknown }>>`
     SELECT
-      COALESCE(SUM(
-        CASE
-          WHEN a.type = 'INCOME'  THEN jl.credit - jl.debit
-          WHEN a.type = 'EXPENSE' THEN jl.debit  - jl.credit
-          ELSE 0
-        END
-      ), 0) AS retained_earnings
+      COALESCE(SUM(jl.credit - jl.debit), 0) AS retained_earnings
     FROM journal_lines jl
     INNER JOIN journal_entries je ON je.id = jl.journal_entry_id
     INNER JOIN accounts a        ON a.id  = jl.account_id

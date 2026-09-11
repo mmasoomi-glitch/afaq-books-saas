@@ -91,6 +91,7 @@ export async function resetDb() {
       TRUNCATE TABLE journal_lines, journal_entries, period_locks, audit_logs,
         journal_counters, periods, accounts, accounting_configs,
         memberships, sessions, auth_accounts, verification_tokens,
+        rate_limits, security_events,
         users, organizations
       RESTART IDENTITY CASCADE
     `);

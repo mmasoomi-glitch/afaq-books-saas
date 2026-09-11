@@ -162,7 +162,67 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-12 (sign-in works, lint gate is real)
+## State — last hydrated 2026-09-12 (a screen shows real ledger data)
+
+**Base branch @ `cca2913`. No open PRs. 258 tests, lint clean, build green,
+typecheck clean, no drift.** PRs #18 and #19 merged since the last hydration.
+
+The chain now runs end to end through a rendered page: cookie →
+`resolveScopeFromSession` → membership re-resolved → `assertCanDo` →
+`guardedTrialBalance` → posted ledger rows summed in SQL → a table.
+
+`src/server/next/page-scope.ts` is to rendering what `guarded.ts` is to the
+service layer: the only place a page obtains a scope. All four authorization
+failures collapse to `notFound()`, never 403, because a 403 confirms the
+organization exists and makes the URL bar an enumeration oracle over the
+customer list.
+
+### A gate caught its own author, one commit after a different gate almost didn't
+
+`page-scope.ts` was written into `src/server/http/` — the layer defined as
+importing no framework — and it imports `next/headers`. CI refused the PR.
+
+The cheap fix was to relax the gate. The right one was to move the file, which
+is what happened: `src/server/next/` now exists to make framework-coupled
+server code recognisable, and the CI gate gained the converse assertion that
+**only** that directory and `src/app/` may import `next/*`. Without the second
+half, the next file reaching for `next/headers` lands wherever is convenient
+and the directory stops meaning anything.
+
+That is the fourth and fifth entry in the same ledger of vacuous-or-nearly
+checks:
+
+| # | The check | What was wrong |
+|---|-----------|----------------|
+| 1 | CI grep for `posting.js` | would have matched nothing after the extension removal, passing silently |
+| 2 | `sophia_review` | returned `FINDINGS: NONE` about a different repository |
+| 3 | `await expect(() => syncFn()).toThrow()` | the `await` did nothing and hid that the assertion is vacuous on a rejected promise |
+| 4 | a test mock hardcoding `"__Host-session"` | a rename would leave it matching nothing, sending every test down the "no session" path — and still passing four of seven |
+| 5 | the framework-import gate | **worked**, and caught the author |
+
+**The question to ask of any new gate: what input would make this report
+failure?** If the answer is not immediate, the gate is decoration.
+
+### And I wrote a flaky test
+
+`P8` asserted `verifyAgainstDummy`'s memoisation by wall clock — second call
+must not be much slower than the first. It failed at **1924ms against a 558ms
+bound** on a loaded machine.
+
+A suite that fails for reasons unrelated to the change is worse than one that
+does not test the thing: it teaches people to re-run CI instead of reading it.
+The memoisation is real and visible in the source; a stopwatch cannot assert it
+reliably here. `P8` now asserts what a test can hold — never throws, never
+true, any input.
+
+### Merging now needs `gh pr update-branch` first
+
+The rulesets use `strict_required_status_checks_policy`, so a PR whose base has
+moved is refused with a suggestion to use `--admin`. **Do not.** That bypasses
+required checks, which `git-collaboration.md` forbids outright. `gh pr
+update-branch <n>`, wait for the re-run, then merge.
+
+## Superseded — hydrated 2026-09-12 (sign-in works, lint gate is real)
 
 **Base branch @ `bb81231`. No open PRs. 251 tests, lint clean, `pnpm build`
 green, typecheck clean, no migration drift.** PRs #15 and #16 merged since the
@@ -484,20 +544,19 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **A registration page**, so `/api/auth/register` is reachable by a person
-   rather than only by a client that first loaded `/signin`. Small, and it
-   removes the odd asymmetry where one of the two public endpoints has a form
-   and the other does not.
-2. **Something to sign in TO.** There is no dashboard, so `SignInForm` reports
-   "Signed in." and stays put — deliberately, because sending a user to a route
-   that does not exist is worse than telling them what happened. The first real
-   screen should be the trial balance: it is the report with the fewest moving
-   parts and it exercises the whole chain from session to org scope to posted
-   ledger rows.
-3. **Prettier**, or a decision not to have one. Formatting is by hand and by
-   convention today. The question is whether a formatter's diffs are worth the
-   churn across an active branch set, and that is a judgement call rather than
-   an oversight.
+1. **No way to create an organization or grant a membership through the UI.**
+   Both are raw database operations today, so reaching the trial balance
+   requires someone to insert a `Membership` row by hand. This is now the
+   narrowest thing between the product and a person using it, and it is an
+   authorization surface in its own right — who may grant what, and to whom.
+2. **Nothing links to the trial balance.** No navigation, no organization
+   switcher, so the URL must be typed. Cheap to fix and it makes everything
+   already built visible.
+3. **A redirect after sign-in**, once there is a destination. `SignInForm`
+   currently reports "Signed in." and stays put, deliberately.
+4. **Prettier**, or a decision not to have one. Formatting is by hand and by
+   convention. The question is whether a formatter's diffs are worth the churn
+   across an active branch set — a judgement call, not an oversight.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init

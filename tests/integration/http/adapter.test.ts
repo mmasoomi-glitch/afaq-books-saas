@@ -88,12 +88,57 @@ test("A2: header names arrive lowercased whatever case they were sent in", async
   // The rest of the layer reads `headers["x-csrf-token"]` directly. If the
   // adapter passed `X-CSRF-Token` through unchanged, the CSRF check would see
   // no header and refuse every mutation from a client that capitalises.
+  //
+  // Built without the fixture helper on purpose: `Headers` COMBINES same-name
+  // entries rather than replacing them, so the helper's default token and this
+  // one would arrive as a single comma-joined value. See A23.
   const req = await toHttpRequest(
-    request("POST", { headers: { "X-CSRF-Token": "abc", Origin: URL_BASE } }),
+    new Request(`${URL_BASE}/api/auth/signin`, {
+      method: "POST",
+      headers: { "X-CSRF-Token": "abc", Origin: URL_BASE },
+    }),
   );
 
   expect(req.headers["x-csrf-token"]).toBe("abc");
   expect(req.headers["origin"]).toBe(URL_BASE);
+});
+
+test("A23: two csrf headers combine into one value and fail the check", async () => {
+  // Discovered by a test failure rather than by reading the spec: `Headers`
+  // joins repeated names with ", " instead of letting the last win. So a client
+  // sending the real token twice — or an attacker appending a guess to a header
+  // they cannot see — produces "a, b", which matches no cookie.
+  //
+  // That is fail-CLOSED, which is the outcome we want, but it is worth pinning:
+  // if a future adapter took the LAST value instead, an attacker who could
+  // inject a second header would control the comparison.
+  const req = await toHttpRequest(
+    new Request(`${URL_BASE}/api/auth/signin`, {
+      method: "POST",
+      headers: new Headers([
+        ["x-csrf-token", "first"],
+        ["x-csrf-token", "second"],
+        ["cookie", `${CSRF_COOKIE}=first`],
+      ]),
+    }),
+  );
+
+  expect(req.headers["x-csrf-token"]).toBe("first, second");
+
+  const res = await toRouteHandler(signInHandler())(
+    new Request(`${URL_BASE}/api/auth/signin`, {
+      method: "POST",
+      headers: new Headers([
+        ["content-type", "application/json"],
+        ["x-csrf-token", "first"],
+        ["x-csrf-token", "second"],
+        ["cookie", `${CSRF_COOKIE}=first`],
+      ]),
+      body: JSON.stringify({ email: "a@b.test", password: PASSWORD }),
+    }),
+  );
+
+  expect(res.status).toBe(403);
 });
 
 test("A3: an unparseable body becomes undefined, not an exception", async () => {

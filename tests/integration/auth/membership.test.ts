@@ -8,6 +8,7 @@ import type { OrgScope } from "../../../src/server/auth/scope";
 import { ForbiddenError } from "../../../src/server/auth/errors";
 import {
   AlreadyAMemberError,
+  CannotTransferToSelfError,
   NotAMemberOfThisOrgError,
   OwnershipTransferError,
   ROLE_RANK,
@@ -19,6 +20,7 @@ import {
   createOrganization,
   grantMembership,
   removeMember,
+  transferOwnership,
 } from "../../../src/server/auth/membership";
 
 /**
@@ -460,4 +462,153 @@ test("M23: ownership can be handed over in one transaction", async () => {
   });
   expect(owners).toHaveLength(1);
   expect(owners[0]?.userId).toBe(successor.userId);
+});
+
+/** The audit rows written for one organization, oldest first. */
+async function auditRows(organizationId: string) {
+  return prisma.auditLog.findMany({
+    where: { organizationId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+test("M24: granting a membership writes an audit row in the same transaction", async () => {
+  // accounting-integrity.md I9 lists role grant among the actions that MUST be
+  // recorded. An audit entry committed separately is the entry that turns out
+  // to be missing for the one change anybody ever asks about.
+  const org = await anOrg();
+  const target = await newUser();
+
+  await grantMembership(org.owner, target.email, "BOOKKEEPER");
+
+  const row = (await auditRows(org.id)).at(-1);
+  expect(row?.action).toBe("member.invite");
+  expect(row?.entityType).toBe("Membership");
+  expect(row?.actorId).toBe(org.owner.userId);
+  expect(row?.after).toEqual({ userId: target.id, role: "BOOKKEEPER" });
+});
+
+test("M25: a role change records what the role was, not only what it became", async () => {
+  // "Who is an ADMIN now" is answerable from the memberships table. "Who made
+  // them one, and what were they before" is only answerable from here.
+  const org = await anOrg();
+  const member = await actorIn(org.id, org.slug, "VIEWER");
+
+  await changeRole(org.owner, member.userId, "ACCOUNTANT");
+
+  const row = (await auditRows(org.id)).at(-1);
+  expect(row?.action).toBe("role.grant");
+  expect(row?.before).toEqual({ userId: member.userId, role: "VIEWER" });
+  expect(row?.after).toEqual({ userId: member.userId, role: "ACCOUNTANT" });
+});
+
+test("M26: removing a member leaves the only record that they were one", async () => {
+  const org = await anOrg();
+  const member = await actorIn(org.id, org.slug, "APPROVER");
+
+  await removeMember(org.owner, member.userId);
+
+  const row = (await auditRows(org.id)).at(-1);
+  expect(row?.action).toBe("member.remove");
+  expect(row?.before).toEqual({ userId: member.userId, role: "APPROVER" });
+  expect(
+    await prisma.membership.count({ where: { userId: member.userId } }),
+  ).toBe(0);
+});
+
+test("M27: a failed membership change writes no audit row", async () => {
+  // The pair is one transaction, so a rollback must take the audit entry with
+  // it. An audit log containing changes that did not happen is worse than one
+  // missing changes that did: it is evidence of something untrue.
+  const org = await anOrg();
+  const admin = await actorIn(org.id, org.slug, "ADMIN");
+  const before = (await auditRows(org.id)).length;
+
+  await expect(
+    changeRole(admin, org.owner.userId, "VIEWER"),
+  ).rejects.toBeInstanceOf(RoleEscalationError);
+
+  expect((await auditRows(org.id)).length).toBe(before);
+});
+
+test("M28: an OWNER can hand the organization over", async () => {
+  // The gap the escalation rule opened: assertGrantable refuses OWNER from
+  // everyone, changeRole will not touch a role at or above the caller own,
+  // and the trigger refuses to remove the last owner. Without this action the
+  // founder was owner permanently.
+  const org = await anOrg();
+  const successor = await actorIn(org.id, org.slug, "ADMIN");
+
+  await transferOwnership(org.owner, successor.userId);
+
+  const owners = await prisma.membership.findMany({
+    where: { organizationId: org.id, role: "OWNER" },
+  });
+  expect(owners).toHaveLength(1);
+  expect(owners[0]?.userId).toBe(successor.userId);
+
+  // The outgoing owner keeps a foothold rather than being locked out.
+  const outgoing = await prisma.membership.findFirstOrThrow({
+    where: { organizationId: org.id, userId: org.owner.userId },
+  });
+  expect(outgoing.role).toBe("ADMIN");
+});
+
+test("M29: the handover is audited as a transfer, not as a role change", async () => {
+  const org = await anOrg();
+  const successor = await actorIn(org.id, org.slug, "ADMIN");
+
+  await transferOwnership(org.owner, successor.userId);
+
+  const row = (await auditRows(org.id)).at(-1);
+  expect(row?.action).toBe("ownership.transfer");
+  expect(row?.actorId).toBe(org.owner.userId);
+});
+
+test("M30: nobody below OWNER can transfer ownership", async () => {
+  const org = await anOrg();
+  const admin = await actorIn(org.id, org.slug, "ADMIN");
+  const target = await actorIn(org.id, org.slug, "VIEWER");
+
+  await expect(transferOwnership(admin, target.userId)).rejects.toBeInstanceOf(
+    ForbiddenError,
+  );
+
+  expect(
+    await prisma.membership.count({
+      where: { organizationId: org.id, role: "OWNER" },
+    }),
+  ).toBe(1);
+});
+
+test("M31: ownership cannot be transferred to yourself or to a non-member", async () => {
+  const org = await anOrg();
+  const outsider = await newUser();
+
+  await expect(
+    transferOwnership(org.owner, org.owner.userId),
+  ).rejects.toBeInstanceOf(CannotTransferToSelfError);
+
+  await expect(
+    transferOwnership(org.owner, outsider.id),
+  ).rejects.toBeInstanceOf(NotAMemberOfThisOrgError);
+});
+
+test("M32: a transfer never leaves two owners or none", async () => {
+  // The promotion and demotion pass through zero owners in between, which is
+  // why the trigger is DEFERRABLE. Checked per statement, this would be
+  // possible in one order and not the other.
+  const org = await anOrg();
+  const first = await actorIn(org.id, org.slug, "ADMIN");
+  const second = await actorIn(org.id, org.slug, "ADMIN");
+
+  await transferOwnership(org.owner, first.userId);
+  const afterFirst = await resolveOrgScope(first.userId, org.slug);
+  await transferOwnership(afterFirst, second.userId);
+
+  const owners = await prisma.membership.findMany({
+    where: { organizationId: org.id, role: "OWNER" },
+  });
+  expect(owners).toHaveLength(1);
+  expect(owners[0]?.userId).toBe(second.userId);
 });

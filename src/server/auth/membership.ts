@@ -60,6 +60,13 @@ export class SlugTakenError extends AuthError {
   }
 }
 
+export class CannotTransferToSelfError extends AuthError {
+  constructor() {
+    super("you already own this organization", "AUTH_ALREADY_OWNER");
+    this.name = "CannotTransferToSelfError";
+  }
+}
+
 /** Narrowed, not cast: a thrown value is `unknown` and may be anything. */
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -164,8 +171,25 @@ export async function grantMembership(
   if (user === null) throw new UserNotFoundError();
 
   try {
-    await prisma.membership.create({
-      data: { organizationId: scope.organizationId, userId: user.id, role },
+    // The membership and its audit row are ONE transaction. An audit entry
+    // committed separately is the entry that turns out to be missing for the
+    // one change anybody ever asks about — and `accounting-integrity.md` I9
+    // lists role grant among the actions that must be recorded, not among the
+    // ones that should be.
+    await prisma.$transaction(async (tx) => {
+      const membership = await tx.membership.create({
+        data: { organizationId: scope.organizationId, userId: user.id, role },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "member.invite",
+          entityType: "Membership",
+          entityId: membership.id,
+          after: { userId: user.id, role },
+        },
+      });
     });
     return { userId: user.id };
   } catch (error) {
@@ -216,7 +240,23 @@ export async function changeRole(
   // each conclude they are safe, and the organization ends with none. The
   // trigger is DEFERRABLE and evaluated at COMMIT, which is the only point at
   // which the question has a stable answer.
-  await prisma.membership.update({ where: { id: membership.id }, data: { role } });
+  await prisma.$transaction(async (tx) => {
+    await tx.membership.update({ where: { id: membership.id }, data: { role } });
+    await tx.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId: scope.userId,
+        action: "role.grant",
+        entityType: "Membership",
+        entityId: membership.id,
+        // BEFORE as well as after. "Who is an ADMIN now" is answerable from the
+        // table; "who made them one, and what were they before" is only
+        // answerable from here.
+        before: { userId: targetUserId, role: membership.role },
+        after: { userId: targetUserId, role },
+      },
+    });
+  });
 }
 
 export async function removeMember(
@@ -232,7 +272,10 @@ export async function removeMember(
         organizationId: scope.organizationId,
       },
     },
-    select: { id: true },
+    // `role` is selected because the audit row needs it, and this is the last
+    // moment it exists anywhere: once the row is deleted, `before` is the only
+    // record of what the removed member was allowed to do.
+    select: { id: true, role: true },
   });
 
   if (membership === null) throw new NotAMemberOfThisOrgError();
@@ -240,5 +283,97 @@ export async function removeMember(
   // Removing the last OWNER is refused by the trigger, for the same race
   // reason as above. `member.remove` is OWNER-only, so the common case of this
   // failing is an owner removing themselves while being the only one.
-  await prisma.membership.delete({ where: { id: membership.id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.membership.delete({ where: { id: membership.id } });
+    await tx.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId: scope.userId,
+        action: "member.remove",
+        entityType: "Membership",
+        entityId: membership.id,
+        // The row is gone, so `before` is the only record that it existed at
+        // all, and the only place the removed member's role survives.
+        before: { userId: targetUserId, role: membership.role },
+      },
+    });
+  });
+}
+
+/**
+ * Hand an organization over. OWNER-only, and the only route to the OWNER role.
+ *
+ * This exists because `assertGrantable` refuses OWNER from every caller, which
+ * on its own left an owner unable to step down at all: `changeRole` will not
+ * touch a role at or above the caller's own — including their own — and the
+ * database trigger refuses to remove the last owner. Both refusals are correct
+ * individually; together they made the founder owner permanently.
+ *
+ * Promotion and demotion happen in ONE transaction, in the order that passes
+ * through zero owners, precisely to prove that the `DEFERRABLE` trigger permits
+ * it. A per-statement check would make this expressible in one order and not
+ * the other, which is an arbitrary rule nobody would guess.
+ *
+ * It is its own action key rather than a role change, so the audit trail can
+ * say which of the two intentions happened. That separation was the entire
+ * argument for excluding OWNER from `role.grant`; reaching the same state by a
+ * generic path would have given the argument away.
+ */
+export async function transferOwnership(
+  scope: OrgScope,
+  targetUserId: string,
+): Promise<void> {
+  assertCanDo(scope, "ownership.transfer");
+
+  if (targetUserId === scope.userId) throw new CannotTransferToSelfError();
+
+  const target = await prisma.membership.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: targetUserId,
+        organizationId: scope.organizationId,
+      },
+    },
+    select: { id: true, role: true },
+  });
+
+  if (target === null) throw new NotAMemberOfThisOrgError();
+
+  const outgoing = await prisma.membership.findUnique({
+    where: {
+      userId_organizationId: {
+        userId: scope.userId,
+        organizationId: scope.organizationId,
+      },
+    },
+    select: { id: true },
+  });
+
+  // The scope was resolved from a real membership row, so this cannot be null
+  // in practice. It is checked rather than asserted because "cannot happen"
+  // and "does not happen" are different claims, and the cost of being wrong
+  // here is an organization with two owners or none.
+  if (outgoing === null) throw new NotAMemberOfThisOrgError();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.membership.update({
+      where: { id: outgoing.id },
+      data: { role: "ADMIN" },
+    });
+    await tx.membership.update({
+      where: { id: target.id },
+      data: { role: "OWNER" },
+    });
+    await tx.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId: scope.userId,
+        action: "ownership.transfer",
+        entityType: "Membership",
+        entityId: target.id,
+        before: { ownerUserId: scope.userId, targetRole: target.role },
+        after: { ownerUserId: targetUserId, outgoingRole: "ADMIN" },
+      },
+    });
+  });
 }

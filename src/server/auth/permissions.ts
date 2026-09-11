@@ -12,7 +12,8 @@ export type Action =
   | "report.read"
   | "member.invite"
   | "member.remove"
-  | "role.grant";
+  | "role.grant"
+  | "ownership.transfer";
 
 const VIEWER_ACTIONS: readonly Action[] = [
   "ledger.account.read",
@@ -42,7 +43,18 @@ const ADMIN_ACTIONS: readonly Action[] = [
   "role.grant",
 ];
 
-const OWNER_ACTIONS: readonly Action[] = [...ADMIN_ACTIONS, "member.remove"];
+/**
+ * `ownership.transfer` is OWNER-only and is deliberately NOT reachable through
+ * `role.grant`. Promoting a co-owner and handing over an organization are
+ * different intentions; keeping them apart is what lets the audit trail say
+ * which one happened, and it is the reason `assertGrantable` refuses OWNER from
+ * every caller including another owner.
+ */
+const OWNER_ACTIONS: readonly Action[] = [
+  ...ADMIN_ACTIONS,
+  "member.remove",
+  "ownership.transfer",
+];
 
 export const ROLE_ACTIONS: Record<MembershipRole, readonly Action[]> = {
   VIEWER: VIEWER_ACTIONS,

@@ -861,6 +861,28 @@ committed separately can be missing for the one change anybody asks about.
 
 ---
 
+**RESOLVED 2026-09-12**, on `agent/03-ownership-audit-sprint-002`.
+
+`grantMembership`, `changeRole`, `removeMember` and `transferOwnership` each
+write an `audit_logs` row inside the SAME transaction as the change.
+
+**The blocker's premise was wrong and that is worth recording.** It claimed
+this needed a schema decision, because the audit helper was "shaped around
+ledger entities". `audit_logs.entity_type` is a plain `String` column, not an
+enum — `"Membership"` fits the existing table with no migration at all. The
+obstacle was imagined; filing it as a blocker cost a round trip.
+
+Role changes record `before` as well as `after`. "Who is an ADMIN now" is
+answerable from the memberships table; "who made them one, and what were they
+before" is only answerable from the log. On removal `before` is the only
+surviving record that the membership existed.
+
+`M27` asserts the half that matters: a rolled-back change writes NO audit row.
+An audit log containing changes that did not happen is worse than one missing
+changes that did — the first is evidence of something untrue.
+
+---
+
 ### B-20260912-05 — Ownership cannot be transferred
 
 - **Filed by:** AUTH-TENANCY
@@ -902,9 +924,36 @@ people will ask for is to relax the escalation rule.
 
 ---
 
+**RESOLVED 2026-09-12**, on `agent/03-ownership-audit-sprint-002`.
+
+`transferOwnership(scope, targetUserId)` — OWNER-only via the new
+`ownership.transfer` action key. It promotes the target and demotes the caller
+in ONE transaction, in the order that passes through zero owners, which is
+exactly what the `DEFERRABLE` trigger exists to permit. `M32` performs two
+consecutive handovers and proves the invariant holds across both rather than
+assuming it.
+
+The outgoing owner is demoted to **ADMIN, not removed**. Handing over an
+organization and leaving it are different decisions, and making one imply the
+other would be a surprise at the worst possible moment.
+
+It is its own action key rather than a role change, so the audit trail says
+which of the two intentions happened. That separation was the entire argument
+for excluding OWNER from `role.grant`; reaching the same state through a
+generic path would have given the argument away.
+
+`M28`–`M32` cover the handover, its audit shape, that nobody below OWNER can
+perform it, and that it refuses both self-transfer and a non-member target.
+
+---
+
 
 ## Resolved
 
+- **`B-20260912-05`** — ownership transfer. Closed 2026-09-12; the gap the
+  escalation rule opened deliberately, closed by its own action key.
+- **`B-20260912-04`** — membership audit rows. Closed 2026-09-12. The entry
+  records that the blocker's own premise about a schema decision was wrong.
 - **`B-20260912-01`** — login CSRF. Closed 2026-09-12 by a page-issued token, and
   the entry records that the original severity was overstated: `SameSite=Lax`
   was already refusing the forged request.

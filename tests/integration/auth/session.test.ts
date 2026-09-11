@@ -6,6 +6,7 @@ import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
   SESSION_IDLE_TTL_MS,
+  normaliseEmail,
   SessionExpiredError,
   SessionNotFoundError,
   hashSessionToken,
@@ -211,4 +212,44 @@ test("T14: a session expires roughly SESSION_IDLE_TTL_MS from now", async () => 
 
   expect(remaining).toBeGreaterThan(SESSION_IDLE_TTL_MS - 60_000);
   expect(remaining).toBeLessThanOrEqual(SESSION_IDLE_TTL_MS);
+});
+
+test("T15: an address registered in mixed case signs in in any case", async () => {
+  // Found by independent review, not by this suite, which is the point of
+  // having one. `enforce` lowercased the address to build its rate-limit key
+  // while the user lookup used the string as typed, so registering as
+  // `User@x.com` and signing in as `user@x.com` was "invalid email or
+  // password" — a login failure with no visible cause.
+  const local = randomUUID();
+  const mixed = `User.${local}@Example.Test`;
+  await registerUser(mixed, PASSWORD);
+
+  await expect(signIn(mixed.toLowerCase(), PASSWORD)).resolves.toBeDefined();
+  await expect(signIn(mixed.toUpperCase(), PASSWORD)).resolves.toBeDefined();
+  await expect(signIn(`  ${mixed}  `, PASSWORD)).resolves.toBeDefined();
+});
+
+test("T16: a case variant of a taken address cannot be registered", async () => {
+  // The more serious half. `users.email` is unique on the RAW string, so
+  // before normalisation moved into this layer, `Admin@corp.com` and
+  // `admin@corp.com` were two separate accounts — anyone could claim a case
+  // variant of a colleague's address and receive mail meant for them.
+  const local = randomUUID();
+  await registerUser(`admin.${local}@corp.test`, PASSWORD);
+
+  await expect(
+    registerUser(`Admin.${local}@Corp.Test`, PASSWORD),
+  ).rejects.toBeInstanceOf(EmailAlreadyRegisteredError);
+
+  expect(await prisma.user.count()).toBe(1);
+});
+
+test("T17: the stored address is the normalised one", async () => {
+  const local = randomUUID();
+  const mixed = `  Mixed.${local}@Example.TEST `;
+  const { userId } = await registerUser(mixed, PASSWORD);
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  expect(user.email).toBe(normaliseEmail(mixed));
+  expect(user.email).toBe(`mixed.${local}@example.test`);
 });

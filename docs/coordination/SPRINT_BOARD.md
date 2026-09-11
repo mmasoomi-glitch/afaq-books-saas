@@ -48,6 +48,65 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 
 ---
 
+## Sprint 002 — Authentication and transport (IN PROGRESS)
+
+- **Sprint base SHA**: `4ec44af` (`origin/develop`)
+- **Start date**: 2026-09-11
+- **Build/test environment**: Sophia MCP pod, PostgreSQL 14.24. The pod is a
+  build environment only; commits are made and pushed from the governed local
+  checkout.
+
+| # | Owner | Task | Status | Evidence |
+|---|-------|------|--------|----------|
+| 002-1 | AUTH-TENANCY | Hand-rolled session layer: argon2id, sha256-stored tokens, membership re-resolved per request | done | PR #9 merged |
+| 002-2 | AUTH-TENANCY | Rate limiting on sign-in and sign-up, Postgres fixed window, both dimensions | done | PR #9 merged. `B-20260911-06` closed |
+| 002-3 | AUTH-TENANCY | Branded `LedgerScope` so an unauthorized caller does not compile | done | PR #10 merged. `B-20260911-05` closed |
+| 002-4 | AUTH-TENANCY | Framework-agnostic HTTP layer, `__Host-` cookies, double-submit CSRF, sliding session renewal | done, awaiting review | `agent/03-http-layer-sprint-002` @ `7cd306d`. `B-20260911-10` closed; `B-20260912-01`/`-02` filed |
+| 002-5 | PLATFORM-GUARDIAN | Next.js 15 scaffold; route handlers that delegate to `src/server/http/` | not started | blocked on nothing — the handler layer is ready to adapt |
+| 002-6 | ARCHITECT | Row Level Security | not started | `B-20260911-04` |
+
+### 002-4 evidence
+
+```text
+$ npx tsc --noEmit
+EXIT=0
+
+$ npx vitest run
+ ✓ tests/integration/ledger/invariants.test.ts (41 tests)
+ ✓ tests/integration/ledger/services.test.ts (20 tests)
+ ✓ tests/integration/http/auth-handlers.test.ts (24 tests)
+ ✓ tests/integration/reports/statements.test.ts (15 tests)
+ ✓ tests/integration/reports/trial-balance.test.ts (9 tests)
+ ✓ tests/unit/http/cookies-csrf.test.ts (30 tests)
+ ✓ tests/integration/auth/rate-limit.test.ts (17 tests)
+ ✓ tests/integration/auth/scope.test.ts (11 tests)
+ ✓ tests/integration/auth/guarded.test.ts (10 tests)
+ ✓ tests/integration/auth/session.test.ts (14 tests)
+ ✓ tests/integration/auth/session-renewal.test.ts (8 tests)
+ ✓ tests/integration/reports/guarded-reports.test.ts (7 tests)
+
+ Test Files  12 passed (12)
+      Tests  206 passed (206)
+
+$ npx prisma migrate diff --from-migrations prisma/migrations     --to-schema-datamodel prisma/schema.prisma --exit-code
+No difference detected.
+```
+
+All 206 tests pass on `agent/03-http-layer-sprint-002` @ `7cd306d`.
+Previous total was 143, so 63 are new: 30 covering cookie serialisation,
+parsing and the CSRF comparison; 24 covering the auth handlers end to end
+against a real database; 8 covering sliding renewal and the absolute ceiling;
+1 added to the rate-limit suite asserting `enforce` returns promptly.
+
+**Known limitations, stated rather than discovered later.** Nothing serves
+these handlers over a socket yet — there is no Next.js scaffold, so no
+endpoint is reachable by a browser. Sign-in and registration are not
+double-submit protected (`B-20260912-01`) and the CSRF token is not bound to
+the session (`B-20260912-02`); both are asserted as they actually behave,
+including `H16`, which pins the weaker behaviour rather than the preferred one.
+
+---
+
 ## Sprint 001 — Ledger-first slice (CLOSED 2026-09-11)
 
 - **Sprint base SHA**: `438bb59` (`origin/develop`, after PR #1 and PR #2)

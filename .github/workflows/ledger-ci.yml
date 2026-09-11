@@ -138,6 +138,36 @@ jobs:
 
           exit "$fail"
 
+      - name: Assert the HTTP layer stays framework-agnostic
+        run: |
+          set -euo pipefail
+          # The whole value of src/server/http is that its security properties —
+          # cookie attributes, the CSRF comparison, the 429 — are testable by
+          # calling a function with a plain object. One `import { cookies } from
+          # "next/headers"` and that stops being true: the tests would need a
+          # request context, and the cheapest way to make them pass again is to
+          # stop asserting the hard parts.
+          fail=0
+          for f in $(grep -rlE "from \"(next|react|express|fastify)" src/server/http/ || true); do
+            echo "::error file=$f::src/server/http must not import a web framework; adapt at the route handler instead"
+            fail=1
+          done
+          echo "checked: the http layer imports no framework"
+
+          # The __Host- prefix is load-bearing, not cosmetic: it is what makes a
+          # browser refuse a shadowing cookie set by a sibling subdomain. A
+          # rename to a bare "session" would pass every test that checks
+          # behaviour and silently remove the protection.
+          for needle in '"__Host-session"' '"__Host-csrf"'; do
+            if ! grep -q -- "$needle" src/server/http/cookies.ts; then
+              echo "::error::src/server/http/cookies.ts no longer uses $needle"
+              fail=1
+            fi
+            echo "OK $needle"
+          done
+
+          exit "$fail"
+
       - name: Assert the invariants are enforced by the DATABASE, not only the schema
         run: |
           set -euo pipefail

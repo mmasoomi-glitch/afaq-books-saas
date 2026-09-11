@@ -620,11 +620,161 @@ browser long before the server session expires, which implies a refresh or
 sliding-renewal mechanism that does not exist yet. Either the cookie lifetime
 rises to match, or a renewal endpoint is built. Do not silently pick one.
 
+**Resolution of that tension — 2026-09-12.** Put back to the same reviewer,
+which chose sliding renewal: keep the one-hour cookie and extend the server
+session on use, capped at an absolute ceiling. Implemented as two clocks rather
+than one. `SESSION_IDLE_TTL_MS` (24h) is how long a session survives unused and
+is what slides; `SESSION_ABSOLUTE_TTL_MS` (14d) is measured from
+`sessions.created_at` and is the line renewal may not cross. The second is not
+optional: without it, sliding renewal means a stolen token is valid for as long
+as the thief keeps using it, and the renewal serves them exactly as well as the
+real user.
+
+The same review also replaced `__session` with `__Host-session`. The browser
+refuses a `__Host-` cookie that lacks `Secure`, lacks `Path=/`, or carries a
+`Domain`, which removes subdomain shadowing as an attack. The accepted cost is
+that the cookie cannot span subdomains; revisit deliberately if single sign-in
+across `app.` and `reports.` is ever needed.
+
+**Status: resolved 2026-09-12** by `agent/03-http-layer-sprint-002`.
+`src/server/http/` — `types.ts`, `cookies.ts`, `csrf.ts`, `handlers/auth.ts`.
+206 tests pass (was 143); typecheck clean; `prisma migrate diff` reports no
+drift. Two narrower follow-ups fell out of the implementation and are filed
+below as `B-20260912-01` and `B-20260912-02`.
+
+---
+
+### B-20260912-01 — Sign-in and registration cannot be CSRF-protected by double-submit
+
+- **Filed by:** AUTH-TENANCY
+- **Date:** 2026-09-12
+- **Branch:** `agent/03-http-layer-sprint-002`
+- **Status:** open
+- **Type:** known gap, accepted for now, not a release blocker on its own
+
+**The gap**
+
+`verifyCsrf` compares a non-`HttpOnly` cookie against an `x-csrf-token` header.
+That works because a cross-origin page can make the browser *send* our cookies
+but cannot *read* them. Sign-in and registration are the two requests where no
+such cookie exists yet — the sign-in response is what issues it — so there is
+nothing to submit twice. This is structural, not an omission.
+
+**What that leaves exposed**
+
+Login CSRF: a hostile page makes the victim's browser sign in **as the
+attacker**. The victim then works in the attacker's organization, and every
+invoice, journal entry and uploaded document they create is readable by
+whoever owns that account. In an accounting product this is a real loss of
+confidential data, not a curiosity.
+
+**What is in place instead**
+
+`assertSameOrigin` is applied to sign-in and registration as the primary
+control rather than as the second layer it is elsewhere. It is incomplete by
+design: a request with no `Origin` header passes, because browsers omit it on
+some same-origin requests and non-browser callers omit it routinely, so
+treating absence as hostile would break legitimate traffic. See `C22`/`C25`
+in `tests/unit/http/cookies-csrf.test.ts` for what it does and does not catch.
+
+**What would close it**
+
+A pre-session token: the sign-in *page* issues a short-lived cookie plus a
+matching hidden value, and the sign-in POST verifies the pair exactly as every
+other mutation does. That requires a sign-in page, which requires the Next.js
+scaffold, which is `001-1` and has not happened. Revisit when FRONTEND-UX
+builds the auth shell.
+
+**Owner:** AUTH-TENANCY, jointly with FRONTEND-UX once a page exists.
+
+---
+
+### B-20260912-02 — The CSRF token is not bound to the session
+
+- **Filed by:** AUTH-TENANCY
+- **Date:** 2026-09-12
+- **Branch:** `agent/03-http-layer-sprint-002`
+- **Status:** open
+- **Type:** hardening
+
+**What is true today**
+
+The CSRF token is stateless: 32 random bytes, never stored, never compared
+against anything except its own echo. So the check proves the caller could read
+*a* cookie on our origin. It does **not** prove the token belongs to the session
+being acted on. `H16` in `tests/integration/http/auth-handlers.test.ts` asserts
+this honestly — one session's cookie paired with another session's token is
+accepted — rather than asserting the behaviour we would prefer.
+
+**Why it is acceptable for now**
+
+An attacker who can set a `__Host-csrf` cookie on our origin already has a
+foothold on it, and with that foothold the session cookie is reachable anyway.
+The token was never the control that would have stopped them. `H16` exists so
+this reasoning is visible rather than assumed.
+
+**What would close it**
+
+Derive the token from the session: `HMAC(server_key, session_token_hash)`,
+verified rather than merely compared. It costs one hash per mutating request,
+needs a key in the deployment vault, and makes the token rotate with the
+session for free. Worth doing before any third party embeds our UI.
+
+**Owner:** AUTH-TENANCY.
+
+---
+
+### B-20260912-03 — Email uniqueness is enforced by the service, not the database
+
+- **Filed by:** AUTH-TENANCY
+- **Date:** 2026-09-12
+- **Branch:** `agent/03-http-layer-sprint-002`
+- **Status:** open
+- **Type:** hardening (the immediate defect is fixed; the enforcement layer is wrong)
+
+**What happened**
+
+Independent review found that `signIn` looked the user up by the address as
+typed while `enforce` lowercased it for the rate-limit key. `registerUser`
+stored it as typed. So `Admin@corp.com` and `admin@corp.com` were two separate
+accounts — the `UNIQUE` constraint is on the raw string — and anyone could
+register a case variant of a colleague's address. Registering as `User@x.com`
+and signing in as `user@x.com` also simply failed.
+
+**Fixed, at the wrong altitude**
+
+`normaliseEmail` now runs inside `signIn` and `registerUser`, so every caller
+gets it, not only the HTTP path. `T15`, `T16` and `T17` in
+`tests/integration/auth/session.test.ts` pin the behaviour.
+
+But this repository's own rule is that application-only validation is
+insufficient for a uniqueness property (`accounting-integrity.md`, on `CHECK`
+and `UNIQUE` constraints). A direct `prisma.user.create` from some future
+module — an invite flow, an admin tool, a seed script — would reintroduce the
+same two accounts, and nothing would stop it.
+
+**What would close it**
+
+Either `CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email))`, or
+migrate the column to `citext`. Both are one migration. Neither was done here
+because a functional index cannot be expressed in `schema.prisma`, and the CI
+gate `prisma migrate diff --exit-code` would then report permanent drift — so
+closing this properly means deciding how that gate treats
+database objects Prisma cannot model. The same question already applies to
+every trigger and `EXCLUDE` constraint in `20260911065811_init_ledger`, which
+Prisma ignores rather than reports, so the answer may simply be "indexes are
+the exception, document it".
+
+**Owner:** AUTH-TENANCY, with LEDGER-CORE on the migration-drift question.
+
 ---
 
 
 ## Resolved
 
+- **`B-20260911-10`** — HTTP transport decisions, implemented rather than merely
+  recorded. Resolved 2026-09-12 on `agent/03-http-layer-sprint-002`; full entry
+  retained above, including how the Max-Age tension was settled.
 - **`B-20260911-05`** — the authorization gate is now structurally enforced by a
   branded scope type. Resolved 2026-09-11 via PR #10; full entry retained above.
 - **`B-20260911-06`** — rate limiting on sign-in and sign-up. Resolved

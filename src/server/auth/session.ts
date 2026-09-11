@@ -97,6 +97,29 @@ export function hashSessionToken(rawToken: string): string {
   return createHash("sha256").update(rawToken).digest("hex");
 }
 
+/**
+ * Email addresses are normalised HERE, in the layer that persists and reads
+ * them, not only at the HTTP edge.
+ *
+ * This was a real defect, found by independent review. `enforce` already
+ * lowercased the address to build its rate-limit key, but the user lookup and
+ * the insert used the string as given. Two consequences, both bad:
+ *
+ *  - `users.email` is unique on the RAW string, so `Admin@corp.com` and
+ *    `admin@corp.com` were two different accounts. Anyone could register a
+ *    case variant of an existing colleague's address.
+ *  - Registering as `User@x.com` and signing in as `user@x.com` failed with
+ *    "invalid email or password", because the lookup was case-sensitive while
+ *    the user reasonably assumed it was not.
+ *
+ * The HTTP handler normalises too. That is not redundancy worth removing: it
+ * keeps the rate-limit key and the lookup in agreement for every caller,
+ * including tests and any future service path that never touches HTTP.
+ */
+export function normaliseEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
 export interface SignInResult {
   rawToken: string;
   userId: string;
@@ -113,12 +136,14 @@ export async function signIn(
   password: string,
   context: AuthRequestContext = {},
 ): Promise<SignInResult> {
+  const address = normaliseEmail(email);
+
   // Rate limiting runs BEFORE the credential check, so a blocked attempt never
   // reaches argon2 and never touches the user table. Both the source address
   // and the account are counted; see rate-limit.ts for why both.
-  await enforce("signin", context.ip, email.toLowerCase());
+  await enforce("signin", context.ip, address);
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email: address } });
 
   if (user === null || user.passwordHash === null) {
     // Spend comparable time before failing, so the response does not reveal
@@ -127,7 +152,7 @@ export async function signIn(
     await verifyAgainstDummy(password);
     await recordSecurityEvent("auth.signin.failed", {
       ...(context.ip === undefined ? {} : { ip: context.ip }),
-      email,
+      email: address,
       detail: "no such user",
     });
     throw new InvalidCredentialsError();
@@ -136,7 +161,7 @@ export async function signIn(
   if (!(await verifyPassword(user.passwordHash, password))) {
     await recordSecurityEvent("auth.signin.failed", {
       ...(context.ip === undefined ? {} : { ip: context.ip }),
-      email,
+      email: address,
       detail: "bad password",
     });
     throw new InvalidCredentialsError();
@@ -155,7 +180,7 @@ export async function signIn(
 
   await recordSecurityEvent("auth.signin.succeeded", {
     ...(context.ip === undefined ? {} : { ip: context.ip }),
-    email,
+    email: address,
   });
 
   return { rawToken, userId: user.id, expires };
@@ -280,17 +305,19 @@ export async function registerUser(
   name?: string,
   context: AuthRequestContext = {},
 ): Promise<{ userId: string }> {
+  const address = normaliseEmail(email);
+
   // Registration is rate limited harder than sign-in (3 per hour) precisely
   // because it has to reveal whether an email is taken. Without this it is an
   // account-enumeration oracle that anyone can query at will.
-  await enforce("signup", context.ip, email.toLowerCase());
+  await enforce("signup", context.ip, address);
 
   const passwordHash = await hashPassword(password);
 
   try {
     const user = await prisma.user.create({
       data: {
-        email,
+        email: address,
         passwordHash,
         ...(name === undefined ? {} : { name }),
       },
@@ -305,7 +332,7 @@ export async function registerUser(
     ) {
       await recordSecurityEvent("auth.signup.duplicate", {
         ...(context.ip === undefined ? {} : { ip: context.ip }),
-        email,
+        email: address,
       });
       throw new EmailAlreadyRegisteredError();
     }

@@ -192,6 +192,37 @@ run_case "sales-ar MultiEdit .claude/settings.json -> BLOCKED" "sales-ar" \
   '{"tool_name":"MultiEdit","tool_input":{"file_path":".claude/settings.json"}}' \
   "2"
 
+# ── Case 31: redirection target after a space ────────────────────
+# Regression: the first implementation matched '>[^ ]*', which captures the
+# empty string for `echo x > file` — the most common write form of all — so
+# the pre-existing CI case for this silently started passing through.
+run_case "sales-ar 'echo x > prisma/schema.prisma' -> BLOCKED" "sales-ar" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo x > prisma/schema.prisma"}}' \
+  "2"
+
+# ── Case 32: same form, but the owner is allowed ─────────────────
+run_case "ledger-core 'echo x > prisma/schema.prisma' -> ALLOWED" "ledger-core" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo x > prisma/schema.prisma"}}' \
+  "0"
+
+# ── Case 33: a read whose OUTPUT overwrites a protected file ─────
+# Regression: the pure-read filter cleared every write target, so redirecting
+# a read into a protected path was allowed. A redirection target is a write
+# regardless of what produced the bytes.
+run_case "sales-ar 'cat x > prisma/schema.prisma' -> BLOCKED" "sales-ar" \
+  '{"tool_name":"Bash","tool_input":{"command":"cat x > prisma/schema.prisma"}}' \
+  "2"
+
+# ── Case 34: append redirection ──────────────────────────────────
+run_case "sales-ar 'echo x >> .claude/settings.json' -> BLOCKED" "sales-ar" \
+  '{"tool_name":"Bash","tool_input":{"command":"echo x >> .claude/settings.json"}}' \
+  "2"
+
+# ── Case 35: reading a protected file is still fine ──────────────
+run_case "sales-ar 'cat prisma/schema.prisma | head' -> ALLOWED" "sales-ar" \
+  '{"tool_name":"Bash","tool_input":{"command":"cat prisma/schema.prisma | head"}}' \
+  "0"
+
 echo ""
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 

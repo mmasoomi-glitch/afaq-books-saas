@@ -51,6 +51,9 @@ fi
 
 # Determine write targets into array WRITE_TARGETS[]
 declare -a WRITE_TARGETS=()
+# Redirection targets are tracked separately: they survive the pure-read
+# filter, because `cat x > protected` writes `protected`.
+declare -a REDIRECT_TARGETS=()
 
 # For Write / Edit / NotebookEdit / MultiEdit: the file_path IS the write target
 if [[ "$tool_name" == "Write" || "$tool_name" == "Edit" || "$tool_name" == "NotebookEdit" || "$tool_name" == "MultiEdit" ]]; then
@@ -69,10 +72,17 @@ elif [[ "$tool_name" == "Bash" && -n "$command_str" ]]; then
   else
     # ── Redirections: >, >>, 2>, &> ──
     # Extract targets after redirection operators
-    _targets=$(echo "$cmd" | grep -oE '(>|>>|2>|&>)[^ ]*' 2>/dev/null | sed -E 's/^(>|>>|2>|&>)//')
+    # The operator may be followed by whitespace, so the target cannot be
+    # matched with a bare [^ ]* — that yields an empty string for the very
+    # common `echo x > file` form.
+    _targets=$(echo "$cmd" | grep -oE '(>>|2>|&>|>)[[:space:]]*[^[:space:]|;&<>]+' 2>/dev/null \
+               | sed -E 's/^(>>|2>|&>|>)[[:space:]]*//')
     if [[ -n "$_targets" ]]; then
       while IFS= read -r _t; do
-        [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        if [[ -n "$_t" ]]; then
+          WRITE_TARGETS+=("$_t")
+          REDIRECT_TARGETS+=("$_t")
+        fi
       done <<< "$_targets"
     fi
 
@@ -204,10 +214,15 @@ elif [[ "$tool_name" == "Bash" && -n "$command_str" ]]; then
     is_pure_read=1
   fi
 
-  # If it's a pure read, clear write targets (reads don't count as writes
-  # even when output is redirected)
+  # A pure read does not make its ARGUMENTS write targets — `cat foo | head`
+  # touches nothing. But a redirection target is a write no matter what
+  # produced the bytes: `cat x > prisma/schema.prisma` overwrites the schema.
+  # So clear the argument-derived targets and put the redirection targets back.
   if [[ "$is_pure_read" -eq 1 ]]; then
     WRITE_TARGETS=()
+    if [[ ${#REDIRECT_TARGETS[@]} -gt 0 ]]; then
+      WRITE_TARGETS=("${REDIRECT_TARGETS[@]}")
+    fi
   fi
 else
   # Unknown tool type -> allow
@@ -222,9 +237,19 @@ normalize_path() {
   while [[ "$p" == ./* ]]; do
     p="${p#./}"
   done
-  # Strip repo root prefix if absolute
-  p="${p#/root/wt-afaq-hook-ownership/}"
-  p="${p#/root/wt-afaq-hook-ownership}"
+  # Back to forward slashes before any prefix comparison, so a Windows-style
+  # absolute path is handled the same way.
+  p="${p//\\//}"
+  # Strip the repository root prefix if the caller gave an absolute path.
+  # CLAUDE_PROJECT_DIR is set by Claude Code; fall back to the cwd, which is
+  # the repository root when the hook runs from .claude/settings.json.
+  local root="${CLAUDE_PROJECT_DIR:-$PWD}"
+  root="${root//\\//}"
+  root="${root%/}"
+  if [[ -n "$root" ]]; then
+    p="${p#"$root"/}"
+    p="${p#"$root"}"
+  fi
   # Back to forward slashes (just in case)
   p="${p//\\///}"
   echo "$p"

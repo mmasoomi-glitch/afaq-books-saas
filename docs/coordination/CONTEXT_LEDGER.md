@@ -87,99 +87,69 @@ Two adjacent traps found the same day:
 
 ---
 
-## State — last hydrated 2026-09-11 (after tenancy + FKs landed)
+## State — last hydrated 2026-09-11 (authz + trial balance landed)
 
-### Repository
+**PR #5 is green in CI: 81 tests passing** against a real `postgres:14`
+container — 41 ledger invariant tests (raw SQL, bypassing Prisma), 20 ledger
+service tests, 11 authorization tests, 9 trial-balance tests.
 
-| Ref | SHA | State |
-|-----|-----|-------|
-| `origin/main` | `3a91656` | empty root commit, 11 behind develop, public default branch (`B-20260911-03`) |
-| `origin/develop` | `438bb59` | governance bootstrap, CI green |
-| `chore/intention-contract-sprint-001` | pushed | PR #3 — all checks green |
-| `fix/ownership-hook-write-edit` | pushed | PR #4 — all checks green |
-| `agent/04-ledger-core-sprint-001` | `122057e` | PR #5 — **all checks green** |
+| Ref | State |
+|-----|-------|
+| `origin/main` | `3a91656`, empty root commit, still the public default branch (`B-20260911-03`) |
+| `origin/develop` | `438bb59`, governance bootstrap |
+| PR #3 | intention contract, branch protection, sprint 001 — 5/5 green |
+| PR #4 | ownership hook enforces Write/Edit + module paths — 5/5 green |
+| PR #5 | ledger + tenancy + authz + trial balance — 5/5 green |
 
-Branch protection live: rulesets `protect-develop` (22882053) and `protect-main`
-(22882054), both `enforcement: active`, verified via the resolved-rules endpoint.
+### Built
 
-### PR #5 — current CI evidence
+- **Ledger** — schema with the invariants enforced by PostgreSQL: deferred
+  balance trigger firing at COMMIT, posted-row immutability, period
+  non-overlap (`EXCLUDE USING gist`), org consistency across
+  entry/line/account, append-only audit and lock logs.
+- **Tenancy + FKs** — `B-20260911-02` CLOSED. All eight ledger tables have a
+  real foreign key to `organizations(id)` `ON DELETE RESTRICT`.
+- **Authorization** — `resolveOrgScope(userId, slug)` derives the org id
+  server-side from a slug; `assertCanDo(scope, action)` checks by action key.
+  Both membership and unknown-slug failures return the same message so the
+  error cannot confirm another tenant's slug.
+- **Trial balance** — sums in SQL from posted rows only, refuses to return an
+  unbalanced result, no JavaScript number anywhere in the money path.
 
-```text
-No migration drift between schema.prisma and migrations
-  No difference detected.
+### THE GAP THAT MATTERS
 
-Accounting-invariant tests
-  tests/integration/ledger/invariants.test.ts (41 tests) 1763ms
-  tests/integration/ledger/services.test.ts   (20 tests) 1220ms
-       Tests  61 passed (61)
+**`assertCanDo` is not wired into anything.** The ledger services do not call
+it, so a caller who invokes `postJournalEntry` directly bypasses authorization
+entirely. The layer is tested but it is not yet a gate. This is the single most
+important remaining item and it is the next job.
 
-Assert the invariants are enforced by the DATABASE
-  OK organization_id_fkey   (+ the 9 earlier invariants)
-```
+### Tooling verdict
 
-Runs on a `postgres:14` service container, so this is verified rather than
-asserted.
-
-### What is built
-
-- **Ledger schema + database-level invariants** — debit/credit exclusivity,
-  reporting-amount consistency, period non-overlap (`EXCLUDE USING gist`),
-  org consistency across entry/line/account, posted-row immutability, a
-  **deferred** balance constraint trigger, period-open enforcement,
-  append-only audit and lock logs.
-- **Tenancy** — `organizations`, `users`, `memberships`, `sessions`,
-  `auth_accounts`, `verification_tokens`. Roles are per-organization on
-  Membership; there is no global role. Auth.js's "Account" is `AuthAccount`
-  here because `Account` is the chart of accounts.
-- **Foreign keys on all eight ledger tables** → `organizations(id)`,
-  `ON DELETE RESTRICT`. **This closed `B-20260911-02`.** Invariant I7 now
-  holds at the database level, not just the service layer. `S20` asserts it.
-- **Services** — `withTx` (Serializable + bounded retry on 40001/40P01/55P03
-  only), `postJournalEntry`, `reverseJournalEntry`, periods
-  (create/close/lock/unlock, each writing `period_locks` + audit), accounts.
-- **CI** — `ledger-ci.yml`: real Postgres, drift check with its own throwaway
-  shadow database, typecheck, tests, and a grep asserting each named invariant
-  still exists in SQL.
-
-### Still open
-
-| Id | Subject | Owner |
-|----|---------|-------|
-| `B-20260911-01` | ownership hook gaps | fixed in PR #4, closes on merge |
-| `B-20260911-03` | `main` behind `develop`, public default branch | repository owner |
-
-- **Merge authority unresolved.** `sophia_ask` returned `OWNER`: `CLAUDE.md`
-  says only an authorized human merges into develop/main. All three PRs are
-  green and waiting.
-- No UI, no auth wiring, no invoices, no reports — excluded by contract C2.
-- `assertCanDo` / `resolveOrgScope` do not exist yet. `LedgerScope` is still
-  constructed by the caller; AUTH-TENANCY must derive it from a session.
-- Doc updates (`SPRINT_BOARD`, `IMPLEMENTATION_STATUS`, `TODO_SPRINT_001_LEDGER`)
-  are deliberately **not** in PR #5 — all three are modified in PR #3 and
-  editing them twice guarantees a conflict. They land once PR #3 merges.
-
-### Sophia status
-
-Inference jobs **stopped at owner request** — the owner needs the GPU. Shell
-calls to the pod (`sophia_exec`) do not use inference and remain fine for
-reading files. The pod worktree `/root/wt-afaq-ledger-schema` holds the same
-work; local and CI are now the source of truth.
-
-What Sophia produced that needed correcting, for the record: services that
-typechecked and did nothing (`lockPeriod` that only read a row, `closePeriod`
-that closed nothing, `postJournalEntry` that never set `posted_at`), and eight
-foreign keys silently marked `NOT VALID` when the spec did not ask for it.
+- **Sophia (qwen3-coder, 64k)** — good on narrow, single-deliverable jobs with
+  an autonomous preamble. Stalls or writes nothing on broad ones. Everything it
+  produces that touches state must be read line by line: it shipped services
+  that typechecked and did nothing, and silently added `NOT VALID` to eight
+  foreign keys.
+- **Forge (`forge-ai`, 131k)** — reachable and authorized, and the 131k context
+  is genuinely double Sophia's. But the served model reasons poorly for this
+  work: on a code review it contradicted itself three times, repeated one point
+  four ways and truncated mid-sentence. It also has **no file tools**, so every
+  edit round-trips through the lead session's context, which is strictly worse
+  than Sophia's agent loop. **Verdict: not worth going overboard on.** Useful
+  only as a cheap second opinion on small, self-contained questions — it did
+  surface two real defects in the trial balance (silent "0" default, and the
+  org filter applied to only one of three joined tables), both now fixed.
+- **Fan-out works** with one database per job (`afaq_a`, `afaq_b`) in separate
+  worktrees `/root/afaq-A` and `/root/afaq-B`. Never share a database.
+- **Never put `kill`/`pkill` in the same `sophia_exec` call as other commands** —
+  it kills the shell before they run. Cost two silently-lost job launches.
 
 ## Next actions, in order
 
-1. **Owner decision needed**: merge PRs #3, #4, #5 (all green), or delegate
-   merge authority to this session. Nothing else in the sprint can close until
-   they land — the doc updates are blocked behind PR #3 specifically.
-2. After PR #3 merges: update `SPRINT_BOARD.md`, `IMPLEMENTATION_STATUS.md` and
-   `TODO_SPRINT_001_LEDGER.md` with the real test counts and the closure of
-   `B-20260911-02`.
-3. Next build slice (AUTH-TENANCY): `resolveOrgScope(req)` and
-   `assertCanDo(scope, action)`, plus the five tenant-isolation test surfaces
-   required by `security-tenancy.md`. The schema for it already exists.
-4. Then REPORTING-ANALYTICS: trial balance computed from posted ledger rows
-   only, with a test comparing it against a freshly-summed control.
+1. **Wire `assertCanDo` into the ledger services** so authorization is an
+   enforced gate rather than a tested component. Every mutating service takes an
+   OrgScope and asserts its action before the write.
+2. **Owner decision: merge PRs #3, #4, #5.** All green. The sprint doc updates
+   are blocked behind PR #3 specifically, since all three doc files change there.
+3. P&L and balance sheet, reusing the trial-balance query shape.
+4. Auth.js v5 wiring so a real session produces the scope.

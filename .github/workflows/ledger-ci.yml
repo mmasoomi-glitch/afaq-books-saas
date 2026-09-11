@@ -110,10 +110,13 @@ jobs:
       - name: Assert the invariants are enforced by the DATABASE, not only the schema
         run: |
           set -euo pipefail
-          # A regression guard on the migration itself. If someone rewrites
-          # the migration and drops one of these, the tests might still pass
-          # for the wrong reason, so assert the enforcement exists in SQL.
-          m=$(ls prisma/migrations/*/migration.sql)
+          # A regression guard on the migrations themselves. If someone rewrites
+          # a migration and drops one of these, the tests might still pass for
+          # the wrong reason, so assert the enforcement exists in SQL.
+          #
+          # Greps across ALL migration files, not one: there is more than a
+          # single migration now, and a quoted "$(ls ...)" collapses them into
+          # one bogus path.
           for needle in \
             "jl_debit_credit_sign" \
             "jl_reporting_amount_consistent" \
@@ -123,10 +126,11 @@ jobs:
             "jl_immutable" \
             "DEFERRABLE INITIALLY DEFERRED" \
             "je_period_open" \
-            "append_only"
+            "append_only" \
+            "organization_id_fkey"
           do
-            if ! grep -q "$needle" "$m"; then
-              echo "::error file=$m::missing database-level invariant: $needle"
+            if ! grep -rq -- "$needle" prisma/migrations/; then
+              echo "::error::missing database-level invariant: $needle"
               exit 1
             fi
             echo "OK $needle"

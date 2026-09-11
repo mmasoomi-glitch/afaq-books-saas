@@ -1,5 +1,5 @@
 import { test, beforeAll, afterAll, beforeEach } from "vitest";
-import { pool, resetDb } from "../../setup.js";
+import { ensureOrg, pool, resetDb } from "../../setup.js";
 import type { QueryResultRow } from "pg";
 
 function one<T>(arr: T[], msg = "expected at least one row"): T {
@@ -28,18 +28,7 @@ async function query<T extends QueryResultRow>(
   }
 }
 
-const orgId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
-const org2Id = "b1f2d3e4-5a6b-7c8d-9e0f-1a2b3c4d5e6f";
-
 // Create test data helpers
-async function createOrg(): Promise<{ id: string }> {
-  const res = await query<{ id: string }>(
-    "INSERT INTO accounts (id, organization_id, code, name, type, currency, is_active) VALUES ($1, $2, $1, $1, $1, $1, true) RETURNING id",
-    [orgId, orgId, "ACC", "Test Org", "ASSET", "USD"]
-  );
-  return { id: one(res).id };
-}
-
 async function createAccount(
   orgId: string,
   code: string,
@@ -200,7 +189,7 @@ beforeEach(async () => {
 // ============================================================
 
 test("A1: jl_debit_credit_sign - rejects row where both debit and credit are positive", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
@@ -220,7 +209,7 @@ test("A1: jl_debit_credit_sign - rejects row where both debit and credit are pos
 });
 
 test("A2: jl_debit_credit_sign - allows row where debit is positive and credit is zero", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
@@ -233,7 +222,7 @@ test("A2: jl_debit_credit_sign - allows row where debit is positive and credit i
 });
 
 test("A3: jl_debit_credit_sign - allows row where credit is positive and debit is zero", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
@@ -244,7 +233,7 @@ test("A3: jl_debit_credit_sign - allows row where credit is positive and debit i
 });
 
 test("A4: jl_nonzero - rejects row where both debit and credit are zero", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
@@ -262,7 +251,7 @@ test("A4: jl_nonzero - rejects row where both debit and credit are zero", async 
 });
 
 test("A5: jl_fx_rate_positive - rejects row where fx_rate is zero", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
@@ -280,7 +269,7 @@ test("A5: jl_fx_rate_positive - rejects row where fx_rate is zero", async () => 
 });
 
 test("A6: jl_fx_rate_positive - allows row where fx_rate is positive", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
@@ -291,7 +280,7 @@ test("A6: jl_fx_rate_positive - allows row where fx_rate is positive", async () 
 });
 
 test("A7: jl_reporting_amount_consistent - rejects mismatched reporting_amount", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
@@ -310,7 +299,7 @@ test("A7: jl_reporting_amount_consistent - rejects mismatched reporting_amount",
 });
 
 test("A8: jl_reporting_amount_consistent - allows correct reporting_amount", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
@@ -325,7 +314,7 @@ test("A8: jl_reporting_amount_consistent - allows correct reporting_amount", asy
 // ============================================================
 
 test("B1: je_number_iff_posted - rejects row where posted_at is set but journal_number is null", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   try {
     await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", "2024-01-01 12:00:00+00", null);
@@ -340,7 +329,7 @@ test("B1: je_number_iff_posted - rejects row where posted_at is set but journal_
 });
 
 test("B2: je_number_iff_posted - rejects row where journal_number is set but posted_at is null", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   try {
     await createJournalEntry(orgId, periodId, 1, "2024-01-01", "Test", null, null);
@@ -355,7 +344,7 @@ test("B2: je_number_iff_posted - rejects row where journal_number is set but pos
 });
 
 test("B3: je_number_iff_posted - allows row where both journal_number and posted_at are null (unposted)", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
   const rows = await query("SELECT * FROM journal_entries WHERE description = $1", ["Test"]);
@@ -363,7 +352,7 @@ test("B3: je_number_iff_posted - allows row where both journal_number and posted
 });
 
 test("B4: je_number_iff_posted - allows row where both journal_number and posted_at are set (posted)", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
   const rows = await query("SELECT * FROM journal_entries WHERE description = $1", ["Test"]);
@@ -371,7 +360,7 @@ test("B4: je_number_iff_posted - allows row where both journal_number and posted
 });
 
 test("B5: je_posted_by_iff_posted - rejects posted_at without posted_by", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   try {
     await createJournalEntry(orgId, periodId, 1, "2024-01-01", "Test", "2024-01-01 12:00:00+00", null);
@@ -386,7 +375,7 @@ test("B5: je_posted_by_iff_posted - rejects posted_at without posted_by", async 
 });
 
 test("B6: je_posted_by_iff_posted - allows posted_at with posted_by", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const byId = "00000000-0000-0000-0000-000000000001";
   await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", byId);
@@ -399,7 +388,7 @@ test("B6: je_posted_by_iff_posted - allows posted_at with posted_by", async () =
 // ============================================================
 
 test("C1: period_dates_ordered - rejects period where end_date < start_date", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   try {
     await createPeriod(orgId, "P1", "2024-02-01", "2024-01-01");
     throw new Error("Should have failed");
@@ -413,19 +402,19 @@ test("C1: period_dates_ordered - rejects period where end_date < start_date", as
 });
 
 test("C2: period_dates_ordered - allows period where end_date >= start_date", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const pid = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   if (!pid) throw new Error("Period not created");
 });
 
 test("C3: period_dates_ordered - allows period where end_date = start_date", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const pid = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-01");
   if (!pid) throw new Error("Period not created");
 });
 
 test("C4: period_no_overlap - rejects overlapping period for same organization", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createPeriod(orgId, "P1", "2024-01-01", "2024-03-31");
   try {
     await createPeriod(orgId, "P2", "2024-02-01", "2024-04-30");
@@ -440,14 +429,14 @@ test("C4: period_no_overlap - rejects overlapping period for same organization",
 });
 
 test("C5: period_no_overlap - allows non-overlapping period for same organization", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const pid = await createPeriod(orgId, "P2", "2024-02-01", "2024-02-29");
   if (!pid) throw new Error("Period not created");
 });
 
 test("C6: fiscal_month_range - rejects fiscal_year_start_month < 1", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   try {
     await query(
       "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
@@ -464,7 +453,7 @@ test("C6: fiscal_month_range - rejects fiscal_year_start_month < 1", async () =>
 });
 
 test("C7: fiscal_month_range - rejects fiscal_year_start_month > 12", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   try {
     await query(
       "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
@@ -481,7 +470,7 @@ test("C7: fiscal_month_range - rejects fiscal_year_start_month > 12", async () =
 });
 
 test("C8: fiscal_month_range - allows fiscal_year_start_month = 1", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await query(
     "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
     [crypto.randomUUID(), orgId, "USD", 1]
@@ -491,7 +480,7 @@ test("C8: fiscal_month_range - allows fiscal_year_start_month = 1", async () => 
 });
 
 test("C9: fiscal_month_range - allows fiscal_year_start_month = 12", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await query(
     "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
     [crypto.randomUUID(), orgId, "USD", 12]
@@ -505,8 +494,8 @@ test("C9: fiscal_month_range - allows fiscal_year_start_month = 12", async () =>
 // ============================================================
 
 test("D1: jl_org_consistency - rejects line with mismatched organization_id", async () => {
-  const orgId = crypto.randomUUID();
-  const org2Id = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
+  const org2Id = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const account = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
@@ -528,7 +517,7 @@ test("D1: jl_org_consistency - rejects line with mismatched organization_id", as
 // ============================================================
 
 test("E1: je_immutable - rejects UPDATE on posted journal entry", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
   try {
@@ -544,7 +533,7 @@ test("E1: je_immutable - rejects UPDATE on posted journal entry", async () => {
 });
 
 test("E2: je_immutable - rejects DELETE on posted journal entry", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
   try {
@@ -560,7 +549,7 @@ test("E2: je_immutable - rejects DELETE on posted journal entry", async () => {
 });
 
 test("E3: je_immutable - allows UPDATE on unposted journal entry", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
   await query("UPDATE journal_entries SET description = 'Modified' WHERE id = $1", [entryId]);
@@ -569,7 +558,7 @@ test("E3: je_immutable - allows UPDATE on unposted journal entry", async () => {
 });
 
 test("E4: jl_immutable - rejects INSERT line on posted journal entry", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
@@ -587,7 +576,7 @@ test("E4: jl_immutable - rejects INSERT line on posted journal entry", async () 
 });
 
 test("E5: jl_immutable - rejects DELETE on posted journal line", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
@@ -614,7 +603,7 @@ test("E5: jl_immutable - rejects DELETE on posted journal line", async () => {
 // ============================================================
 
 test("F1: je_assert_balanced - rejects posting unbalanced entry", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
@@ -633,7 +622,7 @@ test("F1: je_assert_balanced - rejects posting unbalanced entry", async () => {
 });
 
 test("F2: je_assert_balanced - allows posting balanced entry", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
@@ -652,7 +641,7 @@ test("F2: je_assert_balanced - allows posting balanced entry", async () => {
 // ============================================================
 
 test("G1: je_period_open - rejects posting into CLOSED period", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31", "CLOSED");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
   try {
@@ -668,7 +657,7 @@ test("G1: je_period_open - rejects posting into CLOSED period", async () => {
 });
 
 test("G2: je_period_open - rejects posting into LOCKED period", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31", "LOCKED");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
   try {
@@ -684,7 +673,7 @@ test("G2: je_period_open - rejects posting into LOCKED period", async () => {
 });
 
 test("G3: je_period_open - allows posting into OPEN period", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31", "OPEN");
   const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
   const rows = await query("SELECT * FROM journal_entries WHERE id = $1", [entryId]);
@@ -696,7 +685,7 @@ test("G3: je_period_open - allows posting into OPEN period", async () => {
 // ============================================================
 
 test("H1: audit_logs is append-only - rejects UPDATE on audit_logs", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const actorId = "00000000-0000-0000-0000-000000000001";
   await query(
     "INSERT INTO audit_logs (id, organization_id, actor_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -715,7 +704,7 @@ test("H1: audit_logs is append-only - rejects UPDATE on audit_logs", async () =>
 });
 
 test("H2: audit_logs is append-only - rejects DELETE on audit_logs", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const actorId = "00000000-0000-0000-0000-000000000001";
   const logId = crypto.randomUUID();
   await query(
@@ -735,7 +724,7 @@ test("H2: audit_logs is append-only - rejects DELETE on audit_logs", async () =>
 });
 
 test("H3: period_locks is append-only - rejects UPDATE on period_locks", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const actorId = "00000000-0000-0000-0000-000000000001";
   const lockId = crypto.randomUUID();
@@ -765,7 +754,7 @@ test("E6: je_immutable - DELETE on an UNPOSTED entry actually deletes it", async
   // A BEFORE DELETE trigger that returns NEW returns NULL, and returning NULL
   // CANCELS the delete. The original trigger therefore made deleting a draft
   // entry a silent no-op: no error, row still there.
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Draft", null, null);
 
@@ -778,7 +767,7 @@ test("E6: je_immutable - DELETE on an UNPOSTED entry actually deletes it", async
 });
 
 test("E7: jl_immutable - DELETE on a line of an UNPOSTED entry actually deletes it", async () => {
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const accountId = await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Draft", null, null);
@@ -801,7 +790,7 @@ test("E8: je_immutable - reversal link is allowed on a posted entry with NULL so
   // with `=`. source_id and reversal_of_id are nullable, and NULL = NULL is
   // NULL, so the AND chain evaluated to NULL, the exception was not taken, and
   // a legitimate reversal link was rejected. IS NOT DISTINCT FROM fixes it.
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const actor = "00000000-0000-0000-0000-000000000001";
 
@@ -826,7 +815,7 @@ test("E8: je_immutable - reversal link is allowed on a posted entry with NULL so
 test("E9: je_immutable - any OTHER update to a posted entry is still rejected", async () => {
   // The exception must be narrow: only the NULL -> value transition of
   // reversed_by_id, with every other column unchanged.
-  const orgId = crypto.randomUUID();
+  const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const actor = "00000000-0000-0000-0000-000000000001";
   const posted = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Original", actor);

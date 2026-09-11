@@ -58,13 +58,40 @@ const pool = new Pool({ connectionString: testDbUrl });
 
 export { pool };
 
+/**
+ * Every ledger table now has a foreign key from organization_id to
+ * organizations(id), so a test cannot invent a tenant id any more — the row
+ * has to exist. This creates it idempotently, which is why tests can call it
+ * as often as they like.
+ */
+export async function ensureOrg(organizationId: string): Promise<string> {
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `INSERT INTO organizations (id, slug, name, created_at, updated_at)
+       VALUES ($1, $2, $3, now(), now())
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        organizationId,
+        `org-${organizationId.slice(0, 8)}`,
+        `Org ${organizationId.slice(0, 8)}`,
+      ],
+    );
+    return organizationId;
+  } finally {
+    client.release();
+  }
+}
+
 export async function resetDb() {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     await client.query(`
       TRUNCATE TABLE journal_lines, journal_entries, period_locks, audit_logs,
-        journal_counters, periods, accounts, accounting_configs
+        journal_counters, periods, accounts, accounting_configs,
+        memberships, sessions, auth_accounts, verification_tokens,
+        users, organizations
       RESTART IDENTITY CASCADE
     `);
     await client.query("COMMIT");

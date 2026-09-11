@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { Prisma } from "@prisma/client";
-import { pool, resetDb } from "../../setup.js";
+import { ensureOrg, pool, resetDb } from "../../setup.js";
 import { prisma } from "../../../src/server/db/client.js";
 import { createAccount, getAccount, listAccounts } from "../../../src/modules/ledger/accounts.js";
 import {
@@ -37,13 +37,17 @@ afterAll(async () => {
   await pool.end();
 });
 
-function newScope(): LedgerScope {
-  return { userId: randomUUID(), organizationId: randomUUID() };
+async function newScope(): Promise<LedgerScope> {
+  const scope = { userId: randomUUID(), organizationId: randomUUID() };
+  // Ledger tables now carry a real foreign key to organizations(id), so the
+  // tenant has to exist before anything can be written under it.
+  await ensureOrg(scope.organizationId);
+  return scope;
 }
 
 /** A scope with an open period and two accounts to post between. */
 async function fixture() {
-  const scope = newScope();
+  const scope = await newScope();
   const period = await createPeriod(scope, {
     name: "2024-01",
     startDate: new Date("2024-01-01"),
@@ -318,7 +322,7 @@ test("S12: reversing a draft is refused", async () => {
 
 test("S13: accounts are org-scoped and another org's id returns null", async () => {
   const { scope, cash } = await fixture();
-  const other = newScope();
+  const other = await newScope();
 
   expect(await listAccounts(other)).toHaveLength(0);
   // null, not a distinct error: a different error would confirm that some
@@ -454,7 +458,7 @@ test("S18: withTx does not retry a non-retryable error", async () => {
 
 test("S19: a period belonging to another organization is not found", async () => {
   const { period, cash, revenue } = await fixture();
-  const intruder = newScope();
+  const intruder = await newScope();
 
   await expect(
     postJournalEntry(intruder, {
@@ -465,4 +469,25 @@ test("S19: a period belonging to another organization is not found", async () =>
       lines: balancedLines(cash.id, revenue.id),
     }),
   ).rejects.toBeInstanceOf(NotFoundError);
+});
+
+// ── S20: the blocker this migration closes ──────────────────────────
+
+test("S20: a ledger row cannot reference an organization that does not exist", async () => {
+  // Before the foreign keys landed this INSERT succeeded, which is exactly
+  // what B-20260911-02 was about: the database would store a tenant id that
+  // named nothing, and invariant I7 held only at the service layer.
+  const orphanOrgId = randomUUID(); // deliberately never created
+  const client = await pool.connect();
+  try {
+    await expect(
+      client.query(
+        `INSERT INTO accounts (id, organization_id, code, name, type, currency, is_active)
+         VALUES ($1, $2, '9999', 'Orphan', 'ASSET', 'USD', true)`,
+        [randomUUID(), orphanOrgId],
+      ),
+    ).rejects.toThrow(/foreign key/i);
+  } finally {
+    client.release();
+  }
 });

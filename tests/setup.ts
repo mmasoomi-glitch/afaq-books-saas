@@ -11,6 +11,13 @@ if (!testDbUrl) {
   throw new Error("TEST_DATABASE_URL is not set");
 }
 
+// Prisma resolves its connection from DATABASE_URL (see prisma/schema.prisma),
+// not from TEST_DATABASE_URL. Without this line the service layer under test
+// would write to the DEVELOPMENT database while the assertions read the test
+// database — every test would pass while proving nothing, and a test run would
+// quietly mutate dev data.
+process.env.DATABASE_URL = testDbUrl;
+
 // Apply the real migration — including the raw SQL that carries every
 // database-level invariant — to the test database before the suite runs.
 //

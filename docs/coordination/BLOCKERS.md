@@ -150,7 +150,15 @@ the same change.
 - **Filed by:** Lead Orchestrator
 - **Date:** 2026-09-11
 - **Branch:** `chore/intention-contract-sprint-001`
-- **Status:** open
+- **Status:** **resolved 2026-09-11** — PR #4 merged. The hook now handles
+  `Write`/`Edit`/`NotebookEdit`/`MultiEdit` via a second matcher, carries 44
+  ownership rules resolved longest-prefix-first including `src/modules/**`,
+  parses Bash by shell operator and command name rather than substring, and
+  matches owners by exact token. 35 local cases and 8 CI cases, all passing.
+  Two follow-on defects were found and fixed during review: redirection targets
+  after a space were never captured (`echo x > file` matched the empty string),
+  and the pure-read filter discarded redirection targets so `cat x > protected`
+  was allowed.
 - **Type:** blocker (governance correctness)
 
 **What I need**
@@ -208,7 +216,14 @@ only exercise the Bash path, so they do not detect gap (1) or (2).
 - **Filed by:** Lead Orchestrator (on behalf of LEDGER-CORE)
 - **Date:** 2026-09-11
 - **Branch:** `agent/04-ledger-core-sprint-001`
-- **Status:** open (accepted limitation, tracked to closure)
+- **Status:** **resolved 2026-09-11** — PR #5 merged. Migration
+  `20260911151052_add_tenancy_and_ledger_fks` adds a foreign key from every one
+  of the eight ledger tables to `organizations(id)` `ON DELETE RESTRICT`.
+  RESTRICT, not CASCADE: deleting an organization must never silently delete its
+  posted ledger. Test S20 asserts the closure directly — inserting an account
+  under an organization that does not exist is now rejected, where before it
+  succeeded. The generated migration came back with `NOT VALID` appended, which
+  was removed: that enforces new rows but leaves existing rows unchecked.
 - **Type:** schema proposal / handoff request → AUTH-TENANCY
 
 **What I need**
@@ -307,8 +322,95 @@ main
 
 ---
 
+### B-20260911-04 — No Row Level Security; tenant isolation is application-level only
+
+- **Filed by:** Lead Orchestrator, on a finding by the independent judge
+- **Date:** 2026-09-11
+- **Status:** open
+- **Type:** blocker (defence in depth) — deferred, not dismissed
+
+**What I need**
+
+ARCHITECT to decide whether Postgres Row Level Security lands in sprint 002,
+and if so to write the ADR.
+
+**Why this is needed**
+
+`ADR-0001` already called RLS "strongly preferred" as a second line of defence
+and left the sprint decision open. Today tenant isolation rests on two things:
+every query filtering `organization_id` in application code, and the
+`jl_org_consistency` trigger that forces a journal line's organization to match
+both its entry and its account.
+
+That is genuinely layered, and the reports additionally filter the organization
+on all three joined tables. But it is still application-level. A single query
+written without the filter — by a future module, a maintenance script, or a
+report — leaks a tenant. RLS would make the database refuse regardless.
+
+**Judge's assessment, recorded verbatim**
+
+> "Deferring RLS is acceptable as the existing org-consistency trigger and
+> application-level filtering provide robust isolation, making it a safe
+> reversible follow-up."
+
+So this is an accepted deferral with a recorded rationale, not an oversight.
+It is not an acceptable permanent state.
+
+**Asks**
+
+- ARCHITECT: decide sprint 002 or later; write the ADR either way.
+- Whoever implements it: the application sets `SET LOCAL app.current_organization`
+  at the start of every transaction and policies filter on it. `withTx` is the
+  single place that would need to change.
+
+---
+
+### B-20260911-05 — Nothing mechanically forces callers through the authorization gate
+
+- **Filed by:** Lead Orchestrator
+- **Date:** 2026-09-11
+- **Status:** open
+- **Type:** blocker (security hardening)
+
+**What I need**
+
+A mechanism that makes bypassing `guarded.ts` fail rather than merely being
+against convention.
+
+**Why this is needed**
+
+`src/modules/ledger/guarded.ts` and `src/modules/reports/guarded.ts` assert the
+permission and then delegate. Every caller inside `src/` goes through them today
+— verified by grep. But the underlying services remain exported, and nothing at
+the type level, the lint level or in CI stops a future module from importing
+`postJournalEntry` or `trialBalance` directly and skipping the check entirely.
+
+The judge accepted this for the current stage: "application-level gating is the
+current architectural standard, and enforcing it via code review is sufficient
+for this stage." Code review is a person, and people merge things at 2am.
+
+**Options, roughly in order of strength**
+
+1. Make the unguarded services take a branded type that only `guarded.ts` can
+   construct. Bypassing then fails to compile.
+2. An ESLint `no-restricted-imports` rule scoped so only `guarded.ts` may import
+   the service modules.
+3. A CI grep asserting no file outside `guarded.ts` imports them — cheapest, and
+   the same shape as the existing invariant grep in `ledger-ci.yml`.
+
+**Asks**
+
+- ARCHITECT: choose the mechanism.
+- PLATFORM-GUARDIAN: implement it and add the CI check.
+
+---
+
 ## Resolved
 
+- **`B-20260911-01`** — ownership hook now gates `Write`/`Edit` and knows the
+  module paths. Resolved 2026-09-11 via PR #4; full entry retained above.
+- **`B-20260911-02`** — every ledger table now has a real foreign key to
+  `organizations(id)`. Resolved 2026-09-11 via PR #5; full entry retained above.
 - **`B-20260527-01`** — branch protection on `main` and `develop`.
   Resolved 2026-09-11; rulesets `protect-develop` (22882053) and
   `protect-main` (22882054) verified active via the resolved-rules

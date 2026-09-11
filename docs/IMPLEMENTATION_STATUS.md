@@ -10,64 +10,59 @@ do not soften it.
 
 ---
 
-## State — last verified 2026-09-11
+## State — last verified 2026-09-11 (after sprint 001 merged to develop)
 
-Every row below was re-verified against the working tree, the GitHub
-API and CI history on 2026-09-11. **No application code exists yet**:
-`git ls-files` returns 40 files, all governance, documentation and CI.
-There is no `package.json`, no `src/`, no `prisma/`, no `tests/`.
+Re-verified against the working tree and CI. **113 tests pass against a real
+`postgres:14` container** in `ledger-ci.yml` on every pull request.
+
+`develop` @ `5f29213`. PRs #3, #4 and #5 merged 2026-09-11 on owner
+authorization. `main` @ `3a91656` is still the empty root commit and is still
+the public default branch — see `B-20260911-03`.
 
 | Layer / module | State | Owner | Notes |
 |----------------|-------|-------|-------|
-| Repository | bootstrapped | Lead | `develop` @ `438bb59` carries all governance work. `main` @ `3a91656` is **still the empty root commit**, 11 commits behind, and is the public default branch — see `BLOCKERS.md` `B-20260911-03` |
-| Governance docs | working | ARCHITECT | `CLAUDE.md`, 6 `.claude/rules/*.md`, `docs/coordination/*`, ADR-0001, 13 agent-prompt files — merged to `develop` via PR #1/#2 |
-| Intention contract | working | Lead | `INTENTION_CONTRACT.md` v1 + `TODO_SPRINT_001_LEDGER.md` (52 tracked items, 7 done) |
-| Bootstrap CI (`governance-checks.yml`) | working + tested | PLATFORM-GUARDIAN | 5 jobs; last run on `develop` `2026-05-28T09:19Z` → `success`. These five job names are now required contexts in both rulesets — renaming one silently un-enforces it |
-| Claude hooks | **in progress — partially effective** | PLATFORM-GUARDIAN | `block-dangerous-git.sh` works for Bash. `check-agent-ownership.sh` is **largely unenforced**: `.claude/settings.json` registers both hooks under `"matcher": "Bash"` only, so `Write`/`Edit` calls are never checked, and `src/modules/**` is absent from its path map. See `B-20260911-01`. Do not rely on it for module-boundary enforcement |
-| Branch protection | working + verified | repo owner / Lead | Rulesets `protect-develop` (22882053) + `protect-main` (22882054), `enforcement: active`. Both enforce: PR required, 5 status checks, strict up-to-date, no force push, no deletion, no bypass actors. Verified via `gh api .../rules/branches/{develop,main}` — output in `INTEGRATION_LOG.md` 2026-09-11. `B-20260527-01` resolved |
-| Build/test environment | working | Lead | Sophia MCP pod: PostgreSQL 14.24 cluster online, databases `afaq_dev` + `afaq_test` reachable as role `afaq`; Node 22.20, npm 10.9, corepack 0.34. No Docker daemon — Postgres runs natively via `pg_ctlcluster`. Contract C7 governs its use |
-| Application framework (Next.js) | not started | PLATFORM-GUARDIAN | **Deferred out of sprint 001** by contract clause C2 — the ledger slice needs no UI. Scaffolded in a later sprint |
-| Package manager / lockfile | not started | PLATFORM-GUARDIAN | sprint 001 |
-| TypeScript config | not started | PLATFORM-GUARDIAN | sprint 001 |
-| Lint / format config | not started | PLATFORM-GUARDIAN | sprint 001 |
-| Test framework | not started | PLATFORM-GUARDIAN | Sprint 001 — **Vitest only**; Playwright deferred with the UI (C2). Invariant tests must run against real PostgreSQL, never SQLite (C7.3) |
-| CI pipeline (full) | not started | PLATFORM-GUARDIAN | Sprint 001 — typecheck + lint + test jobs **added to** `governance-checks.yml`. The 5 existing job names must not be renamed: they are required contexts in both rulesets |
-| Database / Prisma | not started | LEDGER-CORE + AUTH-TENANCY | Sprint 001 — narrowed scaffold (Prisma + Postgres datasource only, no Next.js). TODO phase 1 |
-| Authentication (Auth.js v5) | not started | AUTH-TENANCY | **Re-ordered after the ledger slice** by owner direction 2026-09-11. Its first task on landing is the FK migration in `B-20260911-02` |
-| Authorization layer | not started | AUTH-TENANCY | **Re-ordered after the ledger slice** by owner direction 2026-09-11. Its first task on landing is the FK migration in `B-20260911-02` |
-| Organizations / memberships | not started | AUTH-TENANCY | **Re-ordered after the ledger slice** by owner direction 2026-09-11. Its first task on landing is the FK migration in `B-20260911-02` |
-| Roles / permissions | not started | AUTH-TENANCY | **Re-ordered after the ledger slice** by owner direction 2026-09-11. Its first task on landing is the FK migration in `B-20260911-02` |
-| Chart of accounts | not started | LEDGER-CORE | Sprint 001 active — governed by `INTENTION_CONTRACT.md` v1. **Known limitation (C3 / `B-20260911-02`): `organization_id` is a plain `uuid NOT NULL` with no foreign key** until AUTH-TENANCY lands, so invariant I7 holds at the column + service layer only. |
-| Accounting periods | not started | LEDGER-CORE | Sprint 001 active — governed by `INTENTION_CONTRACT.md` v1. **Known limitation (C3 / `B-20260911-02`): `organization_id` is a plain `uuid NOT NULL` with no foreign key** until AUTH-TENANCY lands, so invariant I7 holds at the column + service layer only. |
-| Journals + posting | not started | LEDGER-CORE | Sprint 001 active — governed by `INTENTION_CONTRACT.md` v1. **Known limitation (C3 / `B-20260911-02`): `organization_id` is a plain `uuid NOT NULL` with no foreign key** until AUTH-TENANCY lands, so invariant I7 holds at the column + service layer only. |
-| Reversal | not started | LEDGER-CORE | Sprint 001 active — governed by `INTENTION_CONTRACT.md` v1. **Known limitation (C3 / `B-20260911-02`): `organization_id` is a plain `uuid NOT NULL` with no foreign key** until AUTH-TENANCY lands, so invariant I7 holds at the column + service layer only. |
-| Period lock | not started | LEDGER-CORE | Sprint 001 active — governed by `INTENTION_CONTRACT.md` v1. **Known limitation (C3 / `B-20260911-02`): `organization_id` is a plain `uuid NOT NULL` with no foreign key** until AUTH-TENANCY lands, so invariant I7 holds at the column + service layer only. |
-| Customers | not started | SALES-AR | sprint 002+ |
-| Invoices | not started | SALES-AR | sprint 002+ |
-| Customer payments | not started | SALES-AR | sprint 002+ |
-| AR aging | not started | SALES-AR | sprint 002+ |
-| Suppliers | not started | PROCUREMENT-AP | sprint 002+ |
-| Bills | not started | PROCUREMENT-AP | sprint 002+ |
-| Supplier payments | not started | PROCUREMENT-AP | sprint 002+ |
-| AP aging | not started | PROCUREMENT-AP | sprint 002+ |
-| Bank accounts | not started | BANKING-RECON | sprint 002+ |
-| CSV statement import | not started | BANKING-RECON | sprint 002+ |
-| Reconciliation | not started | BANKING-RECON | sprint 002+ |
-| Document storage abstraction | not started | DOCUMENTS-AI-SAFETY | **Deferred out of sprint 001** by contract clause C2 (ledger-first). Re-planned in a later sprint |
-| AI suggestion model | not started | DOCUMENTS-AI-SAFETY | **Deferred out of sprint 001** by contract clause C2 (ledger-first). Re-planned in a later sprint |
-| AI provider integration | not started | DOCUMENTS-AI-SAFETY | TBD; no provider until grounding/anti-injection tests exist |
-| Audit log | not started | LEDGER-CORE + AUTH-TENANCY | Sprint 001 — append-only `AuditLog` table + writer for ledger actions only (post, reverse, lock, unlock). Security events wired when AUTH-TENANCY lands |
-| Trial balance | not started | REPORTING-ANALYTICS | sprint 002+ |
-| Profit and loss | not started | REPORTING-ANALYTICS | sprint 002+ |
-| Balance sheet | not started | REPORTING-ANALYTICS | sprint 002+ |
-| GL drilldown | not started | REPORTING-ANALYTICS | sprint 002+ |
-| Cash forecasting | not started | REPORTING-ANALYTICS | post-MVP |
-| App shell / navigation | not started | FRONTEND-UX | **Deferred out of sprint 001** by contract clause C2 (ledger-first). Re-planned in a later sprint |
-| Shared UI primitives | not started | FRONTEND-UX | **Deferred out of sprint 001** by contract clause C2 (ledger-first). Re-planned in a later sprint |
-| Empty / loading / error states | not started | FRONTEND-UX | **Deferred out of sprint 001** by contract clause C2 (ledger-first). Re-planned in a later sprint |
+| Repository | working | Lead | `develop` @ `5f29213`. `main` unchanged and still default — `B-20260911-03` |
+| Governance docs | working | ARCHITECT | `CLAUDE.md`, 6 rule files, coordination docs, ADR-0001, `INTENTION_CONTRACT.md` v1, `CONTEXT_LEDGER.md` |
+| Branch protection | working + verified | repo owner / Lead | Rulesets `protect-develop` (22882053) + `protect-main` (22882054), active, verified via the resolved-rules endpoint |
+| Claude hooks | working + tested | PLATFORM-GUARDIAN | `B-20260911-01` **closed**. `check-agent-ownership.sh` now gates `Write`/`Edit`/`NotebookEdit`/`MultiEdit` as well as Bash, knows `src/modules/**`, resolves longest-prefix, matches owners by exact token. 35 local cases + 8 CI cases |
+| CI | working + tested | PLATFORM-GUARDIAN | `governance-checks.yml` (5 pinned job names) + `ledger-ci.yml` (real Postgres, migration-drift check with its own shadow DB, typecheck, 113 tests, and a grep asserting each named DB invariant still exists in SQL) |
+| Package manager / lockfile | working | PLATFORM-GUARDIAN | pnpm 9.15.4 pinned via `packageManager`, lockfile committed |
+| TypeScript config | working | PLATFORM-GUARDIAN | strict, plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` |
+| Test framework | working + tested | PLATFORM-GUARDIAN | Vitest, `fileParallelism: false` (one shared database). Playwright still deferred with the UI |
+| Application framework (Next.js) | not started | PLATFORM-GUARDIAN | Deliberately excluded from sprint 001 by contract clause C2 |
+| Lint / format config | not started | PLATFORM-GUARDIAN | no ESLint or Prettier yet |
+| Database / Prisma | working + tested | LEDGER-CORE | 2 migrations, 14 models, `prisma migrate diff` reports no drift in CI |
+| Chart of accounts | working + tested | LEDGER-CORE | `createAccount`, `listAccounts`, `getAccount`, org-scoped; `getAccount` returns null for another tenant's id rather than a distinguishable error |
+| Accounting periods | working + tested | LEDGER-CORE | create / close / lock / unlock, each writing a `period_locks` row and an audit row in the same transaction |
+| Journals + posting | working + tested | LEDGER-CORE | `postJournalEntry` in one Serializable transaction: validates, allocates the journal number via `SELECT … FOR UPDATE`, writes draft then lines then posts by UPDATE, writes audit. Concurrency tested |
+| Reversal | working + tested | LEDGER-CORE | line-by-line inverse, both link directions set, audited. The link is written with raw SQL because Prisma's `@updatedAt` would break the immutability trigger's exception |
+| Period lock | working + tested | LEDGER-CORE | enforced in the database (`je_period_open`) as well as the service |
+| Audit log | working + tested | LEDGER-CORE | append-only table with a trigger; written on post, reverse, lock, unlock, close, account and period creation. **Security events not yet wired** — that arrives with Auth.js |
+| Transaction helper | working + tested | LEDGER-CORE | `withTx` at Serializable with bounded retry on SQLSTATE 40001/40P01/55P03 only; rethrows everything else and after exhausting attempts |
+| Organizations / memberships | working + tested | AUTH-TENANCY | `B-20260911-02` **closed** — all 8 ledger tables now have a real FK to `organizations(id)` `ON DELETE RESTRICT` |
+| Roles / permissions | working + tested | AUTH-TENANCY | per-organization roles; permissions checked by action key, hierarchy VIEWER < BOOKKEEPER < APPROVER < ACCOUNTANT < ADMIN < OWNER |
+| Authorization layer | working + tested | AUTH-TENANCY | `resolveOrgScope(userId, slug)` + `assertCanDo`. Both failure modes share a message so the error cannot confirm another tenant's slug. **Enforced** via `src/modules/ledger/guarded.ts` and `src/modules/reports/guarded.ts` — but see `B-20260911-05` |
+| Authentication (Auth.js v5) | **not started** | AUTH-TENANCY | Schema exists (`users`, `sessions`, `auth_accounts`, `verification_tokens`). **Nothing derives a scope from an authenticated request yet**, so the gate is only as trustworthy as its caller |
+| Trial balance | working + tested | REPORTING-ANALYTICS | posted rows only, summed in SQL, refuses to return an unbalanced result |
+| Profit and loss | working + tested | REPORTING-ANALYTICS | income credit-balance, expense debit-balance, inclusive date range, inverted range throws |
+| Balance sheet | working + tested | REPORTING-ANALYTICS | cumulative to a date; income and expense roll into retained earnings; the identity assets = liabilities + equity + retained earnings is enforced at exact Decimal equality with no tolerance |
+| GL drilldown | not started | REPORTING-ANALYTICS | next reporting slice |
+| Row Level Security | **not started** | ARCHITECT | `B-20260911-04`. Tenant isolation currently rests on application-level filtering plus the `jl_org_consistency` trigger. Judged an acceptable deferral, not an acceptable permanent state |
+| Customers / Invoices / Customer payments / AR aging | not started | SALES-AR | sprint 002+ |
+| Suppliers / Bills / Supplier payments / AP aging | not started | PROCUREMENT-AP | sprint 002+ |
+| Bank accounts / CSV import / Reconciliation | not started | BANKING-RECON | sprint 002+ |
+| Document storage / AI suggestions / AI provider | not started | DOCUMENTS-AI-SAFETY | excluded from sprint 001 by clause C2 |
+| App shell / UI primitives / empty states | not started | FRONTEND-UX | excluded from sprint 001 by clause C2 |
 | Accessibility audit | not started | FRONTEND-UX + QA-AUDITOR | sprint 002+ |
-| Migration readiness (import from other systems) | not started | TBD | post-MVP |
-| Multi-entity expansion | not started | TBD | post-MVP, depends on org model maturity |
+| Cash forecasting | not started | REPORTING-ANALYTICS | post-MVP |
+| Migration readiness | not started | TBD | post-MVP |
+| Multi-entity expansion | not started | TBD | post-MVP |
+
+### What "working + tested" does not mean here
+
+There is no user-facing application. Every row above is a server-side module
+with integration tests. Nothing is deployed, nothing is reachable over HTTP, and
+no human has ever posted a journal entry through a screen.
 
 ## How to update this file
 

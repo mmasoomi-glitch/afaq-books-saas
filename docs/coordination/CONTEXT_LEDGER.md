@@ -162,72 +162,57 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-11 (authz gate + statements landed)
+## State — last hydrated 2026-09-11 (sprint 001 CLOSED, all PRs merged)
 
-**PR #5 is green in CI: 106 tests passing** on a real `postgres:14` container.
-41 ledger invariants (raw SQL, bypassing Prisma), 20 ledger services,
-11 authorization, 10 guarded-gate, 15 statements, 9 trial balance.
+**`develop` @ `5f29213`. No open pull requests. 113 tests green.**
 
-| Ref | State |
-|-----|-------|
-| `origin/main` | `3a91656`, empty root commit, still the public default branch (`B-20260911-03`) |
-| `origin/develop` | `438bb59` |
-| PR #3 / #4 / #5 | all 5/5 green, all awaiting the owner's merge |
+PRs #3, #4 and #5 merged on owner authorization, in that order, each synced and
+re-run because the rulesets require branches to be up to date. Recorded in
+`INTEGRATION_LOG.md` with the authorization noted explicitly.
 
-### Built
+### Merged and working
 
-- **Ledger** with invariants enforced by PostgreSQL: deferred balance trigger at
-  COMMIT, posted-row immutability, period non-overlap, org consistency,
-  append-only audit and lock logs.
-- **Tenancy + foreign keys** — `B-20260911-02` closed.
-- **Authorization is now an enforced GATE**, not just a tested component.
-  `src/modules/ledger/guarded.ts` asserts the permission before delegating, so a
-  refused call never reaches the database. Test G4 is the one that matters: a
-  VIEWER posting gets ForbiddenError *and* `journalEntry.count` is still 0.
-- **Statements** — profit and loss over a range, balance sheet as at a date with
-  the accounting identity enforced at exact Decimal equality, no tolerance.
+- **Ledger** — chart of accounts, periods, journals, posting, reversal, period
+  locks, append-only audit log. The accounting invariants are enforced by
+  PostgreSQL: deferred balance trigger firing at COMMIT, posted-row
+  immutability, period non-overlap, org consistency across entry/line/account.
+- **Tenancy** — organizations, users, per-organization memberships, sessions,
+  OAuth links. All eight ledger tables carry a real FK to `organizations(id)`.
+- **Authorization, enforced** — `resolveOrgScope` + `assertCanDo`, wired through
+  `ledger/guarded.ts` (9 wrappers) and `reports/guarded.ts` (3 wrappers). Assert
+  first, delegate second, so a refused call never reaches the database.
+- **Statements** — trial balance, profit and loss, balance sheet. Posted rows
+  only, summed in SQL, organization filtered on every joined table, money in
+  Decimal end to end, and the balance-sheet identity enforced at exact equality.
 
-### Two real defects caught this round
+### Blockers now open
 
-- **Retained earnings summed expenses with the wrong sign.** The per-type CASE
-  from P&L (which flips expenses positive so they can be shown in their own
-  section and subtracted) was reused in the balance sheet, producing income PLUS
-  expenses. The balance sheet then failed its own identity check by exactly twice
-  the expenses. Retained earnings is just credits minus debits across
-  profit-and-loss accounts. **The guard caught it, not a test assertion** — the
-  report refused to render, which is what it was specified to do.
-- **A test that could never pass.** The obvious test for the unbalanced guard —
-  write a one-sided posted entry, assert it throws — is impossible:
-  `je_balanced_check` is DEFERRABLE INITIALLY DEFERRED and fires at COMMIT
-  however the rows are written, so the database refuses the corrupt state.
-  Removed with the reason written down rather than shipped passing for the
-  wrong reason.
+| Id | Subject | Owner |
+|----|---------|-------|
+| `B-20260911-03` | `main` is behind `develop` and is the public default branch | repository owner |
+| `B-20260911-04` | No Row Level Security — tenant isolation is application-level | ARCHITECT |
+| `B-20260911-05` | Nothing mechanically forces callers through the authorization gate | ARCHITECT + PLATFORM-GUARDIAN |
 
-### Tooling verdict — measured, not assumed
+`B-20260911-01` and `B-20260911-02` are closed.
 
-- **Sophia (qwen3-coder, 64k)** — reliable only on narrow, single-deliverable
-  jobs with an autonomous preamble. Everything touching state must be read line
-  by line: it shipped services that typechecked and did nothing, and silently
-  marked eight foreign keys `NOT VALID`.
-- **Forge (`forge-ai`, 131k)** — fast first drafts (7-35s per file) and the
-  larger context is real. **But it oscillates under iteration rather than
-  converging.** Asked to fix float arithmetic in the balance sheet it fixed that
-  and simultaneously reintroduced a nested `$queryRaw` bug, used a wrong column
-  name, and silently changed the exported interface. It also has no file tools,
-  so every edit round-trips through the lead session's context. **Use it for
-  first drafts and second opinions; do not use it for correction loops.**
-- The working loop is: Forge or Sophia drafts -> lead session reviews for the
-  known defect signatures -> **CI on real Postgres is the verifier**. CI caught
-  the retained-earnings sign error that review missed.
+### The honest limit of what exists
+
+There is no user-facing application. Every module above is server-side with
+integration tests. **Nothing is deployed, nothing is reachable over HTTP, and
+no human has ever posted a journal entry through a screen.** There is also no
+Auth.js session yet, so the authorization gate is only as trustworthy as
+whatever eventually calls `resolveOrgScope` — today that is tests.
 
 ## Next actions, in order
 
-1. **Owner decision: merge PRs #3, #4, #5.** All green. Everything else in the
-   sprint is blocked behind them — the doc updates specifically behind PR #3,
-   which modifies the same three files.
-2. Auth.js v5 wiring so a real session produces the OrgScope that `guarded.ts`
-   already consumes. The schema and the gate both exist; only the session does not.
-3. General-ledger drilldown (per-account transaction listing), reusing the
-   statement query shape.
-4. Then SALES-AR, which is the first module that posts through the ledger rather
-   than alongside it.
+1. **Auth.js v5** — the schema and the gate both exist; only the session does
+   not. This is the single thing standing between "tested modules" and "an
+   application". `resolveOrgScope` is already the seam it plugs into.
+2. **`B-20260911-05`** — make gate bypass fail rather than merely be against
+   convention. Cheapest option is a CI grep in the same shape as the existing
+   invariant grep; strongest is a branded scope type the services demand.
+3. **`B-20260911-04`** — ARCHITECT decides whether RLS lands in sprint 002.
+4. **`B-20260911-03`** — owner decides whether `main` gets promoted or whether
+   `develop` becomes the default branch.
+5. GL drilldown, then SALES-AR — the first module that posts *through* the
+   ledger rather than alongside it.

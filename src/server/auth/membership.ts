@@ -272,7 +272,10 @@ export async function removeMember(
         organizationId: scope.organizationId,
       },
     },
-    select: { id: true },
+    // `role` is selected because the audit row needs it, and this is the last
+    // moment it exists anywhere: once the row is deleted, `before` is the only
+    // record of what the removed member was allowed to do.
+    select: { id: true, role: true },
   });
 
   if (membership === null) throw new NotAMemberOfThisOrgError();

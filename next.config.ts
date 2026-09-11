@@ -31,6 +31,17 @@ const PAGE_CSP = [
   "object-src 'none'",
 ].join("; ");
 
+/** The headers that are identical for pages and for the API. */
+const COMMON_HEADERS = [
+  { key: "x-content-type-options", value: "nosniff" },
+  { key: "x-frame-options", value: "DENY" },
+  { key: "referrer-policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "strict-transport-security",
+    value: "max-age=31536000; includeSubDomains",
+  },
+] as const;
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
 
@@ -48,19 +59,31 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/:path*",
+        // Pages only. The negative lookahead matters, and it was not there
+        // first time: a single `/:path*` rule applied the PAGE policy to the
+        // API too, and `next.config` headers OVERWRITE what a route handler
+        // set. Verified against the running server — `GET /api/auth/session`
+        // came back carrying `default-src 'self'` instead of the handler's
+        // `default-src 'none'`. The looser policy silently won on exactly the
+        // responses that needed the stricter one.
+        source: "/((?!api/).*)",
+        headers: [...COMMON_HEADERS, { key: "content-security-policy", value: PAGE_CSP }],
+      },
+      {
+        // API routes. The handlers set all of this per response as well, which
+        // is deliberate duplication rather than an oversight: the handler
+        // version is what the tests assert and what protects a response served
+        // by anything other than Next, and this version is what wins at the
+        // edge. They must stay in agreement — if they drift, the handler's is
+        // the one that becomes decorative.
+        source: "/api/:path*",
         headers: [
-          { key: "x-content-type-options", value: "nosniff" },
-          { key: "x-frame-options", value: "DENY" },
+          ...COMMON_HEADERS,
           {
-            key: "referrer-policy",
-            value: "strict-origin-when-cross-origin",
+            key: "content-security-policy",
+            value: "default-src 'none'; frame-ancestors 'none'",
           },
-          {
-            key: "strict-transport-security",
-            value: "max-age=31536000; includeSubDomains",
-          },
-          { key: "content-security-policy", value: PAGE_CSP },
+          { key: "cache-control", value: "no-store" },
         ],
       },
     ];

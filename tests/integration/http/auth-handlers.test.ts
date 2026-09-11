@@ -235,6 +235,9 @@ test("H9: the security headers ride on every response, success or failure", asyn
     expect(res.headers?.["x-frame-options"]).toBe("DENY");
     expect(res.headers?.["x-content-type-options"]).toBe("nosniff");
     expect(res.headers?.["content-security-policy"]).toBeDefined();
+    // Including the successful sign-in, which is the response that carries a
+    // session cookie and the user's id — the one a cached copy would give away.
+    expect(res.headers?.["cache-control"]).toBe("no-store");
   }
 });
 

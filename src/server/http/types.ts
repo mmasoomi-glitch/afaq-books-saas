@@ -118,4 +118,19 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = Object.freeze(
   "referrer-policy": "strict-origin-when-cross-origin",
   "strict-transport-security": "max-age=31536000; includeSubDomains",
   "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+
+  // `no-store`, and it is not belt-and-braces.
+  //
+  // Found by independent review and then confirmed against the running server:
+  // these responses carried NO cache directive at all. `force-dynamic` controls
+  // Next's own cache and says nothing to a CDN or a browser, and a 200 from
+  // `GET /api/auth/session` — a JSON body naming the authenticated user, with a
+  // fresh `Set-Cookie` on it — is heuristically cacheable by any shared proxy
+  // that decides to. One cached copy served to the next visitor is an account
+  // takeover with no attacker involved.
+  //
+  // `private` would not be enough: it permits the BROWSER to keep a copy, which
+  // is still wrong on a shared machine after sign-out. `no-store` is the only
+  // directive that means what is meant here.
+  "cache-control": "no-store",
 });

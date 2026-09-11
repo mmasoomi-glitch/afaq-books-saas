@@ -69,6 +69,14 @@ jobs:
       - name: Prisma schema is valid
         run: pnpm prisma validate
 
+      # The generated client is what supplies the `Prisma` namespace and the
+      # model types the service layer is written against. pnpm does not always
+      # run Prisma's postinstall hook, so without this step typecheck fails with
+      # "@prisma/client has no exported member 'Prisma'" and every downstream
+      # parameter falls back to implicit any.
+      - name: Generate the Prisma client
+        run: pnpm prisma generate
+
       # `migrate diff` RESETS whatever database it is given as the shadow and
       # replays the migrations into it. Pointing it at the test database left
       # that database populated but with no _prisma_migrations history, so the

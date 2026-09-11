@@ -29,8 +29,12 @@ let cookieValue: string | undefined;
 vi.mock("next/headers", () => ({
   cookies: () =>
     Promise.resolve({
+      // Compared against the real constant, so a rename of the cookie breaks
+      // this mock loudly instead of leaving it silently matching nothing —
+      // which would make every test here take the "no session" path and still
+      // pass four of the seven.
       get: (name: string) =>
-        name === "__Host-session" && cookieValue !== undefined
+        name === SESSION_COOKIE && cookieValue !== undefined
           ? { name, value: cookieValue }
           : undefined,
     }),

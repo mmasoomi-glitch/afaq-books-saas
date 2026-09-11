@@ -107,6 +107,37 @@ jobs:
       - name: Accounting-invariant tests
         run: pnpm test
 
+
+      - name: Assert nothing bypasses the authorization gate
+        run: |
+          set -euo pipefail
+          # B-20260911-05. The branded LedgerScope makes ACCIDENTAL bypass a
+          # compile error. A determined caller can still mint one, so these two
+          # greps are the visible-intent half of the control.
+          fail=0
+
+          # 1. Only the auth bridge may mint a LedgerScope.
+          for f in $(grep -rl "unsafeCreateLedgerScope" src/ || true); do
+            case "$f" in
+              src/modules/ledger/scope.ts|src/server/auth/scope.ts) ;;
+              *) echo "::error file=$f::mints a LedgerScope directly instead of going through toLedgerScope"; fail=1 ;;
+            esac
+          done
+          echo "checked: who mints a LedgerScope"
+
+          # 2. Only the guarded wrappers may import the unguarded services.
+          for mod in posting periods accounts; do
+            for f in $(grep -rl "ledger/$mod.js\|\./$mod.js" src/ || true); do
+              case "$f" in
+                src/modules/ledger/$mod.ts|src/modules/ledger/guarded.ts) ;;
+                *) echo "::error file=$f::imports $mod directly instead of the guarded wrapper"; fail=1 ;;
+              esac
+            done
+          done
+          echo "checked: who imports the unguarded ledger services"
+
+          exit "$fail"
+
       - name: Assert the invariants are enforced by the DATABASE, not only the schema
         run: |
           set -euo pipefail

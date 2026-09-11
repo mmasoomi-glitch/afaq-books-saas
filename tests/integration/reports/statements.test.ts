@@ -3,6 +3,7 @@ import { beforeEach, expect, test } from "vitest";
 import { ensureOrg, resetDb } from "../../setup.js";
 import { prisma } from "../../../src/server/db/client.js";
 import type { LedgerScope } from "../../../src/modules/ledger/scope.js";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope.js";
 import { createAccount } from "../../../src/modules/ledger/accounts.js";
 import { createPeriod } from "../../../src/modules/ledger/periods.js";
 import { postJournalEntry } from "../../../src/modules/ledger/posting.js";
@@ -19,7 +20,7 @@ const YEAR_END = new Date("2024-12-31");
 async function scopeWithOrg(): Promise<LedgerScope> {
   const organizationId = randomUUID();
   await ensureOrg(organizationId);
-  return { userId: randomUUID(), organizationId };
+  return unsafeCreateLedgerScope(randomUUID(), organizationId);
 }
 
 /** A full chart of accounts plus an open period covering 2024. */

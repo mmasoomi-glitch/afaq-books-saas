@@ -369,7 +369,18 @@ It is not an acceptable permanent state.
 
 - **Filed by:** Lead Orchestrator
 - **Date:** 2026-09-11
-- **Status:** open
+- **Status:** **resolved 2026-09-11** — PR #10. `LedgerScope` now carries a
+  phantom `unique symbol` brand, so a plain `{ userId, organizationId }`
+  literal is no longer assignable and an accidental bypass is a COMPILE ERROR.
+  `unsafeCreateLedgerScope` is the only constructor, named to be conspicuous,
+  and CI asserts that only `src/server/auth/scope.ts` calls it and that only
+  `guarded.ts` imports the unguarded services.
+
+  **The honest limit:** a type cannot stop a determined caller, who can still
+  call `unsafeCreateLedgerScope` themselves. What changed is that doing so is
+  now impossible by accident and impossible to hide in review. The judge had
+  required this before the HTTP layer: *"Structural branded scope type required
+  to prevent silent bypass."*
 - **Type:** blocker (security hardening)
 
 **What I need**
@@ -566,8 +577,56 @@ whether the string "develop" appears anywhere nearby.
 ---
 
 
+### B-20260911-10 — HTTP transport decisions, pre-agreed before any route ships
+
+- **Filed by:** Lead Orchestrator, recording the deciding architect's answers
+- **Date:** 2026-09-11
+- **Status:** open (specification agreed, not yet implemented)
+- **Type:** architecture decision — **implement exactly this when routes ship**
+
+The owner being away, these were decided by the independent reviewer acting as
+architect. Recorded here so the HTTP layer is built to an agreed spec rather
+than to whatever seems reasonable on the day.
+
+**Shape.** A framework-agnostic HTTP handler layer FIRST — request in, response
+out, no framework import — which Next.js route handlers later delegate to. Same
+reasoning as the session layer: the security properties stay testable without
+booting a server.
+
+**Session library.** Keep the hand-rolled session layer. Do not migrate to
+Auth.js v5 now; expose the layer as an Auth.js adapter later. Rationale: the
+existing code is tested and audited, and replacing working security code
+carries more risk than deferring the integration.
+
+**Rate-limit response.** Return `429` with `Retry-After` IMMEDIATELY. Drop the
+server-side await, which today holds a task for up to 10 seconds and would
+otherwise become a resource-exhaustion vector under a flood — see
+`B-20260911-07`. The trade-off is explicit and accepted: a hostile client
+ignores `Retry-After`, and the counter still advances, so repeat offenders keep
+climbing the backoff curve even though they do not wait.
+
+**Transport: COOKIE, not bearer.** Name `__session`. Attributes `HttpOnly`,
+`Secure`, `SameSite=Lax`. `Max-Age` 3600. Lax rather than Strict so that inbound
+links from email still work, which invoice and password-reset flows will need.
+
+**CSRF: an explicit double-submit token on every mutating request.** The
+reviewer was asked directly whether `SameSite=Lax` alone suffices for
+state-changing financial operations and answered that it does not. This matters
+because a successful CSRF here posts to someone's books.
+
+**One tension to resolve at implementation time.** `Max-Age` 3600 is one hour,
+but `SESSION_TTL_MS` is fourteen days. That means the cookie is dropped by the
+browser long before the server session expires, which implies a refresh or
+sliding-renewal mechanism that does not exist yet. Either the cookie lifetime
+rises to match, or a renewal endpoint is built. Do not silently pick one.
+
+---
+
+
 ## Resolved
 
+- **`B-20260911-05`** — the authorization gate is now structurally enforced by a
+  branded scope type. Resolved 2026-09-11 via PR #10; full entry retained above.
 - **`B-20260911-06`** — rate limiting on sign-in and sign-up. Resolved
   2026-09-11 via PR #9; full entry retained above.
 - **`B-20260911-01`** — ownership hook now gates `Write`/`Edit` and knows the

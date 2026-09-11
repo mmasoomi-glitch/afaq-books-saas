@@ -27,6 +27,7 @@ import {
   withTxUsing,
 } from "../../../src/server/tx/with-tx.js";
 import type { LedgerScope } from "../../../src/modules/ledger/scope.js";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope.js";
 
 beforeEach(async () => {
   await resetDb();
@@ -38,7 +39,7 @@ afterAll(async () => {
 });
 
 async function newScope(): Promise<LedgerScope> {
-  const scope = { userId: randomUUID(), organizationId: randomUUID() };
+  const scope = unsafeCreateLedgerScope(randomUUID(), randomUUID());
   // Ledger tables now carry a real foreign key to organizations(id), so the
   // tenant has to exist before anything can be written under it.
   await ensureOrg(scope.organizationId);

@@ -1,6 +1,7 @@
 import type { MembershipRole } from "@prisma/client";
 import { prisma } from "../../server/db/client.js";
 import type { LedgerScope } from "../../modules/ledger/scope.js";
+import { unsafeCreateLedgerScope } from "../../modules/ledger/scope.js";
 import { NotAMemberError, ForbiddenError, OrganizationNotFoundError } from "./errors.js";
 import type { Action } from "./permissions.js";
 import { can } from "./permissions.js";
@@ -48,9 +49,14 @@ export function assertCanDo(scope: OrgScope, action: Action): void {
   }
 }
 
+/**
+ * Narrow a verified OrgScope to the LedgerScope the ledger services accept.
+ *
+ * This is the legitimate bridge: by the time an OrgScope exists,
+ * resolveOrgScope has confirmed a real Membership row, and the guarded wrappers
+ * have asserted the action. Minting the brand here is the assertion that both
+ * happened.
+ */
 export function toLedgerScope(scope: OrgScope): LedgerScope {
-  return {
-    userId: scope.userId,
-    organizationId: scope.organizationId,
-  };
+  return unsafeCreateLedgerScope(scope.userId, scope.organizationId);
 }

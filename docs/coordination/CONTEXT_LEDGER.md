@@ -162,7 +162,63 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-12 (HTTP layer and adapter merged)
+## State — last hydrated 2026-09-12 (the application is reachable)
+
+**Base branch @ `6a939e4`. No open PRs. 240 tests green, `pnpm build` green,
+typecheck clean, no migration drift.** Three PRs merged this round: #11, #12,
+#13.
+
+**The gap that has been open since sprint 001 is closed.** `next build`
+produces four working auth endpoints, each one line of routing:
+
+```
+├ ƒ /api/auth/register
+├ ƒ /api/auth/session
+├ ƒ /api/auth/signin
+└ ƒ /api/auth/signout
+```
+
+All four `ƒ` (dynamic) — a statically rendered auth response would hand the
+next visitor somebody else's session.
+
+### The habit that is paying: check the claim against the running thing
+
+Three rounds, three reviews, four real defects — and in the last round the
+review was also **wrong about one thing**, which matters as much:
+
+| Claim | Verdict | How settled |
+|-------|---------|-------------|
+| Email lookup case-sensitive while the rate-limit key is lowercased | REAL | read the code; two accounts for one address |
+| No request-body size cap | REAL | `A18`/`A19` |
+| `Response` throws on a 204 with a body | REAL | `A22` |
+| API responses carry no `Cache-Control` | REAL | `curl` against the built server |
+| Page CSP overwrites the API's stricter one | REAL | `curl`: `default-src 'self'` where the handler set `'none'` |
+| `source: "/:path*"` misses the root path | **WRONG** | `curl /` — headers were there all along |
+
+A review is evidence to test, not a verdict to apply. Two minutes of `curl`
+separated four real findings from one confident mistake.
+
+### And a decision document was wrong too
+
+ADR-0002 chose `bundler` module resolution, then asserted the `.js` import
+suffixes could stay because `bundler` maps `./y.js` to `y.ts`. **True of
+TypeScript, false of the bundler.** `tsc --noEmit` passed clean and
+`next build` could not resolve a single route file.
+
+`moduleResolution: "bundler"` tells the TYPE CHECKER to behave as a bundler
+would. It does not configure webpack, and webpack looks for `web.js`, which
+does not exist. 158 suffixes came out across 35 files.
+
+Two lessons, both now load-bearing:
+
+1. **`pnpm build` is a CI gate in its own right.** The typecheck and the build
+   answer different questions; this is the proof.
+2. **A CI grep can pass vacuously.** The gate checking that nobody imports the
+   unguarded ledger services was matching `posting.js`. After the rename it
+   would have matched nothing and reported success. Any grep-based gate needs
+   a reason to believe its pattern still matches something.
+
+### State by layer
 
 **Base branch @ `6fc4c1b`. No open PRs. 231 tests green**, typecheck clean, no
 migration drift — verified on the Sophia pod against a real PostgreSQL 14 and
@@ -353,19 +409,28 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **Next.js 15 scaffold (`002-5`).** The only thing between tested modules and
-   an application. The adapter is done, so each route handler is one line:
-   `export const POST = toRouteHandler(signInHandler())`. Settle the
-   `tsconfig.json` resolution question FIRST (see above) rather than letting
-   `next build` rewrite the file. PLATFORM-GUARDIAN owns `next.config.*`,
-   `tsconfig.json` and `package.json`.
-2. **`B-20260912-01`** once a sign-in page exists: a pre-session token, closing
-   login CSRF.
+1. **A sign-in page (FRONTEND-UX).** Not cosmetic: it is the prerequisite for
+   `B-20260912-01`. Login CSRF cannot be closed without a page that issues a
+   pre-session token, and until then a hostile site can sign a victim into the
+   ATTACKER's organization, where the victim's invoices and journal entries
+   become the attacker's to read. The Origin check is what stands there now,
+   and it passes any request that simply omits `Origin`.
+2. **ESLint + Prettier (PLATFORM-GUARDIAN).** `next.config.ts` already sets
+   `eslint.ignoreDuringBuilds: false`, so the build starts enforcing the moment
+   a config exists. Right now the build's lint step silently does nothing,
+   which is the kind of gate that looks present and is not.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
-   database objects Prisma cannot model, then add the `lower(email)` index. The
-   same question already applies to every trigger in the init migration.
+   database objects Prisma cannot model, then add the `lower(email)` unique
+   index. The same question already applies to every trigger in the init
+   migration, so the answer is worth writing down once.
 4. `B-20260911-04` — ARCHITECT decides on RLS.
-5. Then SALES-AR: the first module that posts *through* the ledger.
+5. `B-20260911-07` / `-08` — the reaper job, and something that actually reads
+   `security_events`. A security log nobody reads is a log that exists for the
+   auditor and not for us. Run the reaper under `tsx`, not plain `node`:
+   ADR-0002 removed the extension suffixes plain Node ESM would need.
+6. Then SALES-AR: the first module that posts *through* the ledger.
+
+## Superseded — hydrated 2026-09-12 (HTTP layer and adapter merged)
 
 ---
 

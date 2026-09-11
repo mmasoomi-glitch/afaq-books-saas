@@ -14,8 +14,13 @@ export default function Home() {
     <main>
       <h1>Afaq Books</h1>
       <p>
-        The accounting API is running. There is no user interface yet — the
-        sign-in, ledger and reporting screens have not been built.
+        The accounting API is running. Sign-in and registration have screens;
+        the ledger and reporting screens have not been built.
+      </p>
+      <p>
+        You can <a href="/register">create an account</a> or{" "}
+        <a href="/signin">sign in</a>. There is nothing to see after signing in
+        yet — no ledger or reporting screens exist.
       </p>
       <p>
         Available endpoints: <code>POST /api/auth/register</code>,{" "}

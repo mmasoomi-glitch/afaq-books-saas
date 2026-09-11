@@ -71,4 +71,5 @@ test("M6: the matcher never covers an API route", () => {
   expect(routes).not.toContain("/api");
   expect(routes).not.toContain(":path*");
   expect(routes).toContain("/signin");
+  expect(routes).toContain("/register");
 });

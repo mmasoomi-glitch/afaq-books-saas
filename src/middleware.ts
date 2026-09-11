@@ -93,13 +93,13 @@ export function middleware(request: NextRequest): NextResponse {
  * one, or the check becomes a check against a value the same request supplied.
  * Only the two pages that render a form need this.
  */
-export const config = { matcher: ["/signin"] };
+export const config = { matcher: ["/signin", "/register"] };
 
 /**
- * Only `/signin`, even though `/api/auth/register` also verifies the token.
+ * The two pages that render a form, and nothing else.
  *
- * The cookie has `Path=/`, so one token covers every endpoint — a visitor who
- * has loaded the sign-in page can register with the same value. Adding
- * `/register` to the matcher before a registration page exists would mean
- * setting a cookie on a 404.
+ * `/register` is included now that the page exists; before it did, adding it
+ * would have meant setting a cookie on a 404. The cookie has `Path=/`, so one
+ * token covers every endpoint regardless — the matcher decides where a token is
+ * ISSUED, not where it is accepted.
  */

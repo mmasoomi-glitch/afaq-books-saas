@@ -69,3 +69,9 @@ memory/
 *.crt
 .turbo/
 .vercel/
+
+# Context-ledger SQLite DB and brief markers - per-machine coordination state,
+# not project source. See docs/coordination/CONTEXT_LEDGER.md.
+.claude/context_ledger.db
+.claude/context_ledger.db-*
+.claude/.briefed/

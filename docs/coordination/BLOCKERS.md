@@ -689,6 +689,56 @@ builds the auth shell.
 
 ---
 
+**RESOLVED 2026-09-12**, on `agent/10-signin-page-sprint-002`.
+
+**How the circularity was broken.** `src/middleware.ts` commits the
+`__Host-csrf` cookie one request EARLIER — on the sign-in page that carries the
+form — and hands the same value to the renderer through an `x-csrf-token`
+request header, which the page embeds in its HTML. `signInHandler` and
+`registerHandler` now call `verifyCsrf` like every other mutation.
+
+Middleware rather than the page itself, and not by preference: a Next 15 server
+component cannot call `cookies().set()` during render — it throws — so a token
+minted in the page would have no matching cookie and every submission would
+403. The page refuses to render the form at all when the header is missing,
+rather than rendering one that looks working and cannot work.
+
+**Verified end to end against the running build**, not only in tests:
+
+```text
+$ curl -i http://127.0.0.1:4011/signin
+set-cookie: __Host-csrf=IHw1Mt0ssR…; Path=/; Max-Age=3600; Secure; SameSite=lax
+   …and the same value embedded as csrfToken":"IHw1Mt0ssR…
+
+$ POST /api/auth/signin  (matched pair)          → 200, sets __Host-session
+$ POST /api/auth/signin  (cookie, no header)     → 403 CSRF_INVALID
+$ POST /api/auth/signin  (pair, wrong password)  → 401
+```
+
+**The severity recorded above was overstated, and the correction matters more
+than the fix.** Pressed on its own contradictory answer, the reviewer confirmed
+that `SameSite=Lax` does not send cookies on a cross-site POST at all — so a
+forged sign-in from a hostile page arrives with **no** cookie and is refused on
+that ground alone, and was being refused before this change. Login CSRF was
+mitigated by the cookie attributes, not left open.
+
+What the token adds is therefore defence in depth, and it is worth having for
+reasons that are real but narrower than "this was exploitable": it covers
+clients that do not implement `SameSite`, and it fails closed if the cookie's
+attributes are ever loosened — a change to `SameSite=None` for an embedding
+partner would otherwise silently reopen the hole with nothing to catch it.
+
+**What it costs.** A non-browser client must now fetch the sign-in page for a
+token before it can authenticate. That is the right trade for a browser-facing
+product; a machine-to-machine path wants API keys, not this, and should be
+designed as its own thing rather than by relaxing this check.
+
+**Tests.** `H25`–`H28` (no pair is 403 with no session row; a mismatched pair
+is 403; registration likewise; all three failure shapes read identically so the
+body never says which half was wrong) and `A23`.
+
+---
+
 ### B-20260912-02 — The CSRF token is not bound to the session
 
 - **Filed by:** AUTH-TENANCY
@@ -772,6 +822,9 @@ the exception, document it".
 
 ## Resolved
 
+- **`B-20260912-01`** — login CSRF. Closed 2026-09-12 by a page-issued token, and
+  the entry records that the original severity was overstated: `SameSite=Lax`
+  was already refusing the forged request.
 - **`B-20260911-10`** — HTTP transport decisions, implemented rather than merely
   recorded. Resolved 2026-09-12 on `agent/03-http-layer-sprint-002`; full entry
   retained above, including how the Max-Age tension was settled.

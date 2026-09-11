@@ -2,7 +2,13 @@
 
 ## Active sprint
 
-**Sprint 000 — Governance bootstrap.**
+**Sprint 001 — Ledger-first slice.** See
+[Sprint 001](#sprint-001--ledger-first-slice-active) below.
+Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
+
+---
+
+## Sprint 000 — Governance bootstrap (CLOSED 2026-09-11)
 
 - **Sprint base SHA**: `3a91656329828d9bb97b567036ff9a6a1692462c`
 - **Sprint base ref**: `origin/develop` (immediately after `chore: initial commit (empty repo bootstrap)`)
@@ -26,18 +32,80 @@
 | 000-9 | Lead | Write `.github/PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, `workflows/governance-checks.yml` | done | `chore/agent-governance-bootstrap` | files present |
 | 000-10 | Lead | Write 12 per-agent prompt files under `docs/coordination/agent-prompts/` | done | `chore/agent-governance-bootstrap` | 12 files |
 | 000-11 | Lead | Write `.gitignore` and `.gitattributes` for Next.js/TS/Prisma stack | done | `chore/agent-governance-bootstrap` | files present |
-| 000-12 | Lead | Commit + push `chore/agent-governance-bootstrap` (no PR opened yet) | in progress | `chore/agent-governance-bootstrap` | — |
-| 000-13 | Lead | Prepare PR plan, present to user for approval before opening | pending | n/a | — |
+| 000-12 | Lead | Commit + push `chore/agent-governance-bootstrap` | done | `chore/agent-governance-bootstrap` | pushed; PR #1 opened and **merged** into `develop` |
+| 000-13 | Lead | Prepare PR plan, present to user for approval before opening | done | n/a | PR #1 `chore(governance): agent-governance bootstrap (sprint 000)` merged; follow-up PR #2 `ci(governance): fix agent-prompt count check` merged 2026-05-28 |
+| 000-14 | Lead | Configure server-side branch protection (was `B-20260527-01`) | done | n/a | rulesets `protect-develop` 22882053 + `protect-main` 22882054, `enforcement: active`, verified via `gh api .../rules/branches/{develop,main}` — full output in `INTEGRATION_LOG.md` 2026-09-11 |
+
+> **Reporting lapse, recorded.** Rows 000-12 and 000-13 read
+> `in progress` / `pending` from 2026-05-28 until 2026-09-11, while both
+> PRs had in fact merged on 2026-05-28. The work was done; the board was
+> not updated. Recorded here rather than silently corrected, because
+> `testing-release-gates.md` makes the board the evidence trail and an
+> unexplained retroactive edit would weaken it.
 
 > When this sprint closes (merge into `develop`), the final integration
 > note moves to `INTEGRATION_LOG.md`.
 
 ---
 
-## Sprint 001 — planned (NOT started)
+## Sprint 001 — Ledger-first slice (ACTIVE)
 
-**Sprint base SHA**: TBD (the SHA of `origin/develop` after the
-sprint-000 bootstrap PR merges).
+- **Sprint base SHA**: `438bb59` (`origin/develop`, after PR #1 and PR #2)
+- **Start date**: 2026-09-11
+- **Governing document**: [`INTENTION_CONTRACT.md`](INTENTION_CONTRACT.md) v1
+- **Task tracker**: [`TODO_SPRINT_001_LEDGER.md`](TODO_SPRINT_001_LEDGER.md) — 52 items
+- **Build/test environment**: Sophia MCP pod, PostgreSQL 14.24
+  (`afaq_dev` + `afaq_test`). The pod is a build environment only;
+  commits are made and pushed from the governed local checkout
+  (contract C7.1-C7.2).
+
+### Ordering change — owner-directed
+
+The repository owner directed **ledger before auth-tenancy** on
+2026-09-11, reversing the default order in `OWNERSHIP.md`
+(platform → architect → auth-tenancy → ledger).
+
+The owner further directed that ledger tables carry `organization_id`
+as a plain `uuid NOT NULL` column with **no foreign key**, rather than
+importing a stub `Organization` model.
+
+Consequence: accounting invariant I7 is enforced at the column and
+service layer only for this sprint. Tracked as `B-20260911-02`, with
+the compensating database `CHECK` described in contract clause C3.3.
+Named as a limitation on every ledger row in
+`IMPLEMENTATION_STATUS.md`. Not to be described as complete.
+
+### Active tasks
+
+| # | Owner | Task | Status | Branch | Evidence |
+|---|-------|------|--------|--------|----------|
+| 001-0a | Lead | Full repository audit; open `INTENTION_CONTRACT.md` v1 + `TODO_SPRINT_001_LEDGER.md` | done | `chore/intention-contract-sprint-001` | both files present; audit baseline recorded in contract Part 0 |
+| 001-0b | Lead | Apply + verify branch-protection rulesets; close `B-20260527-01` | done | n/a | `INTEGRATION_LOG.md` 2026-09-11 |
+| 001-0c | Lead | File `B-20260911-01` (hook gaps), `-02` (ledger FK), `-03` (`main` behind `develop`) | done | `chore/intention-contract-sprint-001` | `BLOCKERS.md` |
+| 001-0d | Lead | PR `chore/intention-contract-sprint-001 → develop` | todo | `chore/intention-contract-sprint-001` | — |
+| 001-1b | PLATFORM-GUARDIAN | **Narrowed scaffold**: TypeScript strict, Prisma, Vitest, package scripts, `.env.example`. **No Next.js / React this sprint** (contract C2) | todo | `agent/04-ledger-core-sprint-001` | TODO phase 1 (T1.1-T1.6) |
+| 001-5 | LEDGER-CORE | Ledger schema + database-level invariants | todo | `agent/04-ledger-core-sprint-001` | TODO phase 2 (T2.1-T2.11) |
+| 001-5a | LEDGER-CORE | `withTx` bounded-retry helper | todo | `agent/04-ledger-core-sprint-001` | TODO phase 3 (T3.1-T3.4) |
+| 001-5b | LEDGER-CORE | Ledger services: accounts, periods, post, reverse, lock | todo | `agent/04-ledger-core-sprint-001` | TODO phase 4 (T4.1-T4.7) |
+| 001-5c | LEDGER-CORE | Invariant tests against real PostgreSQL | todo | `agent/04-ledger-core-sprint-001` | TODO phase 5 (T5.1-T5.11) |
+| 001-6b | QA-AUDITOR | Review diff against `no-mocks-no-stubs.md`; review Sophia-authored code (contract C7.4) | todo | `agent/04-ledger-core-sprint-001` | TODO phase 6 |
+
+### Evidence log
+
+Test output for sprint 001 is pasted below as it is produced. An empty
+section here while tasks above read `done` is a contract C5.2
+violation.
+
+*(no test output yet — the toolchain does not exist)*
+
+---
+
+### Deferred within sprint 001
+
+The tasks below were the original sprint-001 plan. They remain valid
+but are **not active**, because the owner directed the ledger slice
+first. They are listed unchanged so the reordering is visible rather
+than rewritten away.
 
 | # | Owner | Task |
 |---|-------|------|

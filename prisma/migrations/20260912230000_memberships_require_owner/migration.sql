@@ -17,6 +17,20 @@ DECLARE
   org_id uuid;
   owners int;
 BEGIN
+  -- Only an operation that REMOVES OR DEMOTES AN OWNER can take the count to
+  -- zero, so nothing else needs checking.
+  --
+  -- This guard is not an optimisation. Without it the trigger refuses any
+  -- membership deletion in an organization that has no owner — including one
+  -- that never had one — which would leave such an organization's memberships
+  -- permanently undeletable. Any organization created outside
+  -- `createOrganization` (a migration, a seed script, a fixture) would be
+  -- frozen, and the error would say "would be left with no OWNER" about a
+  -- state that was already true before the statement ran.
+  IF OLD.role <> 'OWNER' THEN
+    RETURN NULL;
+  END IF;
+
   -- OLD on DELETE, NEW on UPDATE. A role change that moves a membership between
   -- organizations is not a thing this schema allows, so either is the same org.
   org_id := COALESCE(OLD.organization_id, NEW.organization_id);

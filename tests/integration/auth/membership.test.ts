@@ -118,7 +118,7 @@ test("M3: the database refuses a malformed or reserved slug", async () => {
   // through it.
   const founder = await newUser();
 
-  for (const bad of ["UPPER", "has space", "-leading", "trailing-", "ab", "a".repeat(41)]) {
+  for (const bad of ["has space", "-leading", "trailing-", "ab", "a".repeat(41), "under_score"]) {
     await expect(
       createOrganization(founder.id, { slug: bad, name: "X" }),
     ).rejects.toThrow();
@@ -129,6 +129,26 @@ test("M3: the database refuses a malformed or reserved slug", async () => {
       createOrganization(founder.id, { slug: reserved, name: "X" }),
     ).rejects.toThrow();
   }
+});
+
+test("M3b: a mixed-case slug is normalised rather than refused", async () => {
+  // The service lowercases before inserting, so "Acme-Books" is not an invalid
+  // slug — it is a valid one written loudly. An earlier version of M3 expected
+  // "UPPER" to be rejected and was wrong about the service's own behaviour.
+  //
+  // Normalising rather than refusing is the right call: two organizations whose
+  // slugs differ only in case would be two tenants at what every user would
+  // read as one address.
+  const founder = await newUser();
+  const slug = `Org-${randomUUID().slice(0, 8).toUpperCase()}`;
+
+  const { slug: stored } = await createOrganization(founder.id, {
+    slug,
+    name: "Acme",
+  });
+
+  expect(stored).toBe(slug.toLowerCase());
+  expect(await prisma.organization.count({ where: { slug: stored } })).toBe(1);
 });
 
 test("M4: the rank order is the one the rules assume", async () => {
@@ -364,4 +384,80 @@ test("M20: a demotion an OWNER is entitled to make takes effect", async () => {
     where: { userId: accountant.userId, organizationId: org.id },
   });
   expect(m.role).toBe("VIEWER");
+});
+
+test("M21: an organization that never had an OWNER is not frozen", async () => {
+  // Found by the trigger breaking four unrelated tests.
+  //
+  // The first version fired whenever the owner count was zero AFTER the
+  // statement, which meant an organization that never had an owner could never
+  // have a membership removed at all — the error would report a state that was
+  // already true before the statement ran. Any organization created outside
+  // `createOrganization` (a migration, a seed, a fixture) would be frozen.
+  //
+  // Only removing or demoting an OWNER can take the count to zero, so that is
+  // the only case the trigger examines.
+  const org = await prisma.organization.create({
+    data: { slug: newSlug(), name: "Ownerless" },
+  });
+  const user = await newUser();
+  await prisma.membership.create({
+    data: { userId: user.id, organizationId: org.id, role: "BOOKKEEPER" },
+  });
+
+  await prisma.membership.deleteMany({
+    where: { userId: user.id, organizationId: org.id },
+  });
+
+  expect(
+    await prisma.membership.count({ where: { organizationId: org.id } }),
+  ).toBe(0);
+});
+
+test("M22: demoting the last OWNER is refused as well as removing them", async () => {
+  // The trigger fires on UPDATE as well as DELETE. Without that half, the
+  // takeover is a one-line change of route: demote the only owner to VIEWER
+  // instead of deleting them.
+  const org = await anOrg();
+
+  await expect(
+    prisma.membership.updateMany({
+      where: { organizationId: org.id, role: "OWNER" },
+      data: { role: "VIEWER" },
+    }),
+  ).rejects.toThrow();
+
+  const owner = await prisma.membership.findFirstOrThrow({
+    where: { organizationId: org.id, userId: org.owner.userId },
+  });
+  expect(owner.role).toBe("OWNER");
+});
+
+test("M23: ownership can be handed over in one transaction", async () => {
+  // The reason the trigger is DEFERRABLE. A handover promotes one member and
+  // demotes another, and there is an instant between the two statements when
+  // the count is zero. A per-statement check would make the operation possible
+  // in one order and impossible in the other, which is an arbitrary rule nobody
+  // would guess.
+  const org = await anOrg();
+  const successor = await actorIn(org.id, org.slug, "ADMIN");
+
+  await prisma.$transaction(async (tx) => {
+    // Deliberately the "wrong" order: demote first, so the count passes
+    // through zero.
+    await tx.membership.updateMany({
+      where: { organizationId: org.id, userId: org.owner.userId },
+      data: { role: "ADMIN" },
+    });
+    await tx.membership.updateMany({
+      where: { organizationId: org.id, userId: successor.userId },
+      data: { role: "OWNER" },
+    });
+  });
+
+  const owners = await prisma.membership.findMany({
+    where: { organizationId: org.id, role: "OWNER" },
+  });
+  expect(owners).toHaveLength(1);
+  expect(owners[0]?.userId).toBe(successor.userId);
 });

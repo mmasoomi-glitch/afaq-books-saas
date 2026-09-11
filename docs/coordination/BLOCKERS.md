@@ -409,7 +409,12 @@ for this stage." Code review is a person, and people merge things at 2am.
 
 - **Filed by:** Lead Orchestrator, on the independent judge's verdict
 - **Date:** 2026-09-11
-- **Status:** open
+- **Status:** **resolved 2026-09-11** — PR #9 merged. Postgres-backed fixed
+  window on both source address and account, progressive delay capped at 10s
+  rather than a lockout, failing open. 16 tests. Judge's verdict on the
+  implementation: *"Merge. The implementation correctly interprets the spec
+  (progressive delay, not hard lock) and the atomicity strategy is sound."*
+  Operational gaps split out as `B-20260911-07` and `B-20260911-08`.
 - **Type:** blocker — **hard precondition on the HTTP layer**
 
 **What I need**
@@ -463,8 +468,108 @@ that an attacker could reach. The judge's condition is explicitly scoped to
 ---
 
 
+### B-20260911-07 — The rate-limit reaper has no scheduler, and a blocked caller holds a task
+
+- **Filed by:** Lead Orchestrator, from the judge's follow-up list on PR #9
+- **Date:** 2026-09-11
+- **Status:** open
+- **Type:** blocker (operational) — **revisit with the HTTP layer**
+
+**Two related problems, both harmless today and neither harmless later.**
+
+**1. `reapExpired()` exists and nothing calls it.** Every distinct
+`action:dimension:value` creates a row, and rows outlive their window. Under
+sustained traffic — or a deliberate flood of distinct values — `rate_limits`
+grows without bound. Today nothing drives traffic, so nothing grows. The moment
+an HTTP layer exists, this is a table that only ever gets bigger.
+
+Needs a scheduled job. A Postgres `pg_cron` entry, a platform scheduler, or a
+call on a sampled fraction of requests would all work; the decision belongs with
+whoever picks the deployment target.
+
+**2. A blocked caller occupies a server task for up to 10 seconds.**
+`enforce` awaits the delay and then throws, deliberately, so that a hostile
+client cannot decline to wait. With no HTTP layer that costs nothing. Under a
+real server, many simultaneously-blocked attackers hold many tasks, which is a
+resource-exhaustion vector — the throttle becomes the load.
+
+Mitigations to weigh when the HTTP layer lands: cap concurrent delayed requests;
+return `429` with `Retry-After` immediately once the delay would exceed some
+threshold, accepting that a hostile client ignores it while an honest one does
+not; or move the wait to a queue. This is a genuine trade-off, not an oversight
+— the current choice favours correctness against a hostile client over
+resilience against a flood.
+
+**Asks**
+
+- PLATFORM-GUARDIAN: schedule the reaper once a deployment target exists.
+- ARCHITECT: decide the delay strategy before the first HTTP route ships.
+
+---
+
+### B-20260911-08 — Nothing watches `security_events`
+
+- **Filed by:** Lead Orchestrator, from the judge's follow-up list on PR #9
+- **Date:** 2026-09-11
+- **Status:** open
+- **Type:** blocker (security monitoring)
+
+`auth.signin.failed`, `auth.signin.succeeded` and `auth.signup.duplicate` rows
+accumulate in an append-only table and **nothing reads them**. A record nobody
+looks at is not detection; it is only evidence after the fact.
+
+`security-tenancy.md` requires sign-in failures to be logged "with rate-limit
+context", which is now satisfied, but logging was never the point on its own.
+
+What would make it real: an alert on a spike in `auth.signin.failed` for one
+account (someone is grinding it), a spike across many accounts from one address
+(spraying), and any `auth.signin.succeeded` that immediately follows a burst of
+failures for the same account (a guess that landed). None of that exists.
+
+**Asks**
+
+- ARCHITECT: decide where alerting lives once a deployment target is chosen.
+- QA-AUDITOR: until then, treat "no alerting" as a known hole rather than an
+  oversight, and do not let a green test suite imply the system is watched.
+
+---
+
+### B-20260911-09 — `block-dangerous-git.sh` matches substrings, not push targets
+
+- **Filed by:** Lead Orchestrator
+- **Date:** 2026-09-11
+- **Status:** open
+- **Type:** blocker (governance correctness)
+
+The guard blocked a legitimate push to
+`agent/03-auth-rate-limit-sprint-002` because the same shell line also
+contained `--base develop` for the pull-request creation that followed it. The
+push target was a feature branch; nothing was going anywhere near a protected
+branch.
+
+Splitting the commands cleared it. **The guard was not bypassed and nothing was
+pushed to a protected branch** — but the workaround is exactly the behaviour a
+crying-wolf guard teaches, and that is the real cost.
+
+This is the same defect class that `B-20260911-01` fixed in
+`check-agent-ownership.sh`: matching a substring across a whole command line
+instead of parsing the actual target. The fix is the same shape — parse the
+`git push` invocation and inspect its refspec argument, rather than asking
+whether the string "develop" appears anywhere nearby.
+
+**Asks**
+
+- PLATFORM-GUARDIAN: parse the push target properly, and add a CI case
+  asserting that a feature-branch push is still allowed when the command line
+  also mentions a protected branch name.
+
+---
+
+
 ## Resolved
 
+- **`B-20260911-06`** — rate limiting on sign-in and sign-up. Resolved
+  2026-09-11 via PR #9; full entry retained above.
 - **`B-20260911-01`** — ownership hook now gates `Write`/`Edit` and knows the
   module paths. Resolved 2026-09-11 via PR #4; full entry retained above.
 - **`B-20260911-02`** — every ledger table now has a real foreign key to

@@ -25,6 +25,48 @@ lose where the work actually is. Anything not written here did not happen.
    base64 round-trips when a checksum comparison will do, no polling sleeps
    longer than the job needs.
 
+### GOTCHA — one database, many writers
+
+**Broadcast to all projects via senate as `req_5f9ff7fee717`.**
+
+Two Sophia jobs running at once against the same project destroy each other's
+data, because each runs `pnpm test` and the suite truncates the shared database
+between tests. Neither job knows the other exists.
+
+It does not look like a race. It looks like ordinary logic bugs — "row not
+found", "no record was found for a query", assertion mismatches — so you go
+debugging the service layer, and the service layer is fine.
+
+The same trap bites inside a single job, through the test runner:
+
+- `vitest.config.ts` had `poolOptions.threads.singleThread: true`. **Vitest 2
+  defaults to the `forks` pool, so the `threads` options are never read.** The
+  setting did nothing; two test files ran in parallel against one database.
+- Symptom: every file passed alone, 19 tests failed when run together.
+- Fix: `fileParallelism: false`. That is the option that actually serialises.
+
+Rules now in force:
+
+1. **One Sophia job at a time per database.** Fan out only after giving each job
+   its own database (`afaq_test`, `afaq_test2`, …) and its own
+   `TEST_DATABASE_URL`.
+2. **Prove the runner is serialised** — do not trust the config key name. Run
+   per-file and whole-suite. If whole-suite fails and per-file passes, the
+   parallelism setting is not doing what you think.
+3. Prefer a per-job database over a per-job schema; truncate lists and
+   migrations stay simple.
+
+Two adjacent traps found the same day:
+
+- **Prisma reads `DATABASE_URL`, not `TEST_DATABASE_URL`.** Unless the setup
+  file pins `process.env.DATABASE_URL` to the test database, the code under test
+  writes to the *development* database while assertions read the test one. Every
+  test passes while proving nothing, and the run quietly mutates dev data.
+- **`prisma migrate diff --shadow-database-url` RESETS whatever database it is
+  given.** Point it at the test database and that database is left populated
+  with no `_prisma_migrations` history, so the next `migrate deploy` dies with
+  `P3005`. Give it a throwaway shadow database.
+
 ### Lessons already paid for — do not repeat
 
 - **Sophia stalls if a prompt invites a question.** Every task file must open

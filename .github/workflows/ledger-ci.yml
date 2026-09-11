@@ -228,7 +228,9 @@ jobs:
             "DEFERRABLE INITIALLY DEFERRED" \
             "je_period_open" \
             "append_only" \
-            "organization_id_fkey"
+            "organization_id_fkey" \
+            "memberships_require_owner" \
+            "organizations_slug_not_reserved"
           do
             if ! grep -rq -- "$needle" prisma/migrations/; then
               echo "::error::missing database-level invariant: $needle"

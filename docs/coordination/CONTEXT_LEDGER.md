@@ -162,7 +162,82 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-12 (the application is reachable)
+## State — last hydrated 2026-09-12 (sign-in works, lint gate is real)
+
+**Base branch @ `bb81231`. No open PRs. 251 tests, lint clean, `pnpm build`
+green, typecheck clean, no migration drift.** PRs #15 and #16 merged since the
+last hydration.
+
+### A user can now sign in, verified against the running server
+
+```text
+$ curl -i http://127.0.0.1:4011/signin
+set-cookie: __Host-csrf=IHw1Mt0ssR…; Path=/; Max-Age=3600; Secure; SameSite=lax
+   …same value embedded in the HTML as csrfToken":"IHw1Mt0ssR…
+
+POST /api/auth/signin  matched pair          → 200, sets __Host-session
+POST /api/auth/signin  cookie, no header     → 403 CSRF_INVALID
+POST /api/auth/signin  pair, wrong password  → 401
+```
+
+`B-20260912-01` is closed. `src/middleware.ts` commits the CSRF cookie on the
+sign-in PAGE and hands the same value to the renderer via a request header,
+which breaks the circularity that made sign-in uncheckable. Middleware and not
+the page itself because a Next 15 server component cannot call `cookies().set()`
+during render — it throws.
+
+### I recorded that blocker as more severe than it was
+
+Worth carrying forward, because the correction came from pushing back rather
+than from building. **`SameSite=Lax` does not send cookies on a cross-site POST
+at all.** A forged sign-in therefore arrived with no cookie and was already
+being refused. Login CSRF was mitigated by the cookie attributes; the blocker
+said it was open.
+
+The token is still worth having, for narrower reasons stated in the entry: it
+covers clients that do not implement `SameSite`, and it fails closed if the
+cookie attributes are ever loosened — a future `SameSite=None` for an embedding
+partner would otherwise reopen the hole with nothing left to catch it.
+
+### The judge contradicts itself on follow-up questions — twice now
+
+A pattern, not an incident, and it changes how to use it:
+
+| Round | First answer | The contradiction |
+|-------|--------------|-------------------|
+| CSRF mechanism | chose **(B)** page-embedded token | then described **(A)**, the option it had just rejected, as the mechanism |
+| Lint ruleset | chose **(C)** minimal type-aware | then listed `no-floating-promises` and `no-misused-promises` as the rules to disable — the two it had just called critical |
+
+**Its initial recommendations have held up. Its elaborations do not.** Both
+contradictions were caught by reading the answer against itself. The second was
+resolvable without re-asking: both rules have config options rather than needing
+to be off.
+
+So: take the verdict, interrogate the reasoning, and never let an elaboration
+silently overwrite the decision it was supposed to explain.
+
+### The lint gate found one thing worth the whole exercise
+
+**Zero findings in `src/`** — no floating promises in production code, which is
+what the type-aware rules were turned on to confirm. Eleven in tests. Three of
+them were this:
+
+```ts
+await expect(() => assertCanDo(scope, "ledger.post")).toThrow(ForbiddenError);
+```
+
+The synchronous `.toThrow()` returns `void`, so the `await` did nothing — and
+made the assertion LOOK as though it would catch a rejection if `assertCanDo`
+ever became async. It would not: `expect(() => asyncFn()).toThrow()` passes
+**vacuously** on a rejected promise. That is the third vacuous-check found in
+this session, after the CI grep matching `posting.js` and the `sophia_review`
+that returned `FINDINGS: NONE` about another repository.
+
+**Three in one session is a category, not a coincidence.** A check that cannot
+fail looks exactly like a check that passes. Worth asking of any new gate: what
+input would make this report failure?
+
+## Superseded — hydrated 2026-09-12 (the application is reachable)
 
 **Base branch @ `6a939e4`. No open PRs. 240 tests green, `pnpm build` green,
 typecheck clean, no migration drift.** Three PRs merged this round: #11, #12,
@@ -409,16 +484,20 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **A sign-in page (FRONTEND-UX).** Not cosmetic: it is the prerequisite for
-   `B-20260912-01`. Login CSRF cannot be closed without a page that issues a
-   pre-session token, and until then a hostile site can sign a victim into the
-   ATTACKER's organization, where the victim's invoices and journal entries
-   become the attacker's to read. The Origin check is what stands there now,
-   and it passes any request that simply omits `Origin`.
-2. **ESLint + Prettier (PLATFORM-GUARDIAN).** `next.config.ts` already sets
-   `eslint.ignoreDuringBuilds: false`, so the build starts enforcing the moment
-   a config exists. Right now the build's lint step silently does nothing,
-   which is the kind of gate that looks present and is not.
+1. **A registration page**, so `/api/auth/register` is reachable by a person
+   rather than only by a client that first loaded `/signin`. Small, and it
+   removes the odd asymmetry where one of the two public endpoints has a form
+   and the other does not.
+2. **Something to sign in TO.** There is no dashboard, so `SignInForm` reports
+   "Signed in." and stays put — deliberately, because sending a user to a route
+   that does not exist is worse than telling them what happened. The first real
+   screen should be the trial balance: it is the report with the fewest moving
+   parts and it exercises the whole chain from session to org scope to posted
+   ledger rows.
+3. **Prettier**, or a decision not to have one. Formatting is by hand and by
+   convention today. The question is whether a formatter's diffs are worth the
+   churn across an active branch set, and that is a judgement call rather than
+   an oversight.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init

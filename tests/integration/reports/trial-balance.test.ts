@@ -10,7 +10,6 @@ import { trialBalance } from "../../../src/modules/reports/trial-balance";
 import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 import { TrialBalanceUnbalancedError } from "../../../src/modules/reports/errors";
 import type { LedgerScope, AccountType } from "../../../src/modules/ledger/scope";
-import type { TrialBalanceResult } from "../../../src/modules/reports/trial-balance";
 
 function at<T>(rows: readonly T[], i: number): T {
   const r = rows[i];

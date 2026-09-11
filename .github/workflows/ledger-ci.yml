@@ -104,6 +104,15 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Type-aware rules, so this needs the Prisma client generated above and a
+      # second TypeScript program. It earns that on one rule:
+      # `no-floating-promises`. `strict` TypeScript says nothing about a promise
+      # nobody awaits, so a ledger write without `await` typechecks, returns
+      # immediately, and the caller reports success while the write may still
+      # fail with nobody listening.
+      - name: Lint
+        run: pnpm lint
+
       - name: Accounting-invariant tests
         run: pnpm test
 

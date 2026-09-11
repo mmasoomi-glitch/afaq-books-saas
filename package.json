@@ -1,0 +1,30 @@
+{
+  "name": "afaq-books-saas",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force --skip-seed",
+    "db:generate": "prisma generate"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/pg": "^8.23.1",
+    "prisma": "^6.1",
+    "tsx": "^4.19",
+    "typescript": "^5.7",
+    "vitest": "^2.1"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1",
+    "pg": "^8.13",
+    "zod": "^3.24"
+  }
+}

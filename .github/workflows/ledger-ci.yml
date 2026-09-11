@@ -1,0 +1,137 @@
+name: ledger-ci
+
+# Sprint 001. Runs the ledger typecheck and the accounting-invariant tests
+# against a REAL PostgreSQL instance.
+#
+# A service container is not a convenience here. `.claude/rules/testing-
+# release-gates.md` requires accounting-invariant tests to run against real
+# Postgres, "no in-memory SQLite - its constraint and isolation semantics
+# differ from Postgres". Most of what these tests assert (DEFERRABLE
+# constraint triggers, EXCLUDE ... USING gist, plpgsql trigger return
+# semantics) does not exist in SQLite at all, so a substitute would report
+# green while proving nothing.
+#
+# This workflow is deliberately a SEPARATE file from governance-checks.yml.
+# That file's five job names are pinned as required status checks in the
+# protect-develop and protect-main rulesets; editing it from two branches
+# at once risks a conflict that silently drops a gate.
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  ledger:
+    name: Ledger typecheck and invariant tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: afaq
+          POSTGRES_PASSWORD: afaq_ci_local_only
+          POSTGRES_DB: afaq_test
+        ports:
+          - 5432:5432
+        # Without a health check the steps below race the container's
+        # startup and fail intermittently on a cold runner.
+        options: >-
+          --health-cmd "pg_isready -U afaq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://afaq:afaq_ci_local_only@127.0.0.1:5432/afaq_test
+      TEST_DATABASE_URL: postgresql://afaq:afaq_ci_local_only@127.0.0.1:5432/afaq_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma schema is valid
+        run: pnpm prisma validate
+
+      # The generated client is what supplies the `Prisma` namespace and the
+      # model types the service layer is written against. pnpm does not always
+      # run Prisma's postinstall hook, so without this step typecheck fails with
+      # "@prisma/client has no exported member 'Prisma'" and every downstream
+      # parameter falls back to implicit any.
+      - name: Generate the Prisma client
+        run: pnpm prisma generate
+
+      # `migrate diff` RESETS whatever database it is given as the shadow and
+      # replays the migrations into it. Pointing it at the test database left
+      # that database populated but with no _prisma_migrations history, so the
+      # next `migrate deploy` failed with P3005 "schema is not empty". The
+      # shadow database must be its own throwaway.
+      - name: Create a throwaway shadow database
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE afaq_shadow OWNER afaq;'
+
+      - name: No migration drift between schema.prisma and migrations
+        run: |
+          pnpm prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code
+        env:
+          SHADOW_DATABASE_URL: postgresql://afaq:afaq_ci_local_only@127.0.0.1:5432/afaq_shadow
+        # --exit-code makes this fail when a diff exists. A silent drift
+        # between the schema and the migration history is exactly how a
+        # ledger constraint gets dropped in production but not in review.
+
+      - name: Apply migrations to a freshly created database
+        run: pnpm prisma migrate deploy
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Accounting-invariant tests
+        run: pnpm test
+
+      - name: Assert the invariants are enforced by the DATABASE, not only the schema
+        run: |
+          set -euo pipefail
+          # A regression guard on the migrations themselves. If someone rewrites
+          # a migration and drops one of these, the tests might still pass for
+          # the wrong reason, so assert the enforcement exists in SQL.
+          #
+          # Greps across ALL migration files, not one: there is more than a
+          # single migration now, and a quoted "$(ls ...)" collapses them into
+          # one bogus path.
+          for needle in \
+            "jl_debit_credit_sign" \
+            "jl_reporting_amount_consistent" \
+            "period_no_overlap" \
+            "jl_org_consistency" \
+            "je_immutable" \
+            "jl_immutable" \
+            "DEFERRABLE INITIALLY DEFERRED" \
+            "je_period_open" \
+            "append_only" \
+            "organization_id_fkey"
+          do
+            if ! grep -rq -- "$needle" prisma/migrations/; then
+              echo "::error::missing database-level invariant: $needle"
+              exit 1
+            fi
+            echo "OK $needle"
+          done

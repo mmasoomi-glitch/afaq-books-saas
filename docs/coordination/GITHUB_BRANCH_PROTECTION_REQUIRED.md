@@ -2,6 +2,31 @@
 
 ## Status
 
+**CONFIGURED AND VERIFIED — 2026-09-11.**
+
+The owner authorized the revised single-owner plan on 2026-09-11 and
+the lead session applied it. Both rulesets are `enforcement: active`
+and were confirmed through the resolved-rules endpoint (see
+§Verifying below), not inferred from the POST response:
+
+| Ruleset | Id | Target | Rules resolved |
+|---------|----|--------|----------------|
+| `protect-develop` | 22882053 | `refs/heads/develop` | `deletion`, `non_fast_forward`, `pull_request`, `required_status_checks` |
+| `protect-main` | 22882054 | `refs/heads/main` | `deletion`, `non_fast_forward`, `pull_request`, `required_status_checks` |
+
+Full command output is recorded in `INTEGRATION_LOG.md` under
+2026-09-11. Blocker `B-20260527-01` is resolved.
+
+> **The five required check names are now load-bearing strings.**
+> Both rulesets match required status checks by name. Renaming a job
+> in `.github/workflows/governance-checks.yml` does not fail — it
+> silently stops enforcing that gate. Add jobs freely; change these
+> five only by updating both rulesets in the same change.
+
+---
+
+## Original status entry (historical)
+
 **Not configured.** Verified on 2026-05-27 by the lead session:
 
 ```text

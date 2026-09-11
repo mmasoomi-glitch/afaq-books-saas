@@ -13,7 +13,6 @@ import {
 } from "../../../src/server/auth/scope";
 import type { MembershipRole } from "@prisma/client";
 import { NotAMemberError, ForbiddenError, OrganizationNotFoundError } from "../../../src/server/auth/errors";
-import { can } from "../../../src/server/auth/permissions";
 
 beforeEach(async () => {
   await resetDb();
@@ -125,7 +124,7 @@ test("A6: assertCanDo refuses a VIEWER ledger.post", async () => {
     role: "VIEWER" as MembershipRole,
   };
 
-  await expect(() => assertCanDo(scope, "ledger.post")).toThrow(ForbiddenError);
+  expect(() => assertCanDo(scope, "ledger.post")).toThrow(ForbiddenError);
 });
 
 test("A7: assertCanDo refuses a BOOKKEEPER ledger.period.lock", async () => {
@@ -136,7 +135,7 @@ test("A7: assertCanDo refuses a BOOKKEEPER ledger.period.lock", async () => {
     role: "BOOKKEEPER" as MembershipRole,
   };
 
-  await expect(() => assertCanDo(scope, "ledger.period.lock")).toThrow(
+  expect(() => assertCanDo(scope, "ledger.period.lock")).toThrow(
     ForbiddenError,
   );
 });
@@ -167,7 +166,7 @@ test("A9: OWNER can member.remove; ADMIN cannot", async () => {
   };
 
   expect(() => assertCanDo(ownerScope, "member.remove")).not.toThrow();
-  await expect(() => assertCanDo(adminScope, "member.remove")).toThrow(
+  expect(() => assertCanDo(adminScope, "member.remove")).toThrow(
     ForbiddenError,
   );
 });

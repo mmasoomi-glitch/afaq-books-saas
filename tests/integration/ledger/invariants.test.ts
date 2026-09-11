@@ -1,4 +1,4 @@
-import { test, beforeAll, afterAll, beforeEach } from "vitest";
+import { test, beforeAll, beforeEach } from "vitest";
 import { ensureOrg, pool, resetDb } from "../../setup";
 import type { QueryResultRow } from "pg";
 
@@ -195,7 +195,6 @@ test("A1: jl_debit_credit_sign - rejects row where both debit and credit are pos
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
   const accountId = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
-  const revId = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "REV"]);
   try {
     await createJournalLine(orgId, entryId, one(accountId).id, 1, "100", "100");
     throw new Error("Should have failed");
@@ -215,7 +214,6 @@ test("A2: jl_debit_credit_sign - allows row where debit is positive and credit i
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
   const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
-  const rev = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "REV"]);
   await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0");
   const rows = await query("SELECT * FROM journal_lines WHERE journal_entry_id = $1", [entryId]);
   if (rows.length !== 1) throw new Error("Row not inserted");
@@ -582,7 +580,7 @@ test("E5: jl_immutable - rejects DELETE on posted journal line", async () => {
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
   const rev = await query<{ id: string }>("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "REV"]);
-  const { entryId, lineIds } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001", [
+  const { lineIds } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001", [
     { accountId: one(acc).id, lineNumber: 1, debit: "100", credit: "0" },
     { accountId: one(rev).id, lineNumber: 2, debit: "0", credit: "100" },
   ]);

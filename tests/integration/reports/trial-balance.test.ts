@@ -7,6 +7,7 @@ import { postJournalEntry } from "../../../src/modules/ledger/posting.js";
 import { createPeriod } from "../../../src/modules/ledger/periods.js";
 import { createAccount } from "../../../src/modules/ledger/accounts.js";
 import { trialBalance } from "../../../src/modules/reports/trial-balance.js";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope.js";
 import { TrialBalanceUnbalancedError } from "../../../src/modules/reports/errors.js";
 import type { LedgerScope, AccountType } from "../../../src/modules/ledger/scope.js";
 import type { TrialBalanceRow, TrialBalanceResult } from "../../../src/modules/reports/trial-balance.js";
@@ -23,11 +24,11 @@ function byCode(tb: TrialBalanceResult, code: string) {
   return r;
 }
 
-let scope: LedgerScope = { userId: "", organizationId: "" };
+let scope: LedgerScope = unsafeCreateLedgerScope("", "");
 
 beforeEach(async () => {
   await resetDb();
-  scope = { userId: randomUUID(), organizationId: randomUUID() };
+  scope = unsafeCreateLedgerScope(randomUUID(), randomUUID());
   await ensureOrg(scope.organizationId);
 });
 
@@ -217,7 +218,7 @@ test("only includes rows for the requesting organization", async () => {
   // Create a second organization with its own data
   const orgBId = randomUUID();
   await ensureOrg(orgBId);
-  const scopeB: LedgerScope = { userId: randomUUID(), organizationId: orgBId };
+  const scopeB: LedgerScope = unsafeCreateLedgerScope(randomUUID(), orgBId);
 
   const periodB = await createPeriod(scopeB, {
     name: "2024-04",

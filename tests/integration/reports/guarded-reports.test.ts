@@ -3,7 +3,7 @@ import { beforeEach, expect, test } from "vitest";
 import type { MembershipRole } from "@prisma/client";
 import { resetDb } from "../../setup.js";
 import { prisma } from "../../../src/server/db/client.js";
-import { resolveOrgScope } from "../../../src/server/auth/scope.js";
+import { resolveOrgScope, toLedgerScope } from "../../../src/server/auth/scope.js";
 import type { OrgScope } from "../../../src/server/auth/scope.js";
 import { NotAMemberError } from "../../../src/server/auth/errors.js";
 import {
@@ -45,10 +45,7 @@ async function actor(role: MembershipRole): Promise<OrgScope> {
 
 /** One posted sale: debit Cash 500, credit Revenue 500. */
 async function seed(scope: OrgScope): Promise<void> {
-  const ledgerScope = {
-    userId: scope.userId,
-    organizationId: scope.organizationId,
-  };
+  const ledgerScope = toLedgerScope(scope);
   const period = await createPeriod(ledgerScope, {
     name: "2024",
     startDate: FROM,

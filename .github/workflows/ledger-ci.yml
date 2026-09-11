@@ -69,19 +69,29 @@ jobs:
       - name: Prisma schema is valid
         run: pnpm prisma validate
 
-      - name: Apply migrations to a freshly created database
-        run: pnpm prisma migrate deploy
+      # `migrate diff` RESETS whatever database it is given as the shadow and
+      # replays the migrations into it. Pointing it at the test database left
+      # that database populated but with no _prisma_migrations history, so the
+      # next `migrate deploy` failed with P3005 "schema is not empty". The
+      # shadow database must be its own throwaway.
+      - name: Create a throwaway shadow database
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE afaq_shadow OWNER afaq;'
 
       - name: No migration drift between schema.prisma and migrations
         run: |
           pnpm prisma migrate diff \
             --from-migrations prisma/migrations \
             --to-schema-datamodel prisma/schema.prisma \
-            --shadow-database-url "$DATABASE_URL" \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
             --exit-code
+        env:
+          SHADOW_DATABASE_URL: postgresql://afaq:afaq_ci_local_only@127.0.0.1:5432/afaq_shadow
         # --exit-code makes this fail when a diff exists. A silent drift
         # between the schema and the migration history is exactly how a
         # ledger constraint gets dropped in production but not in review.
+
+      - name: Apply migrations to a freshly created database
+        run: pnpm prisma migrate deploy
 
       - name: Typecheck
         run: pnpm typecheck

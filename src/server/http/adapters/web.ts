@@ -29,7 +29,22 @@ export interface AdapterConfig {
    * Whether `x-forwarded-for` may be believed. Default: NO.
    */
   readonly trustForwardedFor?: boolean;
+
+  /** Largest request body accepted, in bytes. Default 64 KiB. */
+  readonly maxBodyBytes?: number;
 }
+
+/**
+ * 64 KiB.
+ *
+ * These endpoints carry an email, a password and a name. Anything approaching
+ * this size is a mistake or an attack, and the ceiling is what stops the
+ * attack being free: without one, `request.json()` buffers whatever the client
+ * sends before anything gets a chance to reject it, so a single connection
+ * streaming a gigabyte costs the server a gigabyte of memory and costs the
+ * attacker nothing.
+ */
+export const DEFAULT_MAX_BODY_BYTES = 64 * 1024;
 
 export class UnsupportedMethodError extends Error {
   readonly code = "METHOD_NOT_SUPPORTED";
@@ -38,6 +53,55 @@ export class UnsupportedMethodError extends Error {
     super(`unsupported HTTP method: ${method}`);
     this.name = "UnsupportedMethodError";
   }
+}
+
+export class PayloadTooLargeError extends Error {
+  readonly code = "PAYLOAD_TOO_LARGE";
+  readonly maxBytes: number;
+
+  constructor(maxBytes: number) {
+    super(`request body exceeds ${String(maxBytes)} bytes`);
+    this.name = "PayloadTooLargeError";
+    this.maxBytes = maxBytes;
+  }
+}
+
+/**
+ * Read the body with a running byte count, refusing as soon as the limit is
+ * crossed.
+ *
+ * Checking `content-length` alone is not enough and is worth saying why: the
+ * header is optional, a chunked request has none, and a client is free to
+ * declare a small one and then send more. The count that matters is the one
+ * taken over the bytes actually received, and it has to be taken DURING the
+ * read — a limit applied after `text()` has already buffered the body has
+ * already lost.
+ */
+async function readBodyText(request: Request, maxBytes: number): Promise<string> {
+  const stream = request.body;
+  if (stream === null) return "";
+
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value === undefined) continue;
+
+      total += value.byteLength;
+      if (total > maxBytes) throw new PayloadTooLargeError(maxBytes);
+      chunks.push(value);
+    }
+  } finally {
+    // Releases the connection when we bailed out early, so a refused giant
+    // upload stops arriving instead of continuing to be read and discarded.
+    await reader.cancel().catch(() => undefined);
+  }
+
+  return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
 /**
@@ -87,12 +151,23 @@ export async function toHttpRequest(
   // Note that an EMPTY body also throws in `json()`. That is the ordinary case
   // for a DELETE, not an attack, which is another reason this cannot be treated
   // as an error worth surfacing.
+  //
+  // A body over the size limit is the one exception: that is thrown, not
+  // swallowed, because "too large" is a fact about the request the caller
+  // deserves to be told, and because pretending the body was merely absent
+  // would answer 400 to something that is really 413.
   let body: unknown;
   if (method !== "GET") {
-    try {
-      body = await request.json();
-    } catch {
-      body = undefined;
+    const text = await readBodyText(
+      request,
+      config?.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
+    );
+    if (text !== "") {
+      try {
+        body = JSON.parse(text) as unknown;
+      } catch {
+        body = undefined;
+      }
     }
   }
 
@@ -146,6 +221,14 @@ export function clientIp(
   return trimmed === "" ? undefined : trimmed;
 }
 
+/**
+ * Statuses the `Response` constructor refuses to pair with a body — it does not
+ * ignore the body, it THROWS. So a handler that ever returned `{ status: 204,
+ * body: null }` would turn a correct 204 into an unhandled exception and then a
+ * 500, and the cause would be three layers away from the symptom.
+ */
+const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 103, 204, 205, 304]);
+
 export function toResponse(res: HttpResponse): Response {
   const headers = new Headers(res.headers ?? {});
 
@@ -157,10 +240,12 @@ export function toResponse(res: HttpResponse): Response {
     headers.append("set-cookie", cookie);
   }
 
-  return new Response(
-    res.body === undefined ? null : JSON.stringify(res.body),
-    { status: res.status, headers },
-  );
+  const body =
+    res.body === undefined || NULL_BODY_STATUSES.has(res.status)
+      ? null
+      : JSON.stringify(res.body);
+
+  return new Response(body, { status: res.status, headers });
 }
 
 export function toRouteHandler(
@@ -174,6 +259,14 @@ export function toRouteHandler(
       if (err instanceof UnsupportedMethodError) {
         return toResponse(
           error(405, err.code, "unsupported method", {
+            headers: { ...SECURITY_HEADERS },
+          }),
+        );
+      }
+
+      if (err instanceof PayloadTooLargeError) {
+        return toResponse(
+          error(413, err.code, "request body too large", {
             headers: { ...SECURITY_HEADERS },
           }),
         );

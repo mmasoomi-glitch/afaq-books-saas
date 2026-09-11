@@ -9,6 +9,8 @@ import {
 import type { HttpRequest } from "../../../src/server/http/types.js";
 import { json, noContent } from "../../../src/server/http/types.js";
 import {
+  DEFAULT_MAX_BODY_BYTES,
+  PayloadTooLargeError,
   UnsupportedMethodError,
   clientIp,
   toHttpRequest,
@@ -278,6 +280,74 @@ test("A16: a trusted address reaches the rate limiter as the counter key", async
   );
   expect(blocked.status).toBe(429);
   expect(blocked.headers.get("retry-after")).toBe("1");
+});
+
+test("A18: a body over the limit is refused, not buffered", async () => {
+  // Found by independent review. Without a ceiling, `json()` buffers whatever
+  // the client sends before anything can reject it: one connection streaming a
+  // gigabyte costs the server a gigabyte and costs the attacker nothing.
+  const huge = "x".repeat(DEFAULT_MAX_BODY_BYTES + 1);
+
+  await expect(
+    toHttpRequest(
+      new Request(`${URL_BASE}/api/auth/signin`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "a@b.test", password: huge }),
+      }),
+    ),
+  ).rejects.toBeInstanceOf(PayloadTooLargeError);
+});
+
+test("A19: the limit counts bytes received, not the declared length", async () => {
+  // A client is free to declare a small `content-length` and send more, and a
+  // chunked request declares none at all. The only count that means anything is
+  // taken over the bytes actually read, while they are being read.
+  const body = "y".repeat(2048);
+  const lying = new Request(`${URL_BASE}/api/auth/signin`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "content-length": "10" },
+    body: JSON.stringify({ padding: body }),
+  });
+
+  await expect(
+    toHttpRequest(lying, { maxBodyBytes: 512 }),
+  ).rejects.toBeInstanceOf(PayloadTooLargeError);
+});
+
+test("A20: an oversized body reaches the client as 413, not 500", async () => {
+  const route = toRouteHandler(signInHandler(), { maxBodyBytes: 64 });
+
+  const res = await route(
+    request("POST", {
+      body: { email: "a@b.test", password: "z".repeat(200) },
+    }),
+  );
+
+  expect(res.status).toBe(413);
+  expect(await res.json()).toEqual({
+    error: { code: "PAYLOAD_TOO_LARGE", message: "request body too large" },
+  });
+});
+
+test("A21: a body just under the limit is accepted normally", async () => {
+  const req = await toHttpRequest(
+    request("POST", { body: { note: "a".repeat(100) } }),
+    { maxBodyBytes: 1024 },
+  );
+
+  expect(req.body).toEqual({ note: "a".repeat(100) });
+});
+
+test("A22: a null-body status never gets a body, whatever the handler says", async () => {
+  // `Response` does not IGNORE a body on a 204 — it throws. So a handler that
+  // ever returned `{ status: 204, body: null }` would turn a correct 204 into
+  // an unhandled exception and then a 500, three layers from the cause.
+  for (const status of [204, 205, 304]) {
+    const res = toResponse({ status, body: null });
+    expect(res.status).toBe(status);
+    expect(await res.text()).toBe("");
+  }
 });
 
 test("A17: untrusted, the same flood is not throttled by address", async () => {

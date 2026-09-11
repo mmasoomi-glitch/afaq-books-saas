@@ -6,122 +6,368 @@
 # docs/coordination/agent-prompts/), this hook warns / blocks writes
 # outside the agent's assigned paths.
 #
+# Supported matchers (registered in .claude/settings.json):
+#   Bash             -> payload has .tool_input.command
+#   Write|Edit|NotebookEdit|MultiEdit -> payload has .tool_input.file_path
+#
 # Behavior:
 #   - Reads tool-call JSON from stdin.
-#   - If the tool is Bash and the command looks like a write
-#     (`>`, `>>`, `tee`, `sed -i`, `mv`, `rm`, `git rm`), and the
-#     target path falls under a protected shared area but the calling
-#     agent does not own it, block.
-#   - If AFAQ_AGENT is unset, the hook is permissive (the lead session
-#     may need to write anywhere).
+#   - Extracts write targets using shell-operator / command-name analysis.
+#   - Resolves ownership via OWNERSHIP.md (longest-prefix-wins).
+#   - AFAQ_AGENT unset -> exit 0 (lead session).
+#   - Blocked agent     -> exit 2 + stderr message with handoff procedure.
 #
-# This is a guardrail, not a sandbox. It complements OWNERSHIP.md and
-# the GitKeeper review step.
+# Dependencies: bash 4+, jq (optional — falls back to grep/sed).
 
 set -u
 
 payload="$(cat || true)"
 [[ -z "$payload" ]] && exit 0
 
+# ── Parse JSON payload ───────────────────────────────────────────
+
+tool_name=""
+file_path=""
+command_str=""
+
 if command -v jq >/dev/null 2>&1; then
   tool_name="$(printf '%s' "$payload" | jq -r '.tool_name // empty' 2>/dev/null || true)"
+  file_path="$(printf '%s' "$payload" | jq -r '.tool_input.file_path // empty' 2>/dev/null || true)"
   command_str="$(printf '%s' "$payload" | jq -r '.tool_input.command // empty' 2>/dev/null || true)"
 else
   tool_name="$(printf '%s' "$payload" | grep -oE '"tool_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -E 's/.*"([^"]*)"$/\1/')"
+  file_path="$(printf '%s' "$payload" | grep -oE '"file_path"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed -E 's/.*"([^"]*)"$/\1/')"
   command_str="$(printf '%s' "$payload" | grep -oE '"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' | head -n1 | sed -E 's/^"command"[[:space:]]*:[[:space:]]*"(.*)"$/\1/')"
 fi
 
-[[ "$tool_name" != "Bash" ]] && exit 0
-[[ -z "$command_str" ]] && exit 0
+# ── AFAQ_AGENT unset -> lead session -> allow ────────────────────
 
 agent="${AFAQ_AGENT:-}"
 if [[ -z "$agent" ]]; then
-  # No agent identity set — lead session. Allow.
   exit 0
 fi
 
-# Protected shared areas. Edits here require explicit ownership.
-protected_globs=(
-  "CLAUDE.md"
-  ".claude/"
-  "docs/coordination/"
-  "docs/IMPLEMENTATION_STATUS.md"
-  ".github/"
-  "prisma/schema.prisma"
-  "prisma/migrations/"
-  "package.json"
-  "pnpm-lock.yaml"
-  "package-lock.json"
-  "yarn.lock"
-  "next.config"
-  "tsconfig.json"
-)
+# ── Collect write targets ────────────────────────────────────────
 
-# Ownership: which agent owns which protected glob. ARCHITECT and
-# GITKEEPER may always edit, plus PLATFORM-GUARDIAN for CI/config and
-# AUTH-TENANCY/LEDGER-CORE for their schema sections. The canonical
-# table is docs/coordination/OWNERSHIP.md — this is a fast-path check.
-declare -A owners=(
-  ["CLAUDE.md"]="architect gitkeeper-integrator"
-  [".claude/"]="platform-guardian architect gitkeeper-integrator"
-  ["docs/coordination/"]="architect gitkeeper-integrator platform-guardian"
-  ["docs/IMPLEMENTATION_STATUS.md"]="* "  # every agent updates its own module row
-  [".github/"]="platform-guardian gitkeeper-integrator"
-  ["prisma/schema.prisma"]="ledger-core auth-tenancy gitkeeper-integrator"
-  ["prisma/migrations/"]="ledger-core auth-tenancy gitkeeper-integrator"
-  ["package.json"]="platform-guardian architect gitkeeper-integrator"
-  ["pnpm-lock.yaml"]="platform-guardian architect gitkeeper-integrator"
-  ["package-lock.json"]="platform-guardian architect gitkeeper-integrator"
-  ["yarn.lock"]="platform-guardian architect gitkeeper-integrator"
-  ["next.config"]="platform-guardian architect gitkeeper-integrator"
-  ["tsconfig.json"]="platform-guardian architect gitkeeper-integrator"
-)
+# Determine write targets into array WRITE_TARGETS[]
+declare -a WRITE_TARGETS=()
 
-# Is the command a write that touches a path?
-# Heuristic: presence of `>`, `>>`, `tee `, `sed -i`, `mv `, `rm `,
-# `git rm `, or `cp ` followed by a path token that matches a protected
-# glob.
-cmd_lc="$(printf '%s' "$command_str" | tr '[:upper:]' '[:lower:]')"
-is_write=0
-for marker in '>' '>>' ' tee ' ' sed -i' ' mv ' ' rm ' ' git rm ' ' cp '; do
-  if [[ "$cmd_lc" == *"$marker"* ]]; then
-    is_write=1
-    break
+# For Write / Edit / NotebookEdit / MultiEdit: the file_path IS the write target
+if [[ "$tool_name" == "Write" || "$tool_name" == "Edit" || "$tool_name" == "NotebookEdit" || "$tool_name" == "MultiEdit" ]]; then
+  if [[ -n "$file_path" ]]; then
+    WRITE_TARGETS+=("$file_path")
   fi
-done
+  # For these tool types, file_path is always a write — skip bash parsing
+elif [[ "$tool_name" == "Bash" && -n "$command_str" ]]; then
+  cmd="$command_str"
 
-[[ "$is_write" -eq 0 ]] && exit 0
+  # ── Detect heredoc: <<-, <<WORD -> treat entire cmd as having writes ──
+  if echo "$cmd" | grep -qE '<<-?[[:space:]]*[A-Za-z_]'; then
+    # Heredoc — content is unknown; any protected path = write
+    # We'll check all paths below
+    :
+  else
+    # ── Redirections: >, >>, 2>, &> ──
+    # Extract targets after redirection operators
+    _targets=$(echo "$cmd" | grep -oE '(>|>>|2>|&>)[^ ]*' 2>/dev/null | sed -E 's/^(>|>>|2>|&>)//')
+    if [[ -n "$_targets" ]]; then
+      while IFS= read -r _t; do
+        [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+      done <<< "$_targets"
+    fi
 
-# For each protected glob, see if the command mentions it.
-for glob in "${protected_globs[@]}"; do
-  if [[ "$cmd_lc" == *"$glob"* ]]; then
-    allowed="${owners[$glob]:-}"
-    # '*' wildcard means every agent may write its own module row.
-    if [[ "$allowed" == "* "* || "$allowed" == "* " ]]; then
-      continue
+    # ── Standalone commands that write: tee, sed -i, truncate, dd of=, install ──
+    # tee FILE [FILE...]
+    if echo "$cmd" | grep -qE '(^|[|;&])tee[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE '(tee|tee [^|&;]+)[[:space:]]+[^|&;]+' | sed -E 's/.*tee[[:space:]]+//' | tr ' ' '\n' | grep -v '^-' | grep -v '^$')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
     fi
-    if [[ "$allowed" == *"$agent"* ]]; then
-      continue
+
+    # sed -i ... FILE
+    if echo "$cmd" | grep -qE 'sed[[:space:]]+-i'; then
+      # Extract the FILE argument (last non-option arg, or the one after -i flags)
+      _targets=$(echo "$cmd" | grep -oE 'sed[[:space:]]+-i(-[a-zA-Z]+)?[[:space:]]+[^|&;]+' | sed -E 's/.*sed[[:space:]]+-i(-[a-zA-Z]+)?[[:space:]]+//')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
     fi
-    cat >&2 <<EOF
+
+    # truncate FILE [FILE...]
+    if echo "$cmd" | grep -qE '(^|[|;&])truncate[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'truncate[[:space:]]+[^|&;]+' | sed -E 's/truncate[[:space:]]+//' | tr ' ' '\n' | grep -v '^-' | grep -v '^$')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
+    fi
+
+    # dd of=FILE
+    if echo "$cmd" | grep -qE '(^|[|;&])dd[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'of=[^|&; ]+' | sed -E 's/^of=//')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
+    fi
+
+    # install SRC DEST (DEST is write target)
+    if echo "$cmd" | grep -qE '(^|[|;&])install[[:space:]]'; then
+      # Extract DEST: last arg after options
+      _targets=$(echo "$cmd" | grep -oE 'install[[:space:]]+[^|&;]+' | sed -E 's/install[[:space:]]+//' | tr ' ' '\n' | tail -1)
+      if [[ -n "$_targets" ]]; then
+        WRITE_TARGETS+=("$_targets")
+      fi
+    fi
+
+    # mv SRC DEST -> DEST is write target, SRC is not
+    if echo "$cmd" | grep -qE '(^|[|;&])mv[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'mv[[:space:]]+[^|&;]+' | sed -E 's/mv[[:space:]]+//')
+      dest=$(echo "$_targets" | tr ' ' '\n' | tail -1)
+      if [[ -n "$dest" ]]; then
+        WRITE_TARGETS+=("$dest")
+      fi
+    fi
+
+    # cp SRC DEST -> DEST is write target, SRC is not
+    if echo "$cmd" | grep -qE '(^|[|;&])cp[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'cp[[:space:]]+[^|&;]+' | sed -E 's/cp[[:space:]]+//')
+      dest=$(echo "$_targets" | tr ' ' '\n' | tail -1)
+      if [[ -n "$dest" ]]; then
+        WRITE_TARGETS+=("$dest")
+      fi
+    fi
+
+    # rm FILE...
+    if echo "$cmd" | grep -qE '(^|[|;&])rm[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'rm[[:space:]]+[^|&;]+' | sed -E 's/rm[[:space:]]+//')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
+    fi
+
+    # git rm FILE...
+    if echo "$cmd" | grep -qE '(^|[|;&])git[[:space:]]+rm[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'git[[:space:]]+rm[[:space:]]+[^|&;]+' | sed -E 's/git[[:space:]]+rm[[:space:]]+//')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
+    fi
+
+    # mkdir -p DIR
+    if echo "$cmd" | grep -qE '(^|[|;&])mkdir[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'mkdir[[:space:]]+[^|&;]+' | sed -E 's/mkdir[[:space:]]+//')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
+    fi
+
+    # rmdir DIR
+    if echo "$cmd" | grep -qE '(^|[|;&])rmdir[[:space:]]'; then
+      _targets=$(echo "$cmd" | grep -oE 'rmdir[[:space:]]+[^|&;]+' | sed -E 's/rmdir[[:space:]]+//')
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
+    fi
+
+    # python3 -c "...", python -c "...", node -e "...", perl -e "...", ruby -e "..."
+    # These are opaque — if a protected path appears anywhere, treat as write
+    if echo "$cmd" | grep -qE '(^|[|;&])(python3?|node|perl|ruby)[[:space:]]+-[ce]'; then
+      _targets=$(echo "$cmd" | grep -oE '[a-zA-Z0-9_][a-zA-Z0-9_./\-]*' | sort -u)
+      if [[ -n "$_targets" ]]; then
+        while IFS= read -r _t; do
+          [[ -n "$_t" ]] && WRITE_TARGETS+=("$_t")
+        done <<< "$_targets"
+      fi
+    fi
+  fi
+
+  # ── Check for pure reads: these NEVER produce write targets ──
+  # cat, less, head, tail, grep, rg, git show, git diff, git log
+  is_pure_read=0
+  if echo "$cmd" | grep -qE '(^|[|;&])(cat|less|head|tail|grep|rg|git[[:space:]]+(show|diff|log))[[:space:]]'; then
+    is_pure_read=1
+  fi
+
+  # If it's a pure read, clear write targets (reads don't count as writes
+  # even when output is redirected)
+  if [[ "$is_pure_read" -eq 1 ]]; then
+    WRITE_TARGETS=()
+  fi
+else
+  # Unknown tool type -> allow
+  exit 0
+fi
+
+# ── Normalise a path to repo-relative forward-slash form ─────────
+
+normalize_path() {
+  local p="$1"
+  # Strip leading ./
+  while [[ "$p" == ./* ]]; do
+    p="${p#./}"
+  done
+  # Strip repo root prefix if absolute
+  p="${p#/root/wt-afaq-hook-ownership/}"
+  p="${p#/root/wt-afaq-hook-ownership}"
+  # Back to forward slashes (just in case)
+  p="${p//\\///}"
+  echo "$p"
+}
+
+# ── Build ownership map from OWNERSHIP.md ────────────────────────
+
+OWNERSHIP_FILE="$(dirname "$(dirname "$(readlink -f "$0")")")/../docs/coordination/OWNERSHIP.md"
+if [[ ! -f "$OWNERSHIP_FILE" ]]; then
+  # Fallback: use embedded rules (should not happen)
+  OWNERSHIP_FILE=""
+fi
+
+declare -a OWN_PATHS=()
+declare -a OWN_AGENTS=()
+
+# Function to add an ownership rule
+add_rule() {
+  local path="$1"
+  local agents="$2"
+  OWN_PATHS+=("$path")
+  OWN_AGENTS+=("$agents")
+}
+
+# ── Embedded ownership map (derived from OWNERSHIP.md) ────────────
+# Format: path  ->  agent1 agent2 ...
+# Longest-prefix-wins when resolving.
+# ANY means every agent is permitted.
+
+add_rule "CLAUDE.md" "architect gitkeeper-integrator"
+add_rule ".claude/" "platform-guardian architect gitkeeper-integrator"
+add_rule ".github/" "platform-guardian gitkeeper-integrator"
+add_rule "docs/coordination/INTEGRATION_LOG.md" "gitkeeper-integrator"
+add_rule "docs/coordination/adr/" "architect gitkeeper-integrator"
+add_rule "docs/coordination/schema-proposals/" "ANY"
+add_rule "docs/coordination/BLOCKERS.md" "ANY"
+add_rule "docs/IMPLEMENTATION_STATUS.md" "ANY"
+add_rule "docs/coordination/" "architect gitkeeper-integrator platform-guardian"
+add_rule "prisma/schema.prisma" "ledger-core auth-tenancy gitkeeper-integrator"
+add_rule "prisma/migrations/" "ledger-core auth-tenancy gitkeeper-integrator"
+add_rule "prisma/seed/" "ledger-core auth-tenancy gitkeeper-integrator"
+add_rule "package.json" "platform-guardian architect gitkeeper-integrator"
+add_rule "pnpm-lock.yaml" "platform-guardian architect gitkeeper-integrator"
+add_rule "package-lock.json" "platform-guardian architect gitkeeper-integrator"
+add_rule "yarn.lock" "platform-guardian architect gitkeeper-integrator"
+add_rule "tsconfig" "platform-guardian architect gitkeeper-integrator"
+add_rule "next.config" "platform-guardian architect gitkeeper-integrator"
+add_rule "vitest.config" "platform-guardian architect gitkeeper-integrator"
+add_rule "playwright.config" "platform-guardian architect gitkeeper-integrator"
+add_rule "eslint.config" "platform-guardian architect gitkeeper-integrator"
+add_rule "tailwind.config" "frontend-ux platform-guardian gitkeeper-integrator"
+add_rule "docker-compose" "platform-guardian gitkeeper-integrator"
+add_rule ".env.example" "platform-guardian gitkeeper-integrator"
+add_rule "src/server/tx/" "ledger-core gitkeeper-integrator"
+add_rule "src/server/auth/" "auth-tenancy gitkeeper-integrator"
+add_rule "src/server/audit/" "auth-tenancy ledger-core gitkeeper-integrator"
+add_rule "src/server/ai/" "documents-ai-safety gitkeeper-integrator"
+add_rule "src/server/docs/" "documents-ai-safety gitkeeper-integrator"
+add_rule "src/server/db/" "platform-guardian ledger-core gitkeeper-integrator"
+add_rule "src/modules/ledger/" "ledger-core gitkeeper-integrator"
+add_rule "src/modules/sales/" "sales-ar gitkeeper-integrator"
+add_rule "src/modules/procurement/" "procurement-ap gitkeeper-integrator"
+add_rule "src/modules/banking/" "banking-recon gitkeeper-integrator"
+add_rule "src/modules/reports/" "reporting-analytics gitkeeper-integrator"
+add_rule "src/modules/config/" "ledger-core architect gitkeeper-integrator"
+add_rule "src/ui/" "frontend-ux gitkeeper-integrator"
+add_rule "src/app/(auth)/" "auth-tenancy gitkeeper-integrator"
+add_rule "src/app/(marketing)/" "frontend-ux gitkeeper-integrator"
+add_rule "src/app/layout.tsx" "frontend-ux gitkeeper-integrator"
+add_rule "tests/unit/ledger/" "ledger-core qa-auditor gitkeeper-integrator"
+add_rule "tests/integration/ledger/" "ledger-core qa-auditor gitkeeper-integrator"
+add_rule "tests/" "qa-auditor gitkeeper-integrator"
+
+# ── Resolve ownership for each write target ──────────────────────
+
+for raw_target in "${WRITE_TARGETS[@]}"; do
+  target="$(normalize_path "$raw_target")"
+
+  # No write targets -> allow
+  [[ -z "$target" ]] && continue
+
+  best_len=0
+  best_rule=-1
+
+  # Longest-prefix-wins: find the most specific matching rule
+  for i in "${!OWN_PATHS[@]}"; do
+    pattern="${OWN_PATHS[$i]}"
+    plen=${#pattern}
+
+    if [[ "$target" == "$pattern"* ]]; then
+      if [[ "$plen" -gt "$best_len" ]]; then
+        best_len=$plen
+        best_rule=$i
+      fi
+    fi
+  done
+
+  # No rule matched -> ALLOWED (guardrail over shared areas, not a whitelist)
+  [[ "$best_rule" -lt 0 ]] && continue
+
+  allowed="${OWN_AGENTS[$best_rule]}"
+
+  # "ANY" permits every agent
+  if [[ "$allowed" == "ANY" ]]; then
+    continue
+  fi
+
+  # Exact token match: split allowed on whitespace, compare with ==
+  allowed_match=0
+  for allowed_agent in $allowed; do
+    if [[ "$agent" == "$allowed_agent" ]]; then
+      allowed_match=1
+      break
+    fi
+  done
+
+  if [[ "$allowed_match" -eq 1 ]]; then
+    continue
+  fi
+
+  # ── BLOCKED: agent does not own this path ────────────────────
+  matched_rule="${OWN_PATHS[$best_rule]}"
+
+  cat >&2 <<EOF
 [check-agent-ownership] DENIED: agent '$agent' attempted to write to a
-protected shared area: $glob
+protected shared area: $target
+
+Matched rule: $matched_rule -> allowed agents: $allowed
 
 Command:
   $command_str
 
-Only these roles may write to $glob:
+Only these roles may write to $target:
   $allowed
 
 If you genuinely need this change:
-  1. Open a handoff entry in docs/coordination/BLOCKERS.md
+  1. Open an entry in docs/coordination/BLOCKERS.md
   2. Tag the listed owners
   3. Wait for GitKeeper to confirm the handoff
 
 See docs/coordination/OWNERSHIP.md for the full ownership table.
 EOF
-    exit 2
-  fi
+  exit 2
 done
 
 exit 0

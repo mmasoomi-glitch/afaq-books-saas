@@ -87,69 +87,72 @@ Two adjacent traps found the same day:
 
 ---
 
-## State — last hydrated 2026-09-11 (authz + trial balance landed)
+## State — last hydrated 2026-09-11 (authz gate + statements landed)
 
-**PR #5 is green in CI: 81 tests passing** against a real `postgres:14`
-container — 41 ledger invariant tests (raw SQL, bypassing Prisma), 20 ledger
-service tests, 11 authorization tests, 9 trial-balance tests.
+**PR #5 is green in CI: 106 tests passing** on a real `postgres:14` container.
+41 ledger invariants (raw SQL, bypassing Prisma), 20 ledger services,
+11 authorization, 10 guarded-gate, 15 statements, 9 trial balance.
 
 | Ref | State |
 |-----|-------|
 | `origin/main` | `3a91656`, empty root commit, still the public default branch (`B-20260911-03`) |
-| `origin/develop` | `438bb59`, governance bootstrap |
-| PR #3 | intention contract, branch protection, sprint 001 — 5/5 green |
-| PR #4 | ownership hook enforces Write/Edit + module paths — 5/5 green |
-| PR #5 | ledger + tenancy + authz + trial balance — 5/5 green |
+| `origin/develop` | `438bb59` |
+| PR #3 / #4 / #5 | all 5/5 green, all awaiting the owner's merge |
 
 ### Built
 
-- **Ledger** — schema with the invariants enforced by PostgreSQL: deferred
-  balance trigger firing at COMMIT, posted-row immutability, period
-  non-overlap (`EXCLUDE USING gist`), org consistency across
-  entry/line/account, append-only audit and lock logs.
-- **Tenancy + FKs** — `B-20260911-02` CLOSED. All eight ledger tables have a
-  real foreign key to `organizations(id)` `ON DELETE RESTRICT`.
-- **Authorization** — `resolveOrgScope(userId, slug)` derives the org id
-  server-side from a slug; `assertCanDo(scope, action)` checks by action key.
-  Both membership and unknown-slug failures return the same message so the
-  error cannot confirm another tenant's slug.
-- **Trial balance** — sums in SQL from posted rows only, refuses to return an
-  unbalanced result, no JavaScript number anywhere in the money path.
+- **Ledger** with invariants enforced by PostgreSQL: deferred balance trigger at
+  COMMIT, posted-row immutability, period non-overlap, org consistency,
+  append-only audit and lock logs.
+- **Tenancy + foreign keys** — `B-20260911-02` closed.
+- **Authorization is now an enforced GATE**, not just a tested component.
+  `src/modules/ledger/guarded.ts` asserts the permission before delegating, so a
+  refused call never reaches the database. Test G4 is the one that matters: a
+  VIEWER posting gets ForbiddenError *and* `journalEntry.count` is still 0.
+- **Statements** — profit and loss over a range, balance sheet as at a date with
+  the accounting identity enforced at exact Decimal equality, no tolerance.
 
-### THE GAP THAT MATTERS
+### Two real defects caught this round
 
-**`assertCanDo` is not wired into anything.** The ledger services do not call
-it, so a caller who invokes `postJournalEntry` directly bypasses authorization
-entirely. The layer is tested but it is not yet a gate. This is the single most
-important remaining item and it is the next job.
+- **Retained earnings summed expenses with the wrong sign.** The per-type CASE
+  from P&L (which flips expenses positive so they can be shown in their own
+  section and subtracted) was reused in the balance sheet, producing income PLUS
+  expenses. The balance sheet then failed its own identity check by exactly twice
+  the expenses. Retained earnings is just credits minus debits across
+  profit-and-loss accounts. **The guard caught it, not a test assertion** — the
+  report refused to render, which is what it was specified to do.
+- **A test that could never pass.** The obvious test for the unbalanced guard —
+  write a one-sided posted entry, assert it throws — is impossible:
+  `je_balanced_check` is DEFERRABLE INITIALLY DEFERRED and fires at COMMIT
+  however the rows are written, so the database refuses the corrupt state.
+  Removed with the reason written down rather than shipped passing for the
+  wrong reason.
 
-### Tooling verdict
+### Tooling verdict — measured, not assumed
 
-- **Sophia (qwen3-coder, 64k)** — good on narrow, single-deliverable jobs with
-  an autonomous preamble. Stalls or writes nothing on broad ones. Everything it
-  produces that touches state must be read line by line: it shipped services
-  that typechecked and did nothing, and silently added `NOT VALID` to eight
-  foreign keys.
-- **Forge (`forge-ai`, 131k)** — reachable and authorized, and the 131k context
-  is genuinely double Sophia's. But the served model reasons poorly for this
-  work: on a code review it contradicted itself three times, repeated one point
-  four ways and truncated mid-sentence. It also has **no file tools**, so every
-  edit round-trips through the lead session's context, which is strictly worse
-  than Sophia's agent loop. **Verdict: not worth going overboard on.** Useful
-  only as a cheap second opinion on small, self-contained questions — it did
-  surface two real defects in the trial balance (silent "0" default, and the
-  org filter applied to only one of three joined tables), both now fixed.
-- **Fan-out works** with one database per job (`afaq_a`, `afaq_b`) in separate
-  worktrees `/root/afaq-A` and `/root/afaq-B`. Never share a database.
-- **Never put `kill`/`pkill` in the same `sophia_exec` call as other commands** —
-  it kills the shell before they run. Cost two silently-lost job launches.
+- **Sophia (qwen3-coder, 64k)** — reliable only on narrow, single-deliverable
+  jobs with an autonomous preamble. Everything touching state must be read line
+  by line: it shipped services that typechecked and did nothing, and silently
+  marked eight foreign keys `NOT VALID`.
+- **Forge (`forge-ai`, 131k)** — fast first drafts (7-35s per file) and the
+  larger context is real. **But it oscillates under iteration rather than
+  converging.** Asked to fix float arithmetic in the balance sheet it fixed that
+  and simultaneously reintroduced a nested `$queryRaw` bug, used a wrong column
+  name, and silently changed the exported interface. It also has no file tools,
+  so every edit round-trips through the lead session's context. **Use it for
+  first drafts and second opinions; do not use it for correction loops.**
+- The working loop is: Forge or Sophia drafts -> lead session reviews for the
+  known defect signatures -> **CI on real Postgres is the verifier**. CI caught
+  the retained-earnings sign error that review missed.
 
 ## Next actions, in order
 
-1. **Wire `assertCanDo` into the ledger services** so authorization is an
-   enforced gate rather than a tested component. Every mutating service takes an
-   OrgScope and asserts its action before the write.
-2. **Owner decision: merge PRs #3, #4, #5.** All green. The sprint doc updates
-   are blocked behind PR #3 specifically, since all three doc files change there.
-3. P&L and balance sheet, reusing the trial-balance query shape.
-4. Auth.js v5 wiring so a real session produces the scope.
+1. **Owner decision: merge PRs #3, #4, #5.** All green. Everything else in the
+   sprint is blocked behind them — the doc updates specifically behind PR #3,
+   which modifies the same three files.
+2. Auth.js v5 wiring so a real session produces the OrgScope that `guarded.ts`
+   already consumes. The schema and the gate both exist; only the session does not.
+3. General-ledger drilldown (per-account transaction listing), reusing the
+   statement query shape.
+4. Then SALES-AR, which is the first module that posts through the ledger rather
+   than alongside it.

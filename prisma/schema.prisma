@@ -45,6 +45,7 @@ model Account {
   @@unique([organizationId, code])
   @@index([organizationId, type])
   @@map("accounts")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model AccountingConfig {
@@ -57,6 +58,7 @@ model AccountingConfig {
 
   @@unique([organizationId])
   @@map("accounting_configs")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model Period {
@@ -77,6 +79,7 @@ model Period {
   @@unique([organizationId, name])
   @@index([organizationId, status])
   @@map("periods")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model PeriodLock {
@@ -92,6 +95,7 @@ model PeriodLock {
 
   @@index([organizationId, periodId])
   @@map("period_locks")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model JournalEntry {
@@ -118,6 +122,7 @@ model JournalEntry {
   @@index([organizationId, periodId])
   @@index([organizationId, postedAt])
   @@map("journal_entries")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model JournalLine {
@@ -140,6 +145,7 @@ model JournalLine {
   @@unique([journalEntryId, lineNumber])
   @@index([organizationId, accountId])
   @@map("journal_lines")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model JournalCounter {
@@ -150,6 +156,7 @@ model JournalCounter {
 
   @@id([organizationId, periodId])
   @@map("journal_counters")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model AuditLog {
@@ -167,6 +174,7 @@ model AuditLog {
   @@index([organizationId, createdAt])
   @@index([organizationId, entityType, entityId])
   @@map("audit_logs")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 // ── Tenancy and identity (AUTH-TENANCY) ─────────────────────────────
@@ -190,6 +198,14 @@ model Organization {
   updatedAt DateTime @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   memberships Membership[]
+  accounts Account[]
+  accountingConfigs AccountingConfig[]
+  periods Period[]
+  periodLocks PeriodLock[]
+  journalEntries JournalEntry[]
+  journalLines JournalLine[]
+  journalCounters JournalCounter[]
+  auditLogs AuditLog[]
 
   @@map("organizations")
 }

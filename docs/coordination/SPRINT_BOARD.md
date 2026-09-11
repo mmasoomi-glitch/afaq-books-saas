@@ -48,7 +48,7 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 
 ---
 
-## Sprint 001 — Ledger-first slice (ACTIVE)
+## Sprint 001 — Ledger-first slice (CLOSED 2026-09-11)
 
 - **Sprint base SHA**: `438bb59` (`origin/develop`, after PR #1 and PR #2)
 - **Start date**: 2026-09-11
@@ -92,11 +92,43 @@ Named as a limitation on every ledger row in
 
 ### Evidence log
 
-Test output for sprint 001 is pasted below as it is produced. An empty
-section here while tasks above read `done` is a contract C5.2
-violation.
+All three pull requests merged into `develop` on 2026-09-11 (`5f29213`).
+PR #3 and #4 green on 5 required checks, PR #5 on 6.
 
-*(no test output yet — the toolchain does not exist)*
+Final CI run for PR #5, on a real `postgres:14` service container:
+
+```text
+$ pnpm prisma migrate diff --from-migrations prisma/migrations     --to-schema-datamodel prisma/schema.prisma --exit-code
+No difference detected.
+
+$ pnpm prisma migrate deploy
+All migrations have been successfully applied.
+
+$ pnpm typecheck
+> tsc --noEmit
+(no output, exit 0)
+
+$ pnpm test
+ PASS  tests/integration/ledger/invariants.test.ts      (41 tests)
+ PASS  tests/integration/ledger/services.test.ts        (20 tests)
+ PASS  tests/integration/auth/scope.test.ts             (11 tests)
+ PASS  tests/integration/auth/guarded.test.ts           (10 tests)
+ PASS  tests/integration/reports/trial-balance.test.ts   (9 tests)
+ PASS  tests/integration/reports/statements.test.ts     (15 tests)
+ PASS  tests/integration/reports/guarded-reports.test.ts (7 tests)
+
+ Test Files  7 passed (7)
+      Tests  113 passed (113)
+
+Assert the invariants are enforced by the DATABASE, not only the schema
+  OK jl_debit_credit_sign / jl_reporting_amount_consistent /
+     period_no_overlap / jl_org_consistency / je_immutable / jl_immutable /
+     DEFERRABLE INITIALLY DEFERRED / je_period_open / append_only /
+     organization_id_fkey
+```
+
+The 41 invariant tests use a raw `pg` client rather than Prisma on purpose:
+they prove the DATABASE rejects violations, not that the ORM declines to ask.
 
 ---
 

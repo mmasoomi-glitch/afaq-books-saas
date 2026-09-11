@@ -1,17 +1,21 @@
-import { PrismaClient as PrismaClientRaw } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
-declare global {
-  // eslint-disable-next-line no-var
-  var prismaGlobal: NonNullable<typeof prismaGlobal> | undefined;
-}
-
-const prismaGlobal = globalThis as typeof globalThis & {
-  prismaGlobal?: PrismaClientRaw;
+/**
+ * One PrismaClient for the process.
+ *
+ * Cached on globalThis so a development hot reload reuses the same client
+ * instead of opening a new connection pool on every reload until the database
+ * refuses connections.
+ */
+const globalForPrisma = globalThis as unknown as {
+  afaqPrisma?: PrismaClient;
 };
 
-const prisma = prismaGlobal.prismaGlobal ?? new PrismaClientRaw();
+export const prisma: PrismaClient =
+  globalForPrisma.afaqPrisma ?? new PrismaClient();
 
-if (process.env.NODE_ENV !== "production") prismaGlobal.prismaGlobal = prisma;
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.afaqPrisma = prisma;
+}
 
-export { prisma };
 export type { PrismaClient } from "@prisma/client";

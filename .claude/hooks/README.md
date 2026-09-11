@@ -1,48 +1,99 @@
-# .claude/hooks/
+# .claude/hooks — Guardrail hooks
 
-These shell scripts are wired in `.claude/settings.json` as PreToolUse
-hooks. Claude Code invokes them via `bash`, so on Windows they require
-**Git Bash** (which ships with Git for Windows and is already present
-because you're using the `git` CLI).
+## check-agent-ownership.sh
 
-## Hooks
+PreToolUse hook that enforces **docs/coordination/OWNERSHIP.md** by examining
+Claude Code tool-call JSON on stdin and blocking unauthorised writes with exit
+code 2.
 
-- `block-dangerous-git.sh` — blocks unsafe Git invocations: pushes to
-  `main`/`develop`, `--force*`, `--no-verify`, direct commits on
-  protected branches, destructive resets/cleans, etc. See
-  `.claude/rules/git-collaboration.md` for the policy and rationale.
+### Matchers
 
-- `check-agent-ownership.sh` — when an agent session identifies itself
-  via the `AFAQ_AGENT` environment variable (the agent-prompt files set
-  this), blocks writes into protected shared paths the agent doesn't
-  own. See `docs/coordination/OWNERSHIP.md`.
+Two matcher entries are registered in `.claude/settings.json`:
 
-## Testing a hook locally
+| Matcher                              | Tool payloads intercepted         |
+|--------------------------------------|-----------------------------------|
+| `Bash`                               | Every Bash tool call              |
+| `Write` `\|` `Edit` `\|` `NotebookEdit` `\|` `MultiEdit` | File-edit tool calls              |
 
-Each hook reads a JSON payload from stdin. To test:
+A single script handles both:
 
-```bash
-echo '{"tool_name":"Bash","tool_input":{"command":"git push origin develop"}}' \
-  | bash .claude/hooks/block-dangerous-git.sh
-echo "exit=$?"
-```
+* **Write / Edit / NotebookEdit / MultiEdit** — the file path comes from
+  `.tool_input.file_path` and is always treated as a write target.
 
-A blocked call exits `2` and prints the reason to stderr. An allowed
-call exits `0` silently.
+* **Bash** — write targets are extracted from `.tool_input.command` using
+  shell-operator and command-name analysis (see below).
 
-## Limitations
+* **Anything else** — silently allowed (exit 0).
 
-These are **local** controls. They are bypassable by a determined user
-(e.g. by editing `settings.json`). They are not a substitute for
-**GitHub server-side branch protection** — see
-`docs/coordination/GITHUB_BRANCH_PROTECTION_REQUIRED.md`.
+### Read vs. write detection
 
-## Not yet wired
+The hook distinguishes reads from writes using **SHELL OPERATOR** and
+**COMMAND NAME**, not raw substring matching:
 
-- `pre-commit-quality-gate.sh` — intentionally **not** created during
-  the bootstrap because the application stack (TypeScript, ESLint,
-  Prisma, Vitest/Playwright) isn't installed yet. A pre-commit hook
-  that runs commands which don't exist would either no-op silently
-  (giving false reassurance) or fail every commit (blocking work).
-  PLATFORM-GUARDIAN will add it in the sprint that scaffolds the
-  Next.js application, once the commands are real.
+| Category            | Tokens / Commands                                         | Behaviour                                  |
+|---------------------|-----------------------------------------------------------|--------------------------------------------|
+| Redirections        | `>`, `>>`, `2>`, `&>` followed by a file path token       | The path token is a write target           |
+| `tee FILE`          | Arguments after `tee`                                     | Targets are write targets                  |
+| `sed -i`            | File argument                                             | Target is a write target                   |
+| `truncate FILE`     | File arguments                                            | Targets are write targets                  |
+| `dd of=FILE`        | `of=` value                                               | Target is a write target                   |
+| `install SRC DEST`  | DEST argument                                             | DEST is write target, SRC is not           |
+| `mv SRC DEST`       | DEST argument                                             | DEST is write target, SRC is not           |
+| `cp SRC DEST`       | DEST argument                                             | DEST is write target, SRC is not           |
+| `rm FILE...`        | File arguments                                            | All are write targets                      |
+| `git rm FILE...`    | File arguments                                            | All are write targets                      |
+| `mkdir -p DIR`      | Directory arguments                                       | All are write targets                      |
+| `rmdir DIR`         | Directory arguments                                       | All are write targets                      |
+| `python3 -c` …      | Any path token in command                                 | Conservative: every protected path = write |
+| `python -c` …       | Same as above                                             | Conservative: every protected path = write |
+| `node -e` …         | Same as above                                             | Conservative: every protected path = write |
+| `perl -e` …         | Same as above                                             | Conservative: every protected path = write |
+| `ruby -e` …         | Same as above                                             | Conservative: every protected path = write |
+| Heredoc (`<<`)      | Any path token in command                                 | Conservative: every protected path = write |
+| `cat`, `less`       | Pure read commands                                        | NOT writes even when output is redirected  |
+| `head`, `tail`      | Pure read commands                                        | NOT writes even when output is redirected  |
+| `grep`, `rg`        | Pure read commands                                        | NOT writes even when output is redirected  |
+| `git show|diff|log` | Pure read commands                                        | NOT writes even when output is redirected  |
+
+### Longest-prefix-wins resolution
+
+When a file path matches multiple ownership rules, the **longest matching
+prefix** wins. For example:
+
+* `tests/integration/ledger/x.test.ts` matches both `tests/` and
+  `tests/integration/ledger/` — the longer rule (`tests/integration/ledger/`)
+  is used.
+* `src/modules/ledger/posting.ts` matches both `src/modules/` and
+  `src/modules/ledger/` — the longer rule wins.
+
+This ensures granular rules take priority over broad catch-all rules.
+
+### Owner matching
+
+* The allowed-agents list from each rule is split on whitespace.
+* The calling agent (`$AFAQ_AGENT`) is compared with **exact token equality**
+  (`==`), not substring matching.
+* If the rule says `ANY`, every agent is permitted.
+* A path that matches **no** rule is **allowed** — this is a guardrail over
+  shared areas, not a full whitelist.
+
+### AFAQ_AGENT convention
+
+* The hook reads the calling agent's slug from the environment variable
+  `AFAQ_AGENT`.
+* This variable is set by the agent-prompt files in
+  `docs/coordination/agent-prompts/0*.md`.
+* **If `AFAQ_AGENT` is unset**, the hook exits 0 (allow) — this covers the
+  human lead session which may need to write anywhere.
+
+### Error output
+
+When blocking, the hook prints to stderr:
+
+1. The agent slug that was denied.
+2. The resolved (repo-relative) file path.
+3. The matched ownership rule (pattern -> allowed agents).
+4. The handoff procedure: open an entry in `docs/coordination/BLOCKERS.md`,
+   tag the owner, wait for GitKeeper confirmation.
+
+Exit code 2 signals the block to Claude Code.

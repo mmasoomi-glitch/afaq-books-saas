@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
-import { resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
+import { resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
 import {
   MAX_DELAY_MS,
   POLICIES,
@@ -11,12 +11,12 @@ import {
   enforce,
   reapExpired,
   recordSecurityEvent,
-} from "../../../src/server/auth/rate-limit.js";
+} from "../../../src/server/auth/rate-limit";
 import {
   InvalidCredentialsError,
   registerUser,
   signIn,
-} from "../../../src/server/auth/session.js";
+} from "../../../src/server/auth/session";
 
 const PASSWORD = "correct horse battery staple";
 const SIGNIN = POLICIES.signin;

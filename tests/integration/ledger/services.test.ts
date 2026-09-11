@@ -1,19 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { Prisma } from "@prisma/client";
-import { ensureOrg, pool, resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
-import { createAccount, getAccount, listAccounts } from "../../../src/modules/ledger/accounts.js";
+import { ensureOrg, pool, resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
+import { createAccount, getAccount, listAccounts } from "../../../src/modules/ledger/accounts";
 import {
   closePeriod,
   createPeriod,
   lockPeriod,
   unlockPeriod,
-} from "../../../src/modules/ledger/periods.js";
+} from "../../../src/modules/ledger/periods";
 import {
   postJournalEntry,
   reverseJournalEntry,
-} from "../../../src/modules/ledger/posting.js";
+} from "../../../src/modules/ledger/posting";
 import {
   AlreadyReversedError,
   InvalidLineError,
@@ -21,13 +21,13 @@ import {
   NotPostedError,
   PeriodNotOpenError,
   UnbalancedEntryError,
-} from "../../../src/modules/ledger/errors.js";
+} from "../../../src/modules/ledger/errors";
 import {
   isRetryableDbError,
   withTxUsing,
-} from "../../../src/server/tx/with-tx.js";
-import type { LedgerScope } from "../../../src/modules/ledger/scope.js";
-import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope.js";
+} from "../../../src/server/tx/with-tx";
+import type { LedgerScope } from "../../../src/modules/ledger/scope";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 
 beforeEach(async () => {
   await resetDb();

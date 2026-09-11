@@ -1,6 +1,6 @@
-import { toRouteHandler } from "../../../../server/http/adapters/web.js";
-import { adapterConfig } from "../../../../server/http/config.js";
-import { sessionHandler } from "../../../../server/http/handlers/auth.js";
+import { toRouteHandler } from "../../../../server/http/adapters/web";
+import { adapterConfig } from "../../../../server/http/config";
+import { sessionHandler } from "../../../../server/http/handlers/auth";
 
 /**
  * The endpoint that keeps an active session alive.

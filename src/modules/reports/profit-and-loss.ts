@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../server/db/client.js";
-import type { LedgerScope } from "../ledger/scope.js";
+import { prisma } from "../../server/db/client";
+import type { LedgerScope } from "../ledger/scope";
 
 export interface ProfitAndLossRow {
   accountId: string;

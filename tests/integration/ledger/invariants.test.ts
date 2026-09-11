@@ -1,5 +1,5 @@
 import { test, beforeAll, afterAll, beforeEach } from "vitest";
-import { ensureOrg, pool, resetDb } from "../../setup.js";
+import { ensureOrg, pool, resetDb } from "../../setup";
 import type { QueryResultRow } from "pg";
 
 function one<T>(arr: T[], msg = "expected at least one row"): T {

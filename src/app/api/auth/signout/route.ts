@@ -1,9 +1,9 @@
-import { toRouteHandler } from "../../../../server/http/adapters/web.js";
+import { toRouteHandler } from "../../../../server/http/adapters/web";
 import {
   adapterConfig,
   authHandlerConfig,
-} from "../../../../server/http/config.js";
-import { signOutHandler } from "../../../../server/http/handlers/auth.js";
+} from "../../../../server/http/config";
+import { signOutHandler } from "../../../../server/http/handlers/auth";
 
 /**
  * POST, never GET, and that is a security property rather than a convention.

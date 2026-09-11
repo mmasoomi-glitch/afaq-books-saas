@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { prisma } from '../db/client.js';
+import { prisma } from '../db/client';
 
 export type Isolation = 'Serializable' | 'RepeatableRead' | 'ReadCommitted';
 export interface WithTxOptions {

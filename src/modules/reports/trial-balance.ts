@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../server/db/client.js";
-import { TrialBalanceUnbalancedError } from "./errors.js";
-import type { LedgerScope } from "../ledger/scope.js";
+import { prisma } from "../../server/db/client";
+import { TrialBalanceUnbalancedError } from "./errors";
+import type { LedgerScope } from "../ledger/scope";
 
 export interface TrialBalanceRow {
   accountId: string;

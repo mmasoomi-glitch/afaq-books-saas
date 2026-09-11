@@ -1,9 +1,9 @@
-import { toRouteHandler } from "../../../../server/http/adapters/web.js";
+import { toRouteHandler } from "../../../../server/http/adapters/web";
 import {
   adapterConfig,
   authHandlerConfig,
-} from "../../../../server/http/config.js";
-import { registerHandler } from "../../../../server/http/handlers/auth.js";
+} from "../../../../server/http/config";
+import { registerHandler } from "../../../../server/http/handlers/auth";
 
 /**
  * Registration creates an account with NO membership, so the user it creates

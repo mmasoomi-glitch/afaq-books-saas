@@ -42,9 +42,48 @@ when a release build behaves differently from the gate that approved it.
 (C) is worse in the same way and adds concealment: the configuration that
 actually governs the production build is the one nobody looks at.
 
-(A) has one source of truth. The `.js` import suffixes stay exactly as they
-are — `bundler` resolution resolves `./y.js` to `y.ts` on disk, which is what
-Vite and esbuild do and what Vitest already does today.
+(A) has one source of truth.
+
+## The part the decision got wrong, and the correction
+
+The original version of this ADR said the `.js` import suffixes could stay,
+because `bundler` resolution maps `./y.js` to `y.ts` on disk. That is true of
+**TypeScript** and false of **the bundler**. `tsc --noEmit` passed cleanly and
+`next build` then failed on every route file:
+
+```
+./src/app/api/auth/signin/route.ts
+Module not found: Can't resolve '../../../../server/http/adapters/web.js'
+```
+
+`moduleResolution: "bundler"` is a statement about how the *type checker*
+should behave in a project that will be bundled. It does not configure, or
+describe, what webpack actually does — and webpack looks for a file called
+`web.js`, which does not exist.
+
+Two ways out were available.
+
+**Map the extension in the bundler.** `config.resolve.extensionAlias = { ".js":
+[".ts", ".tsx", ".js"] }` in `next.config.ts` makes webpack behave the way the
+comment assumed. Rejected: it is a webpack-only hook, Turbopack ignores it and
+has no equivalent, and `next build --turbopack` is stable in 15.5. That leaves
+a mine for whoever first runs the build with the other bundler, and the symptom
+would be the same wall of "module not found" with no obvious cause.
+
+**Remove the suffixes.** Taken. They existed only because NodeNext demanded the
+extension that would exist at runtime; under `bundler` resolution they are
+vestigial and actively wrong. 158 of them across 35 files, mechanical, and
+verified by `tsc --noEmit` plus the full suite.
+
+**What this costs.** Server code can no longer be executed by plain `node`
+without a loader — Node ESM requires the extension. Nothing does that today
+(Vitest and `tsx` both resolve extensionless imports), but the pending reaper
+job in `B-20260911-07` is the first thing that might want to, and it should be
+run under `tsx` rather than reintroducing the suffixes.
+
+**Recorded because the reasoning was wrong, not just the outcome.** A plausible
+claim about a tool's behaviour went into a decision document unverified. The
+build is what tested it, one commit later.
 
 ## Consequences
 

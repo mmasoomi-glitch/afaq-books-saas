@@ -1,9 +1,9 @@
-import { toRouteHandler } from "../../../../server/http/adapters/web.js";
+import { toRouteHandler } from "../../../../server/http/adapters/web";
 import {
   adapterConfig,
   authHandlerConfig,
-} from "../../../../server/http/config.js";
-import { signInHandler } from "../../../../server/http/handlers/auth.js";
+} from "../../../../server/http/config";
+import { signInHandler } from "../../../../server/http/handlers/auth";
 
 /**
  * One line of routing, and that is the point.

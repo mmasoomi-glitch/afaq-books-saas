@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
-import { resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
+import { resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
 import {
   SESSION_ABSOLUTE_TTL_MS,
   SESSION_IDLE_TTL_MS,
@@ -13,7 +13,7 @@ import {
   resolveSession,
   signIn,
   touchSession,
-} from "../../../src/server/auth/session.js";
+} from "../../../src/server/auth/session";
 
 /**
  * Sliding renewal, and the ceiling that stops it sliding forever.

@@ -1,11 +1,11 @@
-import type { OrgScope } from "../../server/auth/scope.js";
-import { assertCanDo, toLedgerScope } from "../../server/auth/scope.js";
-import type { TrialBalanceResult } from "./trial-balance.js";
-import { trialBalance } from "./trial-balance.js";
-import type { ProfitAndLoss } from "./profit-and-loss.js";
-import { profitAndLoss } from "./profit-and-loss.js";
-import type { BalanceSheet } from "./balance-sheet.js";
-import { balanceSheet } from "./balance-sheet.js";
+import type { OrgScope } from "../../server/auth/scope";
+import { assertCanDo, toLedgerScope } from "../../server/auth/scope";
+import type { TrialBalanceResult } from "./trial-balance";
+import { trialBalance } from "./trial-balance";
+import type { ProfitAndLoss } from "./profit-and-loss";
+import { profitAndLoss } from "./profit-and-loss";
+import type { BalanceSheet } from "./balance-sheet";
+import { balanceSheet } from "./balance-sheet";
 
 /**
  * Authorization-gated wrappers for the financial statements.

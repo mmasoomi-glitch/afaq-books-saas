@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
 import type { MembershipRole } from "@prisma/client";
-import { resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
-import { resolveOrgScope } from "../../../src/server/auth/scope.js";
-import type { OrgScope } from "../../../src/server/auth/scope.js";
-import { ForbiddenError } from "../../../src/server/auth/errors.js";
+import { resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
+import { resolveOrgScope } from "../../../src/server/auth/scope";
+import type { OrgScope } from "../../../src/server/auth/scope";
+import { ForbiddenError } from "../../../src/server/auth/errors";
 import {
   guardedClosePeriod,
   guardedCreateAccount,
@@ -15,7 +15,7 @@ import {
   guardedPostJournalEntry,
   guardedReverseJournalEntry,
   guardedUnlockPeriod,
-} from "../../../src/modules/ledger/guarded.js";
+} from "../../../src/modules/ledger/guarded";
 
 beforeEach(async () => {
   await resetDb();

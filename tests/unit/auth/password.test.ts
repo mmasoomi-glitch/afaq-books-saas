@@ -4,7 +4,7 @@ import {
   hashPassword,
   verifyAgainstDummy,
   verifyPassword,
-} from "../../../src/server/auth/password.js";
+} from "../../../src/server/auth/password";
 
 /**
  * The cost parameters are the one thing here that has to survive the database

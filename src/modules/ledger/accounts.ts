@@ -1,8 +1,8 @@
 import type { Account, Prisma } from "@prisma/client";
-import { prisma } from "../../server/db/client.js";
-import { withTx } from "../../server/tx/with-tx.js";
-import type { CreateAccountInput, LedgerScope } from "./scope.js";
-import { NotFoundError } from "./errors.js";
+import { prisma } from "../../server/db/client";
+import { withTx } from "../../server/tx/with-tx";
+import type { CreateAccountInput, LedgerScope } from "./scope";
+import { NotFoundError } from "./errors";
 
 export async function createAccount(
   scope: LedgerScope,

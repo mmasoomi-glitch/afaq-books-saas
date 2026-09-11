@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { CSRF_COOKIE } from "./cookies.js";
-import type { HttpRequest } from "./types.js";
-import { isMutating } from "./types.js";
+import { CSRF_COOKIE } from "./cookies";
+import type { HttpRequest } from "./types";
+import { isMutating } from "./types";
 
 /**
  * Double-submit CSRF.

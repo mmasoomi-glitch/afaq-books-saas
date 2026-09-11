@@ -1,5 +1,5 @@
-import type { AdapterConfig } from "./adapters/web.js";
-import type { AuthHandlerConfig } from "./handlers/auth.js";
+import type { AdapterConfig } from "./adapters/web";
+import type { AuthHandlerConfig } from "./handlers/auth";
 
 /**
  * The two settings that cannot be guessed from inside the process, read once

@@ -1,19 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
 import type { MembershipRole } from "@prisma/client";
-import { resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
-import { resolveOrgScope, toLedgerScope } from "../../../src/server/auth/scope.js";
-import type { OrgScope } from "../../../src/server/auth/scope.js";
-import { NotAMemberError } from "../../../src/server/auth/errors.js";
+import { resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
+import { resolveOrgScope, toLedgerScope } from "../../../src/server/auth/scope";
+import type { OrgScope } from "../../../src/server/auth/scope";
+import { NotAMemberError } from "../../../src/server/auth/errors";
 import {
   guardedBalanceSheet,
   guardedProfitAndLoss,
   guardedTrialBalance,
-} from "../../../src/modules/reports/guarded.js";
-import { createAccount } from "../../../src/modules/ledger/accounts.js";
-import { createPeriod } from "../../../src/modules/ledger/periods.js";
-import { postJournalEntry } from "../../../src/modules/ledger/posting.js";
+} from "../../../src/modules/reports/guarded";
+import { createAccount } from "../../../src/modules/ledger/accounts";
+import { createPeriod } from "../../../src/modules/ledger/periods";
+import { postJournalEntry } from "../../../src/modules/ledger/posting";
 
 const AS_OF = new Date("2024-12-31");
 const FROM = new Date("2024-01-01");

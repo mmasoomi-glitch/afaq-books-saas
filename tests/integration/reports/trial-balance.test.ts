@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { test, expect, beforeEach } from "vitest";
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../../src/server/db/client.js";
-import { resetDb, ensureOrg } from "../../setup.js";
-import { postJournalEntry } from "../../../src/modules/ledger/posting.js";
-import { createPeriod } from "../../../src/modules/ledger/periods.js";
-import { createAccount } from "../../../src/modules/ledger/accounts.js";
-import { trialBalance } from "../../../src/modules/reports/trial-balance.js";
-import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope.js";
-import { TrialBalanceUnbalancedError } from "../../../src/modules/reports/errors.js";
-import type { LedgerScope, AccountType } from "../../../src/modules/ledger/scope.js";
-import type { TrialBalanceRow, TrialBalanceResult } from "../../../src/modules/reports/trial-balance.js";
+import { prisma } from "../../../src/server/db/client";
+import { resetDb, ensureOrg } from "../../setup";
+import { postJournalEntry } from "../../../src/modules/ledger/posting";
+import { createPeriod } from "../../../src/modules/ledger/periods";
+import { createAccount } from "../../../src/modules/ledger/accounts";
+import { trialBalance } from "../../../src/modules/reports/trial-balance";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
+import { TrialBalanceUnbalancedError } from "../../../src/modules/reports/errors";
+import type { LedgerScope, AccountType } from "../../../src/modules/ledger/scope";
+import type { TrialBalanceRow, TrialBalanceResult } from "../../../src/modules/reports/trial-balance";
 
 function at<T>(rows: readonly T[], i: number): T {
   const r = rows[i];

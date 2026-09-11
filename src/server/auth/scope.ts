@@ -1,10 +1,10 @@
 import type { MembershipRole } from "@prisma/client";
-import { prisma } from "../../server/db/client.js";
-import type { LedgerScope } from "../../modules/ledger/scope.js";
-import { unsafeCreateLedgerScope } from "../../modules/ledger/scope.js";
-import { NotAMemberError, ForbiddenError, OrganizationNotFoundError } from "./errors.js";
-import type { Action } from "./permissions.js";
-import { can } from "./permissions.js";
+import { prisma } from "../../server/db/client";
+import type { LedgerScope } from "../../modules/ledger/scope";
+import { unsafeCreateLedgerScope } from "../../modules/ledger/scope";
+import { NotAMemberError, ForbiddenError, OrganizationNotFoundError } from "./errors";
+import type { Action } from "./permissions";
+import { can } from "./permissions";
 
 /**
  * A resolved, membership-verified scope.

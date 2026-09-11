@@ -87,7 +87,7 @@ Two adjacent traps found the same day:
 
 ---
 
-## State — last hydrated 2026-09-11
+## State — last hydrated 2026-09-11 (after tenancy + FKs landed)
 
 ### Repository
 
@@ -95,105 +95,91 @@ Two adjacent traps found the same day:
 |-----|-----|-------|
 | `origin/main` | `3a91656` | empty root commit, 11 behind develop, public default branch (`B-20260911-03`) |
 | `origin/develop` | `438bb59` | governance bootstrap, CI green |
-| `chore/intention-contract-sprint-001` | pushed | PR #3 |
-| `fix/ownership-hook-write-edit` | pushed | PR #4 |
-| `agent/04-ledger-core-sprint-001` | pushed | PR #5 |
+| `chore/intention-contract-sprint-001` | pushed | PR #3 — all checks green |
+| `fix/ownership-hook-write-edit` | pushed | PR #4 — all checks green |
+| `agent/04-ledger-core-sprint-001` | `122057e` | PR #5 — **all checks green** |
 
-Branch protection is **live**: rulesets `protect-develop` (22882053) and
-`protect-main` (22882054), both `enforcement: active`, verified via the
-resolved-rules endpoint.
+Branch protection live: rulesets `protect-develop` (22882053) and `protect-main`
+(22882054), both `enforcement: active`, verified via the resolved-rules endpoint.
 
-### Open pull requests
+### PR #5 — current CI evidence
 
-| PR | Title | Checks | Blocked on |
-|----|-------|--------|-----------|
-| #3 | intention contract v1, branch protection, sprint 001 open | all 5 green | owner merge |
-| #4 | ownership hook enforces Write/Edit and module paths | all 5 green | owner merge |
-| #5 | ledger schema, invariants, services, tests | governance green; **ledger job failing** | see below |
+```text
+No migration drift between schema.prisma and migrations
+  No difference detected.
 
-**Merge authority is unresolved.** `sophia_ask` returned `OWNER`: `CLAUDE.md`
-says "only an authorized human merges into develop or main", and the session
-must not merge its own PRs until the owner says otherwise. Everything else
-continues regardless.
+Accounting-invariant tests
+  tests/integration/ledger/invariants.test.ts (41 tests) 1763ms
+  tests/integration/ledger/services.test.ts   (20 tests) 1220ms
+       Tests  61 passed (61)
 
-### PR #5 — where the ledger actually is
+Assert the invariants are enforced by the DATABASE
+  OK organization_id_fkey   (+ the 9 earlier invariants)
+```
 
-Green on the pod (`/root/wt-afaq-ledger-schema`): `pnpm typecheck` exits 0 and
-`pnpm test` is **60 passed / 60** (41 raw-SQL invariant tests + 19 service
-tests) against real PostgreSQL 14.24.
+Runs on a `postgres:14` service container, so this is verified rather than
+asserted.
 
-CI has been chasing the pod. Fixed so far, each a real portability defect:
+### What is built
 
-1. `npx prisma` not resolvable under pnpm → resolve `node_modules/.bin/prisma`.
-2. `stdio: "ignore"` hid every migration error → capture stdout/stderr.
-3. `migrate diff` was handed the test database as its own shadow → gave it a
-   throwaway `afaq_shadow`.
-4. Prisma client never generated on the runner → added `pnpm prisma generate`.
-5. `client.ts` had a self-referential type (TS2502) which degraded `prisma` to
-   `any` and produced six unrelated implicit-any errors → rewritten.
+- **Ledger schema + database-level invariants** — debit/credit exclusivity,
+  reporting-amount consistency, period non-overlap (`EXCLUDE USING gist`),
+  org consistency across entry/line/account, posted-row immutability, a
+  **deferred** balance constraint trigger, period-open enforcement,
+  append-only audit and lock logs.
+- **Tenancy** — `organizations`, `users`, `memberships`, `sessions`,
+  `auth_accounts`, `verification_tokens`. Roles are per-organization on
+  Membership; there is no global role. Auth.js's "Account" is `AuthAccount`
+  here because `Account` is the chart of accounts.
+- **Foreign keys on all eight ledger tables** → `organizations(id)`,
+  `ON DELETE RESTRICT`. **This closed `B-20260911-02`.** Invariant I7 now
+  holds at the database level, not just the service layer. `S20` asserts it.
+- **Services** — `withTx` (Serializable + bounded retry on 40001/40P01/55P03
+  only), `postJournalEntry`, `reverseJournalEntry`, periods
+  (create/close/lock/unlock, each writing `period_locks` + audit), accounts.
+- **CI** — `ledger-ci.yml`: real Postgres, drift check with its own throwaway
+  shadow database, typecheck, tests, and a grep asserting each named invariant
+  still exists in SQL.
 
-Last push `953f426` carries fix 5; **its CI result has not been read yet.**
-That is the first thing to check next turn.
-
-### What exists in the ledger
-
-- `prisma/schema.prisma` — 8 models, Decimal(18,4) money, no float anywhere.
-- `prisma/migrations/20260911065811_init_ledger/` — the invariants that matter,
-  all enforced by PostgreSQL: debit/credit exclusivity, reporting-amount
-  consistency, period non-overlap (`EXCLUDE USING gist`), org consistency
-  across entry/line/account, posted-row immutability, a **deferred** balance
-  constraint trigger, period-open enforcement, append-only audit and lock logs.
-- `src/server/tx/with-tx.ts` — Serializable + bounded retry on 40001/40P01/55P03
-  only; `withTxUsing` exposes the retry loop for testing without a database.
-- `src/modules/ledger/` — `accounts`, `periods`, `posting`, `errors`, `scope`.
-- `tests/integration/ledger/` — `invariants.test.ts` (41), `services.test.ts` (19).
-- `.github/workflows/ledger-ci.yml` — postgres:14 service, drift check, tests,
-  plus a grep asserting each named invariant still exists in the migration.
-
-### Known limitations, all recorded
-
-- `organization_id` carries **no foreign key** (owner-directed, `B-20260911-02`).
-  Invariant I7 holds at the column and service layer only. `jl_org_consistency`
-  is the compensating control. AUTH-TENANCY must add the FKs.
-- No UI, no auth, no invoices — excluded by contract clause C2.
-- The audit log has a writer only for ledger actions.
-
-### Open blockers
+### Still open
 
 | Id | Subject | Owner |
 |----|---------|-------|
-| `B-20260911-01` | ownership hook gaps | PLATFORM-GUARDIAN — **fixed in PR #4**, closes on merge |
-| `B-20260911-02` | ledger `organization_id` has no FK | AUTH-TENANCY |
+| `B-20260911-01` | ownership hook gaps | fixed in PR #4, closes on merge |
 | `B-20260911-03` | `main` behind `develop`, public default branch | repository owner |
 
-### Pod environment
+- **Merge authority unresolved.** `sophia_ask` returned `OWNER`: `CLAUDE.md`
+  says only an authorized human merges into develop/main. All three PRs are
+  green and waiting.
+- No UI, no auth wiring, no invoices, no reports — excluded by contract C2.
+- `assertCanDo` / `resolveOrgScope` do not exist yet. `LedgerScope` is still
+  constructed by the caller; AUTH-TENANCY must derive it from a session.
+- Doc updates (`SPRINT_BOARD`, `IMPLEMENTATION_STATUS`, `TODO_SPRINT_001_LEDGER`)
+  are deliberately **not** in PR #5 — all three are modified in PR #3 and
+  editing them twice guarantees a conflict. They land once PR #3 merges.
 
-`/workspace/repos/afaq-books-saas` (re-clone if missing) and worktree
-`/root/wt-afaq-ledger-schema`. PostgreSQL 14.24 running, databases `afaq_dev`
-and `afaq_test`, role `afaq`. Node 22.20, pnpm 9.15.4 at
-`/workspace/node/bin/pnpm`. No Docker daemon.
+### Sophia status
 
-Launch a job with:
+Inference jobs **stopped at owner request** — the owner needs the GPU. Shell
+calls to the pod (`sophia_exec`) do not use inference and remain fine for
+reading files. The pod worktree `/root/wt-afaq-ledger-schema` holds the same
+work; local and CI are now the source of truth.
 
-```bash
-nohup bash -c 'source /root/.sophia-env 2>/dev/null; \
-  export PATH="/workspace/node/bin:$PATH"; \
-  cd /root/wt-afaq-ledger-schema && \
-  opencode run --model sophia/qwen3-coder "$(cat /workspace/tasks/NAME.md)" \
-  > /workspace/logs/oc-NAME.log 2>&1; \
-  echo OC_EXIT=$? >> /workspace/logs/oc-NAME.log' >/dev/null 2>&1 &
-```
-
----
+What Sophia produced that needed correcting, for the record: services that
+typechecked and did nothing (`lockPeriod` that only read a row, `closePeriod`
+that closed nothing, `postJournalEntry` that never set `posted_at`), and eight
+foreign keys silently marked `NOT VALID` when the spec did not ask for it.
 
 ## Next actions, in order
 
-1. Read the CI result for `953f426` on PR #5.
-2. If red, write the failure into a Sophia task file and let Sophia fix it on
-   the pod; do not hand-fix.
-3. Sync any pod fix back by per-file `md5sum` comparison, commit, push.
-4. When PR #5 is green, update `SPRINT_BOARD.md`, `IMPLEMENTATION_STATUS.md`
-   and `TODO_SPRINT_001_LEDGER.md` — deferred until PR #3 merges, because all
-   three files are modified there and editing them twice guarantees a conflict.
-5. Remaining TODO phases: reporting has not started; AUTH-TENANCY is next after
-   the ledger lands.
+1. **Owner decision needed**: merge PRs #3, #4, #5 (all green), or delegate
+   merge authority to this session. Nothing else in the sprint can close until
+   they land — the doc updates are blocked behind PR #3 specifically.
+2. After PR #3 merges: update `SPRINT_BOARD.md`, `IMPLEMENTATION_STATUS.md` and
+   `TODO_SPRINT_001_LEDGER.md` with the real test counts and the closure of
+   `B-20260911-02`.
+3. Next build slice (AUTH-TENANCY): `resolveOrgScope(req)` and
+   `assertCanDo(scope, action)`, plus the five tenant-isolation test surfaces
+   required by `security-tenancy.md`. The schema for it already exists.
+4. Then REPORTING-ANALYTICS: trial balance computed from posted ledger rows
+   only, with a test comparing it against a freshly-summed control.

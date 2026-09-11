@@ -181,6 +181,19 @@ jobs:
           done
           echo "checked: the http layer imports no framework"
 
+          # And the converse: Next-coupled SERVER code belongs in one place, so
+          # it can be recognised as such. Only src/server/next/ and src/app/
+          # may import next/*. This gate caught page-scope.ts sitting in
+          # src/server/http/ before it merged, which is the only reason the
+          # distinction survived contact with a deadline.
+          for f in $(grep -rlE "from \"next/" src/server/ || true); do
+            case "$f" in
+              src/server/next/*) ;;
+              *) echo "::error file=$f::only src/server/next/ may import next/*; move it or adapt at the page"; fail=1 ;;
+            esac
+          done
+          echo "checked: where next/* may be imported"
+
           # The __Host- prefix is load-bearing, not cosmetic: it is what makes a
           # browser refuse a shadowing cookie set by a sibling subdomain. A
           # rename to a bare "session" would pass every test that checks

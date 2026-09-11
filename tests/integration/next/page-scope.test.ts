@@ -50,7 +50,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { requirePageScope, optionalPageScope } = await import(
-  "../../../src/server/http/page-scope"
+  "../../../src/server/next/page-scope"
 );
 
 const PASSWORD = "correct horse battery staple";

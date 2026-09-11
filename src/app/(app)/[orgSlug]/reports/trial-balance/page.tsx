@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../server/http/page-scope";
+import { requirePageScope } from "../../../../../server/next/page-scope";
 import { guardedTrialBalance } from "../../../../../modules/reports/guarded";
 
 export const metadata: Metadata = {

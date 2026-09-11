@@ -1,12 +1,23 @@
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { SESSION_COOKIE } from "./cookies";
+import { SESSION_COOKIE } from "../http/cookies";
 import type { OrgScope } from "../auth/scope";
 import { resolveScopeFromSession } from "../auth/session";
 import { AuthError } from "../auth/errors";
 
 /**
  * The ONLY place a page obtains an organization scope.
+ *
+ * This lives in `src/server/next/` rather than `src/server/http/` because it
+ * imports `next/headers` and `next/navigation`, and `src/server/http/` is
+ * defined as the layer that imports no framework at all — a CI gate enforces
+ * that, and it caught this file in the wrong place before it merged.
+ *
+ * The distinction is worth keeping rather than relaxing. `src/server/http/`
+ * takes a plain object and returns a plain object, which is what makes the
+ * CSRF comparison and the cookie attributes assertable without a server.
+ * Framework-coupled server code is a different thing and belongs somewhere it
+ * can be recognised as such.
  *
  * A page that read the session cookie itself and then trusted the
  * `organizationSlug` from its own URL would have authentication without

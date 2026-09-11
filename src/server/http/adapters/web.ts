@@ -1,11 +1,11 @@
-import { parseCookieHeader } from "../cookies.js";
+import { parseCookieHeader } from "../cookies";
 import type {
   HttpHandler,
   HttpMethod,
   HttpRequest,
   HttpResponse,
-} from "../types.js";
-import { SECURITY_HEADERS, error } from "../types.js";
+} from "../types";
+import { SECURITY_HEADERS, error } from "../types";
 
 /**
  * The adapter, and the ONLY file in `src/server/http/` that knows the WHATWG

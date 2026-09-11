@@ -1,24 +1,24 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
-import { resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
-import { registerUser } from "../../../src/server/auth/session.js";
+import { resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
+import { registerUser } from "../../../src/server/auth/session";
 import {
   CSRF_COOKIE,
   SESSION_COOKIE,
-} from "../../../src/server/http/cookies.js";
-import { CSRF_HEADER } from "../../../src/server/http/csrf.js";
+} from "../../../src/server/http/cookies";
+import { CSRF_HEADER } from "../../../src/server/http/csrf";
 import type {
   HttpMethod,
   HttpRequest,
   HttpResponse,
-} from "../../../src/server/http/types.js";
+} from "../../../src/server/http/types";
 import {
   registerHandler,
   sessionHandler,
   signInHandler,
   signOutHandler,
-} from "../../../src/server/http/handlers/auth.js";
+} from "../../../src/server/http/handlers/auth";
 
 const PASSWORD = "correct horse battery staple";
 const ORIGIN = "https://books.example.com";
@@ -235,6 +235,9 @@ test("H9: the security headers ride on every response, success or failure", asyn
     expect(res.headers?.["x-frame-options"]).toBe("DENY");
     expect(res.headers?.["x-content-type-options"]).toBe("nosniff");
     expect(res.headers?.["content-security-policy"]).toBeDefined();
+    // Including the successful sign-in, which is the response that carries a
+    // session cookie and the user's id — the one a cached copy would give away.
+    expect(res.headers?.["cache-control"]).toBe("no-store");
   }
 });
 

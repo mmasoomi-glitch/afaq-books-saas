@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
-import { withTx } from "../../server/tx/with-tx.js";
-import type { LedgerScope } from "./scope.js";
+import { withTx } from "../../server/tx/with-tx";
+import type { LedgerScope } from "./scope";
 import {
   AlreadyReversedError,
   InvalidLineError,
@@ -8,7 +8,7 @@ import {
   NotPostedError,
   PeriodNotOpenError,
   UnbalancedEntryError,
-} from "./errors.js";
+} from "./errors";
 
 const ZERO = new Prisma.Decimal(0);
 

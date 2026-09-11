@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
-import { resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
+import { resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
 import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
@@ -16,8 +16,8 @@ import {
   signIn,
   signOut,
   signOutAllSessions,
-} from "../../../src/server/auth/session.js";
-import { NotAMemberError } from "../../../src/server/auth/errors.js";
+} from "../../../src/server/auth/session";
+import { NotAMemberError } from "../../../src/server/auth/errors";
 
 const PASSWORD = "correct horse battery staple";
 

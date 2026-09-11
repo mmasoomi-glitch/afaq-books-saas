@@ -162,11 +162,37 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-12 (HTTP layer in review)
+## State — last hydrated 2026-09-12 (HTTP layer and adapter merged)
 
-**PR #11 open** from `agent/03-http-layer-sprint-002` @ `04e710e`, against the
-base branch @ `4ec44af`. **209 tests green**, typecheck clean, no migration
-drift — all verified on the Sophia pod against a real PostgreSQL 14.
+**Base branch @ `6fc4c1b`. No open PRs. 231 tests green**, typecheck clean, no
+migration drift — verified on the Sophia pod against a real PostgreSQL 14 and
+again in CI against a `postgres:14` service container.
+
+Two PRs merged this round:
+
+- **#11** (`f1505e3`) — the framework-agnostic HTTP layer: `types.ts`,
+  `cookies.ts`, `csrf.ts`, `handlers/auth.ts`, plus sliding session renewal and
+  the `sessions.created_at` migration. 209 tests.
+- **#12** (`6fc4c1b`) — `adapters/web.ts`, the one file that knows `Request` and
+  `Response` exist, plus a 64 KiB request-body cap and a null-body-status
+  guard. 231 tests.
+
+### Each round, review found something the tests did not
+
+Worth recording as a pattern rather than two anecdotes, because both defects
+were invisible to a green suite:
+
+- **#11** — `enforce` lowercased the email for its rate-limit key while `signIn`
+  looked the user up by the raw string. `users.email` is `UNIQUE` on the raw
+  string, so `Admin@corp.com` and `admin@corp.com` were two separate accounts.
+  206 tests passed over it.
+- **#12** — no request-body size cap (`request.json()` buffers a gigabyte before
+  anything can refuse it), and `new Response(body, { status: 204 })` *throws*
+  rather than ignoring the body, so a handler returning a 204 with a body would
+  have produced a 500 three layers from the cause.
+
+The common shape: both are about what happens on inputs the tests never thought
+to send. Tests encode the cases someone imagined. Review is for the rest.
 
 ### The chain now reaches HTTP
 
@@ -175,9 +201,21 @@ of the token → `__Host-session` cookie → `sessionHandler` → `resolveSessio
 `touchSession` → `resolveOrgScope` (membership re-checked per request) →
 `assertCanDo` → `guarded.ts` → ledger services → database invariants.
 
-**What is still missing is a socket.** The handlers exist and are tested; no
-Next.js scaffold serves them, so no endpoint is reachable by a browser. That is
-now the single thing standing between tested modules and an application.
+…and `toRouteHandler` wraps the last step, so a Next.js route handler is one
+line: `export const POST = toRouteHandler(signInHandler())`.
+
+**What is still missing is a socket.** The handlers and the adapter exist and
+are tested; no Next.js scaffold serves them, so no endpoint is reachable by a
+browser. That is now the single thing standing between tested modules and an
+application, and it is the next task.
+
+**The known friction, recorded before hitting it:** `next dev` / `next build`
+rewrites `tsconfig.json` — it sets `moduleResolution: "bundler"`, `module:
+"esnext"`, `jsx: "preserve"`, `noEmit`, and adds its plugin. The current config
+is `module: "NodeNext"`, which is what makes the `.js`-suffixed relative
+imports and the `tsx`/Vitest side work. Expect to need either two tsconfigs or
+a deliberate decision about which resolution mode the whole repository uses.
+Do not let Next silently rewrite the file and discover it in a diff.
 
 ### Merged, and what each layer actually guarantees
 
@@ -193,10 +231,22 @@ now the single thing standing between tested modules and an application.
 - **Rate limiting** — Postgres fixed window on both address and account,
   progressive delay not lockout, fails **open** deliberately (PR #9).
 
-### In review (PR #11)
+### Landed this round (#11, #12)
 
 - **HTTP layer** — plain object in, plain object out, no framework import,
   enforced by a CI grep.
+- **Adapter** — `toHttpRequest` / `toResponse` / `toRouteHandler`. Narrows the
+  method rather than casting it (an invented verb reaching `isMutating` would
+  answer "not mutating" and skip CSRF while carrying the session cookie).
+  Appends `Set-Cookie` rather than setting it (collapsing sign-in's two cookies
+  would leave a user with a session and no CSRF token). Caps the body at 64 KiB,
+  counted over bytes received rather than over `content-length`, which is
+  optional, absent on chunked requests, and freely understated by the client.
+- **`x-forwarded-for` is NOT believed by default.** The rate limiter keys its
+  per-address counter on it, so trusting a client-set header gives an attacker a
+  fresh counter per request. `A17` pins the honest cost of the default: without
+  a trusted proxy the address dimension contributes nothing, and the account
+  dimension is what still works.
 - **Cookies** — `__Host-session` / `__Host-csrf`. The prefix is load-bearing:
   it is what makes a browser refuse a shadowing cookie set by a sibling
   subdomain. Accepted cost — the cookie cannot span subdomains.
@@ -239,7 +289,8 @@ people learn to route around.
 | Session layer (127 tests) | PASS_WITH_CONDITIONS | `B-20260911-06`, now closed |
 | HTTP transport decisions (asked in advance) | DECIDED | `B-20260911-10`, implemented |
 | Cookie Max-Age vs 14-day session | DECIDED: sliding renewal + `__Host-` | implemented |
-| HTTP layer security (209 tests) | **1 real defect found** | email case; fixed in-branch |
+| HTTP layer security (209 tests) | **1 real defect found** | email case; fixed in-branch, PR #11 |
+| Web adapter security (231 tests) | **2 real defects found** | body cap, 204 body; fixed in-branch, PR #12 |
 
 ### GOTCHA — a judge that answers about the wrong repository
 
@@ -303,8 +354,11 @@ signal is there, but it has to be read rather than skimmed.
 ## Next actions, in order
 
 1. **Next.js 15 scaffold (`002-5`).** The only thing between tested modules and
-   an application. Route handlers delegate to `src/server/http/` — the adapter
-   is the only place framework types are allowed, and CI enforces that.
+   an application. The adapter is done, so each route handler is one line:
+   `export const POST = toRouteHandler(signInHandler())`. Settle the
+   `tsconfig.json` resolution question FIRST (see above) rather than letting
+   `next build` rewrite the file. PLATFORM-GUARDIAN owns `next.config.*`,
+   `tsconfig.json` and `package.json`.
 2. **`B-20260912-01`** once a sign-in page exists: a pre-session token, closing
    login CSRF.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat

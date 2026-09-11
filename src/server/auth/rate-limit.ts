@@ -1,4 +1,4 @@
-import { prisma } from "../db/client.js";
+import { prisma } from "../db/client";
 
 /**
  * Rate limiting for the authentication endpoints.

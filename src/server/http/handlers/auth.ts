@@ -1,5 +1,5 @@
-import type { HttpRequest, HttpResponse } from "../types.js";
-import { SECURITY_HEADERS, error, json, noContent } from "../types.js";
+import type { HttpRequest, HttpResponse } from "../types";
+import { SECURITY_HEADERS, error, json, noContent } from "../types";
 import {
   CSRF_COOKIE,
   CSRF_COOKIE_OPTIONS,
@@ -7,10 +7,10 @@ import {
   SESSION_COOKIE_OPTIONS,
   expireCookie,
   serializeCookie,
-} from "../cookies.js";
-import { CsrfError, assertSameOrigin, issueCsrfToken, verifyCsrf } from "../csrf.js";
-import { AuthError } from "../../auth/errors.js";
-import { RateLimitedError } from "../../auth/rate-limit.js";
+} from "../cookies";
+import { CsrfError, assertSameOrigin, issueCsrfToken, verifyCsrf } from "../csrf";
+import { AuthError } from "../../auth/errors";
+import { RateLimitedError } from "../../auth/rate-limit";
 import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
@@ -21,7 +21,7 @@ import {
   signIn,
   signOut,
   touchSession,
-} from "../../auth/session.js";
+} from "../../auth/session";
 
 /**
  * The authentication endpoints, as plain functions.

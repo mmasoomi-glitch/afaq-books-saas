@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
-import { ensureOrg, resetDb } from "../../setup.js";
-import { prisma } from "../../../src/server/db/client.js";
-import type { LedgerScope } from "../../../src/modules/ledger/scope.js";
-import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope.js";
-import { createAccount } from "../../../src/modules/ledger/accounts.js";
-import { createPeriod } from "../../../src/modules/ledger/periods.js";
-import { postJournalEntry } from "../../../src/modules/ledger/posting.js";
-import { profitAndLoss } from "../../../src/modules/reports/profit-and-loss.js";
-import { balanceSheet } from "../../../src/modules/reports/balance-sheet.js";
+import { ensureOrg, resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
+import type { LedgerScope } from "../../../src/modules/ledger/scope";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
+import { createAccount } from "../../../src/modules/ledger/accounts";
+import { createPeriod } from "../../../src/modules/ledger/periods";
+import { postJournalEntry } from "../../../src/modules/ledger/posting";
+import { profitAndLoss } from "../../../src/modules/reports/profit-and-loss";
+import { balanceSheet } from "../../../src/modules/reports/balance-sheet";
 
 beforeEach(async () => {
   await resetDb();

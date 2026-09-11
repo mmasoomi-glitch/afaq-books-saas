@@ -107,6 +107,18 @@ jobs:
       - name: Accounting-invariant tests
         run: pnpm test
 
+      # The typecheck above runs `tsc --noEmit`, which is NOT the same question
+      # as "does this build". `moduleResolution: "bundler"` tells the type
+      # checker to behave as a bundler would; it does not configure the bundler,
+      # and the two disagreed on the `.js` import suffixes — tsc passed while
+      # `next build` could not resolve a single route file. See ADR-0002.
+      #
+      # So the build is its own gate. Without it, a resolution or a server/client
+      # boundary error reaches whoever runs `next build` next, with no hint that
+      # CI ever had an opinion.
+      - name: Production build
+        run: pnpm build
+
 
       - name: Assert nothing bypasses the authorization gate
         run: |
@@ -126,8 +138,14 @@ jobs:
           echo "checked: who mints a LedgerScope"
 
           # 2. Only the guarded wrappers may import the unguarded services.
+          #
+          # The pattern matches an import path ENDING in the module name, with
+          # no extension. Relative imports lost their `.js` suffixes when the
+          # repository moved to bundler resolution (ADR-0002); a pattern still
+          # looking for `posting.js` would match nothing and this gate would
+          # pass vacuously, which is the worst way for a check to fail.
           for mod in posting periods accounts; do
-            for f in $(grep -rl "ledger/$mod.js\|\./$mod.js" src/ || true); do
+            for f in $(grep -rlE "from \"[^\"]*/$mod\"" src/ || true); do
               case "$f" in
                 src/modules/ledger/$mod.ts|src/modules/ledger/guarded.ts) ;;
                 *) echo "::error file=$f::imports $mod directly instead of the guarded wrapper"; fail=1 ;;

@@ -1,4 +1,4 @@
-import { Algorithm, hash, verify, type Options } from "@node-rs/argon2";
+import { hash, verify, type Options } from "@node-rs/argon2";
 
 /**
  * Password hashing.
@@ -17,8 +17,26 @@ import { Algorithm, hash, verify, type Options } from "@node-rs/argon2";
  * hash string, so old hashes keep verifying with their old cost while new ones
  * use the new cost.
  */
+/**
+ * Argon2id, written as the literal `2` rather than as `Algorithm.Argon2id`.
+ *
+ * `@node-rs/argon2` declares the enum as `export declare const enum Algorithm`,
+ * and TypeScript cannot inline an ambient const enum under `isolatedModules` —
+ * which Next.js requires, because SWC compiles each file alone and has no way
+ * to know what the enum member means. The value exists perfectly well at
+ * runtime; only the compile-time reference is unavailable.
+ *
+ * A bare magic number for a cryptographic parameter is exactly the kind of
+ * thing that rots silently, so it is not left to a comment. `P1` in
+ * tests/unit/auth/password.test.ts asserts the ENCODED hash — argon2 writes its
+ * algorithm and cost into the output string — so if this number ever stopped
+ * meaning Argon2id, or the cost drifted, a test says so rather than the hashes
+ * quietly getting weaker.
+ */
+const ARGON2ID = 2 as NonNullable<Options["algorithm"]>;
+
 export const ARGON2_OPTIONS: Readonly<Options> = Object.freeze({
-  algorithm: Algorithm.Argon2id,
+  algorithm: ARGON2ID,
   memoryCost: 19456,
   timeCost: 2,
   parallelism: 1,

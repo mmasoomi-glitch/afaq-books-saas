@@ -10,7 +10,7 @@ do not soften it.
 
 ---
 
-## State — last verified 2026-09-12 (sprint 002, HTTP layer branch)
+## State — last verified 2026-09-12 (sprint 002, scaffold branch)
 
 Re-verified against the working tree and CI. **113 tests pass against a real
 `postgres:14` container** in `ledger-ci.yml` on every pull request.
@@ -29,8 +29,8 @@ the public default branch — see `B-20260911-03`.
 | Package manager / lockfile | working | PLATFORM-GUARDIAN | pnpm 9.15.4 pinned via `packageManager`, lockfile committed |
 | TypeScript config | working | PLATFORM-GUARDIAN | strict, plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` |
 | Test framework | working + tested | PLATFORM-GUARDIAN | Vitest, `fileParallelism: false` (one shared database). Playwright still deferred with the UI |
-| Application framework (Next.js) | not started | PLATFORM-GUARDIAN | Deliberately excluded from sprint 001 by contract clause C2 |
-| Lint / format config | not started | PLATFORM-GUARDIAN | no ESLint or Prettier yet |
+| Application framework (Next.js) | working + tested | PLATFORM-GUARDIAN | Next 15.5, App Router, `src/app/`. `pnpm build` succeeds and is a CI gate in its own right — `tsc --noEmit` passed on imports the bundler could not resolve, so the two are not the same question. ADR-0002 |
+| Lint / format config | **not started** | PLATFORM-GUARDIAN | No ESLint or Prettier. `next.config.ts` sets `eslint.ignoreDuringBuilds: false`, so the moment a config exists the build starts enforcing it |
 | Database / Prisma | working + tested | LEDGER-CORE | 4 migrations, 16 models, `prisma migrate diff` reports no drift (verified 2026-09-12 against a throwaway shadow database) |
 | Chart of accounts | working + tested | LEDGER-CORE | `createAccount`, `listAccounts`, `getAccount`, org-scoped; `getAccount` returns null for another tenant's id rather than a distinguishable error |
 | Accounting periods | working + tested | LEDGER-CORE | create / close / lock / unlock, each writing a `period_locks` row and an audit row in the same transaction |
@@ -50,7 +50,9 @@ the public default branch — see `B-20260911-03`.
 | Cookies | working + tested | AUTH-TENANCY | `__Host-session` (HttpOnly) and `__Host-csrf` (deliberately not HttpOnly). The prefix makes a browser refuse a shadowing cookie from a sibling subdomain; the accepted cost is no subdomain sharing |
 | CSRF | working + tested | AUTH-TENANCY | Double-submit, constant-time compare, plus an exact-match `Origin` check. **Two known gaps, both filed and tested rather than assumed away**: sign-in/registration cannot be double-submit protected (`B-20260912-01`) and the token is not session-bound (`B-20260912-02`) |
 | Auth.js v5 integration | **not started** | AUTH-TENANCY | Deferred deliberately: the reviewer judged replacing working, audited security code riskier than exposing it later as an adapter. The session layer is shaped to be adopted, not rewritten |
-| HTTP route handlers (Next.js) | **not started** | PLATFORM-GUARDIAN | The handlers exist and are tested; nothing serves them over a socket yet. Until the scaffold lands, no endpoint is reachable by a browser |
+| HTTP route handlers (Next.js) | working | PLATFORM-GUARDIAN | Four routes under `src/app/api/auth/`, each one line: `toRouteHandler(signInHandler())`. All four are `force-dynamic` and `runtime: nodejs` — a cached auth response would hand the next visitor somebody else's session |
+| Web adapter | working + tested | AUTH-TENANCY | `toHttpRequest` / `toResponse` / `toRouteHandler`. Narrows the method rather than casting it; appends `Set-Cookie` rather than setting it; caps the body at 64 KiB counted over bytes received. `x-forwarded-for` is **not** believed unless `TRUST_PROXY_HEADERS=true` |
+| UI / app shell | **not started** | FRONTEND-UX | `layout.tsx` and `page.tsx` are the minimum that makes a valid document. The home page states plainly that there is no interface rather than showing a dashboard with nothing behind it |
 | Trial balance | working + tested | REPORTING-ANALYTICS | posted rows only, summed in SQL, refuses to return an unbalanced result |
 | Profit and loss | working + tested | REPORTING-ANALYTICS | income credit-balance, expense debit-balance, inclusive date range, inverted range throws |
 | Balance sheet | working + tested | REPORTING-ANALYTICS | cumulative to a date; income and expense roll into retained earnings; the identity assets = liabilities + equity + retained earnings is enforced at exact Decimal equality with no tolerance |

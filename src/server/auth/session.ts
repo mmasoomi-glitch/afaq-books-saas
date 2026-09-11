@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
-import { prisma } from "../db/client.js";
-import { hashPassword, verifyAgainstDummy, verifyPassword } from "./password.js";
-import { AuthError } from "./errors.js";
-import { enforce, recordSecurityEvent } from "./rate-limit.js";
-import type { OrgScope } from "./scope.js";
-import { resolveOrgScope } from "./scope.js";
+import { prisma } from "../db/client";
+import { hashPassword, verifyAgainstDummy, verifyPassword } from "./password";
+import { AuthError } from "./errors";
+import { enforce, recordSecurityEvent } from "./rate-limit";
+import type { OrgScope } from "./scope";
+import { resolveOrgScope } from "./scope";
 
 /**
  * The session layer, deliberately independent of any web framework.

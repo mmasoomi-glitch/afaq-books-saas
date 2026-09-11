@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
-import { resetDb } from "../../setup.js";
-import { registerUser } from "../../../src/server/auth/session.js";
+import { resetDb } from "../../setup";
+import { registerUser } from "../../../src/server/auth/session";
 import {
   CSRF_COOKIE,
   SESSION_COOKIE,
-} from "../../../src/server/http/cookies.js";
-import type { HttpRequest } from "../../../src/server/http/types.js";
-import { json, noContent } from "../../../src/server/http/types.js";
+} from "../../../src/server/http/cookies";
+import type { HttpRequest } from "../../../src/server/http/types";
+import { json, noContent } from "../../../src/server/http/types";
 import {
   DEFAULT_MAX_BODY_BYTES,
   PayloadTooLargeError,
@@ -16,11 +16,11 @@ import {
   toHttpRequest,
   toResponse,
   toRouteHandler,
-} from "../../../src/server/http/adapters/web.js";
+} from "../../../src/server/http/adapters/web";
 import {
   signInHandler,
   signOutHandler,
-} from "../../../src/server/http/handlers/auth.js";
+} from "../../../src/server/http/handlers/auth";
 
 /**
  * The adapter, exercised through real `Request` and `Response` objects. Node 22

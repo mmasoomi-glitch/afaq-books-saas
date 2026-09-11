@@ -62,8 +62,51 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 | 002-2 | AUTH-TENANCY | Rate limiting on sign-in and sign-up, Postgres fixed window, both dimensions | done | PR #9 merged. `B-20260911-06` closed |
 | 002-3 | AUTH-TENANCY | Branded `LedgerScope` so an unauthorized caller does not compile | done | PR #10 merged. `B-20260911-05` closed |
 | 002-4 | AUTH-TENANCY | Framework-agnostic HTTP layer, `__Host-` cookies, double-submit CSRF, sliding session renewal | done, reviewed | `agent/03-http-layer-sprint-002` @ `6795417`, 209 tests. `B-20260911-10` closed; `B-20260912-01`/`-02`/`-03` filed. Review found one real defect (email case), fixed in the same branch |
-| 002-5 | PLATFORM-GUARDIAN | Next.js 15 scaffold; route handlers that delegate to `src/server/http/` | not started | blocked on nothing — the handler layer is ready to adapt |
+| 002-5 | PLATFORM-GUARDIAN | Next.js 15 scaffold; route handlers that delegate to `src/server/http/` | done, awaiting review | `agent/02b-scaffold-sprint-002`. 239 tests, `pnpm build` green, ADR-0002 records the resolution decision and its correction |
 | 002-6 | ARCHITECT | Row Level Security | not started | `B-20260911-04` |
+| 002-7 | AUTH-TENANCY | Web adapter: `Request`/`Response` at the edge, body cap, forwarded-header policy | done | PR #12 merged, 231 tests |
+
+### 002-5 evidence
+
+```text
+$ npx tsc --noEmit
+(clean)
+
+$ npx next build
+   ▲ Next.js 15.5.25
+ ✓ Compiled successfully in 4.5s
+   Linting and checking validity of types ...
+ ✓ Generating static pages (4/4)
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                      139 B         102 kB
+├ ○ /_not-found                            995 B         103 kB
+├ ƒ /api/auth/register                     139 B         102 kB
+├ ƒ /api/auth/session                      139 B         102 kB
+├ ƒ /api/auth/signin                       139 B         102 kB
+└ ƒ /api/auth/signout                      139 B         102 kB
+
+$ npx vitest run
+ Test Files  14 passed (14)
+      Tests  239 passed (239)
+```
+
+All four auth routes are `ƒ` (dynamic), which is the required outcome: a
+statically rendered auth response would hand the next visitor somebody else's
+session. `git status` after the build is clean — Next did not rewrite
+`tsconfig.json`, because ADR-0002 shaped it first.
+
+**The build is a separate gate from the typecheck, and this branch is why.**
+`tsc --noEmit` passed cleanly on imports `next build` could not resolve at all:
+`moduleResolution: "bundler"` tells the TYPE CHECKER to behave as a bundler
+would, and does not configure the bundler. The `.js` import suffixes — a
+NodeNext requirement — had to come out, 158 of them across 35 files. ADR-0002
+records that its own first version asserted otherwise without testing it.
+
+**Known limitations.** No ESLint or Prettier yet, so `next build`'s lint step
+does nothing (`ignoreDuringBuilds` is already `false`, so it starts enforcing
+the moment a config lands). No UI beyond a page that states there is no UI.
+`B-20260912-01` and `-02` remain open against the auth endpoints.
 
 ### 002-4 evidence
 

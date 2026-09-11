@@ -1,20 +1,20 @@
 import type { Account, Period } from "@prisma/client";
-import type { OrgScope } from "../../server/auth/scope.js";
-import { assertCanDo, toLedgerScope } from "../../server/auth/scope.js";
-import type { CreateAccountInput, CreatePeriodInput } from "./scope.js";
-import type { PostJournalInput, PostedEntry } from "./posting.js";
+import type { OrgScope } from "../../server/auth/scope";
+import { assertCanDo, toLedgerScope } from "../../server/auth/scope";
+import type { CreateAccountInput, CreatePeriodInput } from "./scope";
+import type { PostJournalInput, PostedEntry } from "./posting";
 import {
   createAccount,
   getAccount,
   listAccounts,
-} from "./accounts.js";
+} from "./accounts";
 import {
   closePeriod,
   createPeriod,
   lockPeriod,
   unlockPeriod,
-} from "./periods.js";
-import { postJournalEntry, reverseJournalEntry } from "./posting.js";
+} from "./periods";
+import { postJournalEntry, reverseJournalEntry } from "./posting";
 
 /**
  * Authorization-gated wrappers around the ledger services.

@@ -1,19 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
-import { prisma } from "../../../src/server/db/client.js";
-import { createAccount } from "../../../src/modules/ledger/accounts.js";
-import { createPeriod } from "../../../src/modules/ledger/periods.js";
-import { postJournalEntry } from "../../../src/modules/ledger/posting.js";
-import { ensureOrg, resetDb } from "../../setup.js";
-import type { LedgerScope } from "../../../src/modules/ledger/scope.js";
+import { prisma } from "../../../src/server/db/client";
+import { createAccount } from "../../../src/modules/ledger/accounts";
+import { createPeriod } from "../../../src/modules/ledger/periods";
+import { postJournalEntry } from "../../../src/modules/ledger/posting";
+import { ensureOrg, resetDb } from "../../setup";
+import type { LedgerScope } from "../../../src/modules/ledger/scope";
 import {
   resolveOrgScope,
   assertCanDo,
   toLedgerScope,
-} from "../../../src/server/auth/scope.js";
+} from "../../../src/server/auth/scope";
 import type { MembershipRole } from "@prisma/client";
-import { NotAMemberError, ForbiddenError, OrganizationNotFoundError } from "../../../src/server/auth/errors.js";
-import { can } from "../../../src/server/auth/permissions.js";
+import { NotAMemberError, ForbiddenError, OrganizationNotFoundError } from "../../../src/server/auth/errors";
+import { can } from "../../../src/server/auth/permissions";
 
 beforeEach(async () => {
   await resetDb();

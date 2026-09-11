@@ -87,6 +87,81 @@ Two adjacent traps found the same day:
 
 ---
 
+## Governance: judge and jury (owner-directed, 2026-09-11)
+
+**FORGE BUILDS. SOPHIA JUDGES. THE ORCHESTRATOR DECIDES WORKFLOW.
+OWNER INTENT IS THE CONSTITUTION. EVIDENCE OVERRIDES AGENT CONFIDENCE.**
+
+- **Forge (worker)** — implementation, refactoring, tests, debugging, migrations.
+  Forge never certifies its own work.
+- **Sophia (judge)** — independent review of Forge's output, hidden defects,
+  owner-intent compliance, security and tenant isolation, whether work is
+  actually complete. Sophia inspects EVIDENCE, not the worker's explanation.
+- **Orchestrator** — decomposes, delegates, reconciles, enforces verdicts.
+  Never reinterprets REJECT as PASS. Never asks the judge to approve its own
+  proposal. Never hides a failed test or a known uncertainty.
+
+Request a verdict when a milestone finishes, when a worker claims complete,
+when architecture changes, when tests pass but correctness is uncertain, when
+security or tenant isolation is involved, before declaring completion. Not
+after every trivial edit.
+
+**Final completion gate:** BUILD pass + TESTS pass + SOPHIA verdict pass +
+OWNER INTENT satisfied + no unverified critical items. If any is false, the
+work is not complete.
+
+### Operational notes on the two tools
+
+- **Forge's repo-inspection tools are DOWN.** `forge_repo_status`,
+  `forge_checkpoint_status` and `forge_runtime_status` all return
+  `[remote] could not reach the Forge pod: exit 255`. Only the inference
+  endpoint works (local tunnel, `127.0.0.1:8901`, model `forge-ai`, 131k
+  context). Forge can therefore implement but cannot inspect this repository —
+  it must be given context. Fixing that SSH hop would materially improve it.
+- **Forge oscillates on under-specified rework and converges on precise
+  rework.** Told vaguely to "fix the float arithmetic" it fixed that and
+  simultaneously reintroduced a nested `$queryRaw` bug, used a wrong column
+  name and changed an exported interface. Given exact function signatures and
+  named defects it fixed everything and broke nothing. Always hand it the
+  signatures.
+- **`sophia_ask` does not emit the structured VERDICT block.** It either
+  answers or routes to `OWNER`. Treat its substance as the verdict; use
+  `sophia_review` for diff-level judgment.
+- **Cross-project boundary:** other projects on the Sophia pod are OUT OF
+  BOUNDS, including read-only listings. Only `afaq-*` paths and databases.
+
+### Verdict history
+
+| Date | Subject | Verdict | Outcome |
+|------|---------|---------|---------|
+| 2026-09-11 | Ledger + tenancy + authz + statements (106 tests) | PASS_WITH_CONDITIONS — two conditions | see below |
+| 2026-09-11 | Condition 2 rework: report authorization gate (113 tests) | PASS | satisfied |
+
+**Condition 1 — Row Level Security. DEFERRED, owner decision recorded.**
+Sophia: "Deferring RLS is acceptable as the existing org-consistency trigger
+and application-level filtering provide robust isolation, making it a safe
+reversible follow-up." Tracked below as a follow-up; must be migrated into
+`BLOCKERS.md` as `B-20260911-04` once PR #3 merges, because editing
+`BLOCKERS.md` on this branch would collide with that PR.
+
+**Condition 2 — report authorization gate. SATISFIED.** Sophia: "Condition 2
+is satisfied; application-level gating is the current architectural standard,
+and enforcing it via code review is sufficient for this stage."
+
+### Open follow-ups not yet in BLOCKERS.md
+
+- **RLS-001 (becomes `B-20260911-04`)** — enable Postgres Row Level Security as
+  defence in depth for tenant isolation. Today isolation rests on
+  application-level filtering in every query plus the `jl_org_consistency`
+  trigger. ADR-0001 already flagged RLS as "strongly preferred" and left the
+  sprint decision to ARCHITECT. Owner decision needed.
+- **GATE-001** — nothing mechanically forces callers through `guarded.ts`. The
+  unguarded services stay exported; the gate is a convention enforced by
+  review. Sophia judged that acceptable for this stage. A lint rule or a
+  branded scope type would make it structural.
+
+---
+
 ## State — last hydrated 2026-09-11 (authz gate + statements landed)
 
 **PR #5 is green in CI: 106 tests passing** on a real `postgres:14` container.

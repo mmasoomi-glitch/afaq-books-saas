@@ -7,6 +7,7 @@ import { postJournalEntry } from "../../../src/modules/ledger/posting.js";
 import { createPeriod } from "../../../src/modules/ledger/periods.js";
 import { createAccount } from "../../../src/modules/ledger/accounts.js";
 import { trialBalance } from "../../../src/modules/reports/trial-balance.js";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope.js";
 import { TrialBalanceUnbalancedError } from "../../../src/modules/reports/errors.js";
 import type { LedgerScope, AccountType } from "../../../src/modules/ledger/scope.js";
 import type { TrialBalanceRow, TrialBalanceResult } from "../../../src/modules/reports/trial-balance.js";

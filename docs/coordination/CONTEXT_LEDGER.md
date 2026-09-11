@@ -162,57 +162,83 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-11 (sprint 001 CLOSED, all PRs merged)
+## State — last hydrated 2026-09-11 (session layer merged)
 
-**`develop` @ `5f29213`. No open pull requests. 113 tests green.**
+**`develop` @ `2f73126`. No open PRs. 127 tests green** on a real `postgres:14`
+container. Five PRs merged today: #3, #4, #5, #6, #7.
 
-PRs #3, #4 and #5 merged on owner authorization, in that order, each synced and
-re-run because the rulesets require branches to be up to date. Recorded in
-`INTEGRATION_LOG.md` with the authorization noted explicitly.
+### The chain is now complete, end to end
 
-### Merged and working
+`signIn` → session row storing only a sha256 of the token → `resolveSession` →
+`resolveOrgScope` (membership re-checked per request) → `assertCanDo` →
+`guarded.ts` wrappers → ledger services → database invariants.
 
-- **Ledger** — chart of accounts, periods, journals, posting, reversal, period
-  locks, append-only audit log. The accounting invariants are enforced by
-  PostgreSQL: deferred balance trigger firing at COMMIT, posted-row
-  immutability, period non-overlap, org consistency across entry/line/account.
-- **Tenancy** — organizations, users, per-organization memberships, sessions,
-  OAuth links. All eight ledger tables carry a real FK to `organizations(id)`.
-- **Authorization, enforced** — `resolveOrgScope` + `assertCanDo`, wired through
-  `ledger/guarded.ts` (9 wrappers) and `reports/guarded.ts` (3 wrappers). Assert
-  first, delegate second, so a refused call never reaches the database.
-- **Statements** — trial balance, profit and loss, balance sheet. Posted rows
-  only, summed in SQL, organization filtered on every joined table, money in
-  Decimal end to end, and the balance-sheet identity enforced at exact equality.
+A caller can go from an email and a password to a posted, balanced, audited
+journal entry, and every step refuses what it should refuse. **What does not
+exist is anything that speaks HTTP.**
 
-### Blockers now open
+### Merged
 
-| Id | Subject | Owner |
-|----|---------|-------|
-| `B-20260911-03` | `main` is behind `develop` and is the public default branch | repository owner |
-| `B-20260911-04` | No Row Level Security — tenant isolation is application-level | ARCHITECT |
-| `B-20260911-05` | Nothing mechanically forces callers through the authorization gate | ARCHITECT + PLATFORM-GUARDIAN |
+- **Ledger** with PostgreSQL-enforced invariants (deferred balance trigger at
+  COMMIT, posted-row immutability, period non-overlap, org consistency).
+- **Tenancy** with real foreign keys on all eight ledger tables.
+- **Authorization**, enforced through 12 guarded wrappers.
+- **Statements** — trial balance, P&L, balance sheet, identity enforced exactly.
+- **Sessions** — argon2id at OWASP parameters, tokens stored only as sha256,
+  unknown email indistinguishable from wrong password, membership revocation
+  effective on the next request.
 
-`B-20260911-01` and `B-20260911-02` are closed.
+### Open blockers
 
-### The honest limit of what exists
+| Id | Subject | Owner | Gate |
+|----|---------|-------|------|
+| `B-20260911-03` | `main` behind `develop`, public default branch | owner | — |
+| `B-20260911-04` | No Row Level Security | ARCHITECT | — |
+| `B-20260911-05` | Nothing forces callers through the gate | ARCHITECT + PG | — |
+| `B-20260911-06` | **No rate limiting** | owner + AUTH-TENANCY | **blocks the HTTP layer** |
 
-There is no user-facing application. Every module above is server-side with
-integration tests. **Nothing is deployed, nothing is reachable over HTTP, and
-no human has ever posted a journal entry through a screen.** There is also no
-Auth.js session yet, so the authorization gate is only as trustworthy as
-whatever eventually calls `resolveOrgScope` — today that is tests.
+`B-20260911-06` is the one with teeth. The judge's condition was explicit:
+implement the rate limiter *before enabling the HTTP layer*. argon2id raises
+the price of a guess but does not cap the rate, and the dummy-verify defence
+answers a different attack entirely.
+
+### Verdict history
+
+| Subject | Verdict | Outcome |
+|---------|---------|---------|
+| Ledger + tenancy + authz + statements (106 tests) | PASS_WITH_CONDITIONS ×2 | see below |
+| Condition 2: report authorization gate (113 tests) | PASS | satisfied |
+| Condition 1: Row Level Security | deferred | `B-20260911-04` |
+| Session layer (127 tests) | PASS_WITH_CONDITIONS | `B-20260911-06` gates HTTP |
+
+### Tooling, as measured
+
+**Forge oscillated destructively on this round and it is worth recording.** Sent
+a rework of `session.ts` naming three precise defects, it fixed the first and
+then: redefined `AuthError` (which the same file imports), changed the session
+TTL from 14 to 30 days, deleted two exported error classes and an exported
+function, reordered `registerUser`'s parameters, and invented Prisma column
+names (`tokenHash`, `expiresAt`) that do not exist in the schema.
+
+Its FIRST draft of that file was structurally sound and needed only three
+fixes. The lesson is sharper than "give it exact signatures": **on a file where
+the first draft is close, apply the fixes yourself rather than asking for a
+rewrite.** Forge is a first-draft generator, not an editor.
+
+Its earlier converged rework — the guarded-reports test, where it was given
+exact signatures and named defects — still stands as the counter-example. The
+difference seems to be whether the rework is *local edits* (converges) or
+*regenerate the whole file* (regresses).
 
 ## Next actions, in order
 
-1. **Auth.js v5** — the schema and the gate both exist; only the session does
-   not. This is the single thing standing between "tested modules" and "an
-   application". `resolveOrgScope` is already the seam it plugs into.
-2. **`B-20260911-05`** — make gate bypass fail rather than merely be against
-   convention. Cheapest option is a CI grep in the same shape as the existing
-   invariant grep; strongest is a branded scope type the services demand.
-3. **`B-20260911-04`** — ARCHITECT decides whether RLS lands in sprint 002.
-4. **`B-20260911-03`** — owner decides whether `main` gets promoted or whether
-   `develop` becomes the default branch.
-5. GL drilldown, then SALES-AR — the first module that posts *through* the
-   ledger rather than alongside it.
+1. **`B-20260911-06` — rate limiting.** Now the critical path: it gates the HTTP
+   layer, and the HTTP layer is what turns this from tested modules into an
+   application. Owner picks Postgres or Redis; limit per source address AND per
+   account, because those defend against different attacks.
+2. **HTTP layer**, once (1) lands. Cookies with `HttpOnly`, `Secure`,
+   `SameSite`, CSRF handling, and the security headers `security-tenancy.md`
+   already specifies. `resolveScopeFromSession` is the seam.
+3. `B-20260911-05` — make gate bypass fail rather than be against convention.
+4. `B-20260911-04` — ARCHITECT decides on RLS.
+5. Then SALES-AR: the first module that posts *through* the ledger.

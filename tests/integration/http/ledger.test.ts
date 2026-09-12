@@ -18,6 +18,7 @@ import {
   createPeriodHandler,
   postEntryHandler,
   reverseEntryHandler,
+  transitionPeriodHandler,
 } from "../../../src/server/http/handlers/ledger";
 import { guardedListEntries } from "../../../src/modules/ledger/guarded";
 import { resolveOrgScope } from "../../../src/server/auth/scope";
@@ -772,4 +773,159 @@ test("L30: an explicit asOf posts the reversal into that period", async () => {
   });
   expect(reversal.periodId).toBe(env.periodId);
   expect(reversal.entryDate.toISOString().slice(0, 10)).toBe("2024-06-15");
+});
+
+test("L31: closing a period refuses further postings into it", async () => {
+  const env = await ledgerReady("ACCOUNTANT");
+
+  const closed = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+    req("POST", {
+      session: env.token,
+      body: { action: "close", reason: "year end signed off" },
+    }),
+  );
+  expect(closed.status).toBe(200);
+  expect(bodyOf(closed)["status"]).toBe("CLOSED");
+
+  const post = await withOrgScope(env.slug, postEntryHandler())(
+    req("POST", {
+      session: env.token,
+      body: {
+        periodId: env.periodId,
+        entryDate: "2024-03-01",
+        description: "Too late",
+        currency: "USD",
+        lines: [
+          { accountId: env.cashId, debit: "1" },
+          { accountId: env.revenueId, credit: "1" },
+        ],
+      },
+    }),
+  );
+
+  expect(post.status).toBe(422);
+  expect(errorCode(post)).toBe("LEDGER_PERIOD_NOT_OPEN");
+  expect(await prisma.journalEntry.count()).toBe(0);
+});
+
+test("L32: a transition with no reason is refused", async () => {
+  // I3 requires an unlock to be recorded in the audit trail, and the services
+  // write that row. A row saying "unlocked by someone" answers nothing an
+  // auditor asks -- the reason is what makes it worth having, so it is
+  // mandatory rather than optional.
+  const env = await ledgerReady("ACCOUNTANT");
+
+  for (const body of [
+    { action: "close" },
+    { action: "close", reason: "   " },
+    { action: "close", reason: "" },
+  ]) {
+    const res = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+      req("POST", { session: env.token, body }),
+    );
+    expect(res.status).toBe(400);
+  }
+
+  const period = await prisma.period.findUniqueOrThrow({
+    where: { id: env.periodId },
+  });
+  expect(period.status).toBe("OPEN");
+});
+
+test("L33: an unrecognised action is refused", async () => {
+  const env = await ledgerReady("ACCOUNTANT");
+
+  for (const action of ["delete", "CLOSE", "reopen", ""]) {
+    const res = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+      req("POST", { session: env.token, body: { action, reason: "because" } }),
+    );
+    expect(res.status).toBe(400);
+  }
+});
+
+test("L34: a bookkeeper cannot close, an accountant cannot lock", async () => {
+  // The permissions are not a gradient anybody should have to guess at:
+  // close is ACCOUNTANT and above, lock and unlock are ADMIN and above.
+  const bookkeeper = await ledgerReady("BOOKKEEPER");
+  const refusedClose = await withOrgScope(
+    bookkeeper.slug,
+    transitionPeriodHandler(bookkeeper.periodId),
+  )(req("POST", { session: bookkeeper.token, body: { action: "close", reason: "x" } }));
+  expect(refusedClose.status).toBe(403);
+
+  const accountant = await ledgerReady("ACCOUNTANT");
+  const refusedLock = await withOrgScope(
+    accountant.slug,
+    transitionPeriodHandler(accountant.periodId),
+  )(req("POST", { session: accountant.token, body: { action: "lock", reason: "x" } }));
+  expect(refusedLock.status).toBe(403);
+});
+
+test("L35: an admin can lock, and a locked period refuses even an accountant", async () => {
+  const env = await ledgerReady("ADMIN");
+
+  const locked = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+    req("POST", {
+      session: env.token,
+      body: { action: "lock", reason: "audit in progress" },
+    }),
+  );
+  expect(locked.status).toBe(200);
+  expect(bodyOf(locked)["status"]).toBe("LOCKED");
+
+  const post = await withOrgScope(env.slug, postEntryHandler())(
+    req("POST", {
+      session: env.token,
+      body: {
+        periodId: env.periodId,
+        entryDate: "2024-03-01",
+        description: "Nope",
+        currency: "USD",
+        lines: [
+          { accountId: env.cashId, debit: "1" },
+          { accountId: env.revenueId, credit: "1" },
+        ],
+      },
+    }),
+  );
+  expect(post.status).toBe(422);
+  expect(await prisma.journalEntry.count()).toBe(0);
+});
+
+test("L36: the reason reaches the audit trail", async () => {
+  // The whole justification for making it mandatory. If it were not stored,
+  // requiring it would be ceremony.
+  const env = await ledgerReady("ADMIN");
+  const reason = "unlocked to correct the misposted March payroll accrual";
+
+  await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+    req("POST", { session: env.token, body: { action: "lock", reason: "audit" } }),
+  );
+  await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+    req("POST", { session: env.token, body: { action: "unlock", reason } }),
+  );
+
+  const rows = await prisma.auditLog.findMany({
+    where: { organizationId: env.organizationId },
+    orderBy: { createdAt: "asc" },
+  });
+  expect(JSON.stringify(rows)).toContain(reason);
+});
+
+test("L37: another tenant cannot transition your period", async () => {
+  const mine = await ledgerReady("ADMIN");
+  const theirs = await actor("OWNER");
+
+  const res = await withOrgScope(mine.slug, transitionPeriodHandler(mine.periodId))(
+    req("POST", {
+      session: theirs.token,
+      body: { action: "lock", reason: "mischief" },
+    }),
+  );
+
+  expect(res.status).toBe(404);
+  const period = await prisma.period.findUniqueOrThrow({
+    where: { id: mine.periodId },
+  });
+  expect(period.status).toBe("OPEN");
 });

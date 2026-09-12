@@ -65,6 +65,8 @@ export default async function OrganizationsPage() {
               {" · "}
               <a href={`/${org.slug}/entries`}>Journal</a>
               {" · "}
+              <a href={`/${org.slug}/periods`}>Periods</a>
+              {" · "}
               <a href={`/${org.slug}/entries/new`}>New entry</a>
               {" · "}
               <a href={`/${org.slug}/reports/trial-balance`}>Trial balance</a>

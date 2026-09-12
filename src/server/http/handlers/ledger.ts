@@ -11,6 +11,9 @@ import {
   guardedCreatePeriod,
   guardedPostJournalEntry,
   guardedReverseJournalEntry,
+  guardedClosePeriod,
+  guardedLockPeriod,
+  guardedUnlockPeriod,
 } from "../../../modules/ledger/guarded";
 // Through `guarded`, not `posting` — that module is private to the ledger and
 // the CI gate treats a type-only import of it exactly like a value import.
@@ -383,5 +386,46 @@ export function reverseEntryHandler(entryId: string): ScopedHandler {
       entryId: reversal.entryId,
       journalNumber: reversal.journalNumber,
     });
+  });
+}
+
+/**
+ * `POST /api/[orgSlug]/periods/[periodId]/transition` — close, lock or unlock.
+ *
+ * One endpoint rather than three, because they are one decision with three
+ * outcomes and the REASON is mandatory for all of them. `accounting-
+ * integrity.md` I3 requires that an unlock is itself recorded in the audit
+ * trail; the services already write that row, and the reason is what makes it
+ * worth reading. "Unlocked by admin@example.com" answers nothing an auditor
+ * asks; "unlocked to correct the misposted March payroll accrual" does.
+ *
+ * The three verbs are NOT interchangeable and the permissions differ:
+ * `ledger.period.close` is ACCOUNTANT and above, `lock` and `unlock` are ADMIN
+ * and above. The guarded wrappers enforce that; this only routes.
+ */
+export function transitionPeriodHandler(periodId: string): ScopedHandler {
+  return guarded(async (req, scope) => {
+    const action = readString(req.body, "action");
+    const reason = readString(req.body, "reason");
+
+    if (action !== "close" && action !== "lock" && action !== "unlock") {
+      return badBody("action must be close, lock or unlock");
+    }
+
+    // Required, not optional, and not defaulted to something bland. A reason
+    // nobody had to type is a reason nobody thought about, and the audit row it
+    // produces is worse than no row because it looks like evidence.
+    if (reason === undefined) {
+      return badBody("a reason is required, and is recorded in the audit trail");
+    }
+
+    const period =
+      action === "close"
+        ? await guardedClosePeriod(scope, periodId, reason)
+        : action === "lock"
+          ? await guardedLockPeriod(scope, periodId, reason)
+          : await guardedUnlockPeriod(scope, periodId, reason);
+
+    return json(200, { id: period.id, name: period.name, status: period.status });
   });
 }

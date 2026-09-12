@@ -75,8 +75,7 @@ export default async function NewEntryPage({ params }: PageProps) {
                 {periods.length > 0
                   ? " Every period you have is closed or locked."
                   : " No periods have been created."}{" "}
-                Periods have no screen yet; they are created through{" "}
-                <code>POST /api/{orgSlug}/periods</code>.
+                <a href={`/${orgSlug}/periods`}>Open a period</a>.
               </li>
             ) : null}
           </ul>

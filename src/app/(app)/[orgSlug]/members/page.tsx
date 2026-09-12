@@ -43,6 +43,13 @@ export default async function MembersPage({ params }: PageProps) {
         {scope.organizationSlug} · you are {article(scope.role)}{" "}
         <strong>{scope.role}</strong>
       </p>
+      <p>
+        <a href={`/${orgSlug}/accounts`}>Chart of accounts</a>
+        {" · "}
+        <a href={`/${orgSlug}/reports/trial-balance`}>Trial balance</a>
+        {" · "}
+        <a href="/organizations">All organizations</a>
+      </p>
 
       <table>
         <caption>

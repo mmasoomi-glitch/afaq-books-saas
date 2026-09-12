@@ -37,7 +37,7 @@ than quietly deleted.
 | Test framework | working + tested | PLATFORM-GUARDIAN | Vitest, `fileParallelism: false` (one shared database). Playwright still deferred with the UI |
 | Application framework (Next.js) | working + tested | PLATFORM-GUARDIAN | Next 15.5, App Router, `src/app/`. `pnpm build` succeeds and is a CI gate in its own right — `tsc --noEmit` passed on imports the bundler could not resolve, so the two are not the same question. ADR-0002 |
 | Lint config | working + enforced | PLATFORM-GUARDIAN | ESLint configured and a CI gate; `eslint src tests` exits 0. `next.config.ts` sets `eslint.ignoreDuringBuilds: false`, so the build enforces it too |
-| Formatter (Prettier) | **not started** | PLATFORM-GUARDIAN | Still none. Formatting is consistent by convention only, which is not a gate |
+| Formatter (Prettier) | working + enforced | PLATFORM-GUARDIAN | `prettier --check .` is a CI gate. Config matches the pre-existing style, so adoption reformatted 66 files and changed no logic. `prisma/migrations/` is excluded because those files have run against real databases and Prisma records their checksums; `*.md` is excluded because the governance prose is hand-wrapped and reformatting would bury real edits |
 | Database / Prisma | working + tested | LEDGER-CORE | 4 migrations, 16 models, `prisma migrate diff` reports no drift (verified 2026-09-12 against a throwaway shadow database) |
 | Chart of accounts | working + tested | LEDGER-CORE | `createAccount`, `listAccounts`, `getAccount`, org-scoped; `getAccount` returns null for another tenant's id rather than a distinguishable error |
 | Accounting periods | working + tested | LEDGER-CORE | create / close / lock / unlock, each writing a `period_locks` row and an audit row in the same transaction |

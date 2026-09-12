@@ -1076,12 +1076,46 @@ deciding that once is cheaper than twice.
 **Owner:** ARCHITECT for the retention decision, PLATFORM-GUARDIAN for the
 scheduler.
 
+---
+
+**B-20260911-07 RESOLVED 2026-09-13**, on `agent/05-maintenance-sprint-002`.
+
+`POST /api/maintenance/reap`, behind a shared-secret header, for an external
+scheduler to call. `reapExpired` existed and was tested; nothing called it.
+
+Chosen over `pg_cron` and over opportunistic cleanup in the request path, by
+independent review. `pg_cron` needs an extension and `shared_preload_libraries`
+in every environment including CI, and is **silently absent** when missing.
+Probabilistic cleanup inside `checkAndConsume` puts a variable-latency DELETE
+in a request a user is waiting on, and does nothing when traffic is low —
+which is exactly when rows accumulate unnoticed.
+
+**A missing secret and a wrong secret answer identically: 404.** A 503 "not
+configured" would be more helpful to an operator and would tell an attacker
+whether this deployment has maintenance set up. The operator gets a loud
+server-side warning instead, which is where they are looking anyway. `M5`
+asserts the two responses are identical; `M6` asserts an empty configured
+secret does not become a skeleton key.
+
+The endpoint returns the COUNT removed, not "ok". A maintenance endpoint that
+always answers ok is indistinguishable from one that silently stopped working.
+
+**Still open, deliberately: `B-20260913-02`.** `audit_logs` is untouched by
+this and `M8` asserts it. The table is append-only by trigger, and deleting
+from it would contradict the reason it exists — retention there means archiving
+to colder storage or detaching partitions, which is a decision rather than a
+job. The reviewer was explicit that deletion is "generally incorrect for
+financial compliance".
+
+
 
 ---
 
 
 ## Resolved
 
+- **`B-20260911-07`** — nothing reaped expired rate-limit rows. Closed 2026-09-13
+  by a shared-secret maintenance endpoint for an external scheduler.
 - **`B-20260913-01`** — the organization/route slug namespace. Closed 2026-09-13
   by an `/o/` prefix; the reserved-word list is gone rather than longer.
 - **`B-20260912-05`** — ownership transfer. Closed 2026-09-12; the gap the

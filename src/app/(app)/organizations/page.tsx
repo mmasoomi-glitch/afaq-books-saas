@@ -61,21 +61,21 @@ export default async function OrganizationsPage() {
             <li key={org.organizationId}>
               <strong>{org.name}</strong> — {org.role}
               <br />
-              <a href={`/${org.slug}/accounts`}>Chart of accounts</a>
+              <a href={`/o/${org.slug}/accounts`}>Chart of accounts</a>
               {" · "}
-              <a href={`/${org.slug}/entries`}>Journal</a>
+              <a href={`/o/${org.slug}/entries`}>Journal</a>
               {" · "}
-              <a href={`/${org.slug}/periods`}>Periods</a>
+              <a href={`/o/${org.slug}/periods`}>Periods</a>
               {" · "}
-              <a href={`/${org.slug}/entries/new`}>New entry</a>
+              <a href={`/o/${org.slug}/entries/new`}>New entry</a>
               {" · "}
-              <a href={`/${org.slug}/reports/trial-balance`}>Trial balance</a>
+              <a href={`/o/${org.slug}/reports/trial-balance`}>Trial balance</a>
               {" · "}
-              <a href={`/${org.slug}/reports/profit-and-loss`}>P&amp;L</a>
+              <a href={`/o/${org.slug}/reports/profit-and-loss`}>P&amp;L</a>
               {" · "}
-              <a href={`/${org.slug}/reports/balance-sheet`}>Balance sheet</a>
+              <a href={`/o/${org.slug}/reports/balance-sheet`}>Balance sheet</a>
               {" · "}
-              <a href={`/${org.slug}/members`}>Members</a>
+              <a href={`/o/${org.slug}/members`}>Members</a>
             </li>
           ))}
         </ul>

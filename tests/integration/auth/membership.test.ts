@@ -126,10 +126,16 @@ test("M3: the database refuses a malformed or reserved slug", async () => {
     ).rejects.toThrow();
   }
 
-  for (const reserved of ["api", "signin", "register", "admin"]) {
-    await expect(
-      createOrganization(founder.id, { slug: reserved, name: "X" }),
-    ).rejects.toThrow();
+  // The reserved-word list is GONE, and its absence is the fix. Organizations
+  // live under `/o/{slug}/...`, so a slug can no longer shadow a route and a
+  // route can no longer make somebody's organization unreachable. See
+  // B-20260913-01 and 20260913020000_drop_reserved_slugs.
+  for (const onceReserved of ["api", "signin", "register", "admin"]) {
+    const { slug } = await createOrganization(founder.id, {
+      slug: onceReserved,
+      name: "X",
+    });
+    expect(slug).toBe(onceReserved);
   }
 });
 

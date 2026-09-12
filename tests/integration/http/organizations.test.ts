@@ -164,7 +164,10 @@ test("O4: a reserved or malformed slug is 400, not 500", async () => {
   // something invalid and can fix it.
   const user = await signedIn();
 
-  for (const slug of ["members", "organizations", "api", "UP PER", "ab"]) {
+  // Only the FORMAT constraint remains. The reserved-word list was dropped
+  // when organizations moved under `/o/`, because a slug can no longer shadow
+  // a route — see B-20260913-01.
+  for (const slug of ["UP PER", "ab", "-leading", "under_score", "a".repeat(41)]) {
     const res = await createOrganizationHandler()(
       req("POST", { session: user.token, body: { slug, name: "Acme" } }),
     );
@@ -173,6 +176,12 @@ test("O4: a reserved or malformed slug is 400, not 500", async () => {
   }
 
   expect(await prisma.organization.count()).toBe(0);
+
+  // And a name that used to be forbidden is now ordinary.
+  const ok = await createOrganizationHandler()(
+    req("POST", { session: user.token, body: { slug: "members", name: "Acme" } }),
+  );
+  expect(ok.status).toBe(201);
 });
 
 test("O5: a duplicate slug is 409", async () => {

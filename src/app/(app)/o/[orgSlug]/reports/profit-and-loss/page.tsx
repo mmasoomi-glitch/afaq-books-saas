@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
 import { guardedProfitAndLoss } from "../../../../../../modules/reports/guarded";
 import DateRangeForm from "../DateRangeForm";
+import AccountLink from "../AccountLink";
 
 export const metadata: Metadata = {
   title: "Profit and loss · Afaq Books",
@@ -89,7 +90,16 @@ export default async function ProfitAndLossPage({
             <tbody>
               {report.income.map((row) => (
                 <tr key={row.accountId}>
-                  <td>{row.accountCode}</td>
+                  <td>
+                    <AccountLink
+                      orgSlug={orgSlug}
+                      accountId={row.accountId}
+                      accountCode={row.accountCode}
+                      accountName={row.accountName}
+                      from={from.toISOString().slice(0, 10)}
+                      to={to.toISOString().slice(0, 10)}
+                    />
+                  </td>
                   <td>{row.accountName}</td>
                   <td>{row.amount}</td>
                 </tr>
@@ -117,7 +127,16 @@ export default async function ProfitAndLossPage({
             <tbody>
               {report.expenses.map((row) => (
                 <tr key={row.accountId}>
-                  <td>{row.accountCode}</td>
+                  <td>
+                    <AccountLink
+                      orgSlug={orgSlug}
+                      accountId={row.accountId}
+                      accountCode={row.accountCode}
+                      accountName={row.accountName}
+                      from={from.toISOString().slice(0, 10)}
+                      to={to.toISOString().slice(0, 10)}
+                    />
+                  </td>
                   <td>{row.accountName}</td>
                   <td>{row.amount}</td>
                 </tr>

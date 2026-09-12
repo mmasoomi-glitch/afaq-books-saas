@@ -1,0 +1,26 @@
+-- Email uniqueness, enforced by the database rather than by remembering to.
+--
+-- B-20260912-03. `users.email` already carries a `UNIQUE` constraint, but it is
+-- on the RAW string: `Admin@corp.com` and `admin@corp.com` are two different
+-- values and were two different accounts. `normaliseEmail` now runs inside
+-- `signIn` and `registerUser`, so every caller through those goes through it —
+-- but `accounting-integrity.md` is explicit that application-only validation is
+-- insufficient for a uniqueness property, and a direct `prisma.user.create`
+-- from a future invite flow, admin tool or seed script would reintroduce the
+-- two accounts with nothing to stop it.
+--
+-- A functional unique index cannot be expressed in `schema.prisma`, which is
+-- why this was deferred rather than written. The deferral rested on an
+-- assumption about `prisma migrate diff --exit-code` reporting permanent drift;
+-- that assumption is checked in CI by this migration existing, rather than
+-- argued about.
+--
+-- If this fails to apply, the database already contains two addresses differing
+-- only in case. That is the correct outcome: silently merging or deleting one
+-- of two real accounts is not a migration's decision to make.
+-- Named 20260913* rather than with today's date so it sorts AFTER the
+-- migrations already applied. Prisma orders by folder name; an earlier
+-- timestamp would replay this before migrations that already exist, which is a
+-- footgun for anyone reading the history later even though these are
+-- independent.
+CREATE UNIQUE INDEX "users_email_lower_key" ON "users" (lower("email"));

@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
 import { guardedBalanceSheet } from "../../../../../../modules/reports/guarded";
 import type { BalanceSheetRow } from "../../../../../../modules/reports/balance-sheet";
-import ReportNav from "../ReportNav";
 import AsOfForm from "../AsOfForm";
 
 export const metadata: Metadata = {
@@ -74,7 +73,7 @@ export default async function BalanceSheetPage({
   searchParams,
 }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
   const asOf = parseAsOf((await searchParams)["asOf"]);
 
   // `balanceSheet` enforces assets = liabilities + equity + retained earnings
@@ -86,7 +85,6 @@ export default async function BalanceSheetPage({
   return (
     <main>
       <h1>Balance sheet</h1>
-      <ReportNav orgSlug={orgSlug} />
       <p>
         {scope.organizationSlug} · as at{" "}
         <time dateTime={report.asOf}>{report.asOf}</time>

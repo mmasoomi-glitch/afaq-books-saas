@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
 import { guardedProfitAndLoss } from "../../../../../../modules/reports/guarded";
-import ReportNav from "../ReportNav";
 import DateRangeForm from "../DateRangeForm";
 
 export const metadata: Metadata = {
@@ -36,7 +35,7 @@ export default async function ProfitAndLossPage({
   searchParams,
 }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
   const query = await searchParams;
 
   const now = new Date();
@@ -50,7 +49,6 @@ export default async function ProfitAndLossPage({
     return (
       <main>
         <h1>Profit and loss</h1>
-        <ReportNav orgSlug={orgSlug} />
         <p role="alert">
           The start date is after the end date. Adjust the range and try again.
         </p>
@@ -67,7 +65,6 @@ export default async function ProfitAndLossPage({
   return (
     <main>
       <h1>Profit and loss</h1>
-      <ReportNav orgSlug={orgSlug} />
       <p>
         {scope.organizationSlug} ·{" "}
         <time dateTime={report.from}>{report.from}</time> to{" "}

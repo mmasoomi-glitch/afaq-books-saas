@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
 import { guardedListPeriods } from "../../../../../modules/ledger/guarded";
 import { can } from "../../../../../server/auth/permissions";
 import PeriodAdmin from "./PeriodAdmin";
@@ -21,7 +21,7 @@ function iso(date: Date): string {
 
 export default async function PeriodsPage({ params }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
   const periods = await guardedListPeriods(scope);
 
   const today = new Date();

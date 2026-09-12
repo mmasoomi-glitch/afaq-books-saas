@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
 import { guardedTrialBalance } from "../../../../../../modules/reports/guarded";
-import ReportNav from "../ReportNav";
 import AsOfForm from "../AsOfForm";
 
 export const metadata: Metadata = {
@@ -50,7 +49,7 @@ export default async function TrialBalancePage({
   // permission. A visitor with no session is redirected to sign in; one who is
   // not a member of this organization gets a 404 that is indistinguishable
   // from the organization not existing.
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
 
   const asOf = parseAsOf((await searchParams)["asOf"]);
 
@@ -67,7 +66,6 @@ export default async function TrialBalancePage({
         {scope.organizationSlug} · as at{" "}
         <time dateTime={report.asOf}>{report.asOf}</time>
       </p>
-      <ReportNav orgSlug={orgSlug} />
       <AsOfForm asOf={report.asOf} />
 
       {report.rows.length === 0 ? (

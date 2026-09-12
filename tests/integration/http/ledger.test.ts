@@ -350,6 +350,22 @@ async function ledgerReady(role: MembershipRole = "BOOKKEEPER"): Promise<{
     }),
   );
 
+  // A period covering TODAY as well, because a reversal defaults to today and
+  // is posted into whichever period covers that date. Without one, every
+  // reversal here would fail for a reason that has nothing to do with what is
+  // under test — which is exactly how the real behaviour was found.
+  const thisYear = new Date().getFullYear();
+  await withOrgScope(base.slug, createPeriodHandler())(
+    req("POST", {
+      session: base.token,
+      body: {
+        name: String(thisYear),
+        startDate: `${String(thisYear)}-01-01`,
+        endDate: `${String(thisYear)}-12-31`,
+      },
+    }),
+  );
+
   return {
     ...base,
     cashId: String(bodyOf(cash)["id"]),
@@ -720,4 +736,40 @@ test("L28: the journal never shows another tenant entries", async () => {
     await scopeFor(theirs.organizationId, theirs.slug),
   );
   expect(entries).toHaveLength(0);
+});
+
+test("L29: reversing with no period for that date is 422, not 404", async () => {
+  // The two facts were sharing one error class. "That entry does not exist"
+  // must stay opaque because it may be an attempt to reach another tenant row;
+  // "you have no period covering today" is a gap in the caller own books that
+  // only they can fix, and telling them 404 sends them looking for a missing
+  // entry instead of at their period list.
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: { asOf: "1990-06-01" } }),
+  );
+
+  expect(res.status).toBe(422);
+  expect(errorCode(res)).toBe("LEDGER_NO_PERIOD_FOR_DATE");
+  expect(await prisma.journalEntry.count()).toBe(1);
+});
+
+test("L30: an explicit asOf posts the reversal into that period", async () => {
+  // Reversing "as of" a date is the point of the parameter: the correction
+  // lands in the period that covers it, which may not be the original period.
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: { asOf: "2024-06-15" } }),
+  );
+
+  expect(res.status).toBe(201);
+  const reversal = await prisma.journalEntry.findUniqueOrThrow({
+    where: { id: String(bodyOf(res)["entryId"]) },
+  });
+  expect(reversal.periodId).toBe(env.periodId);
+  expect(reversal.entryDate.toISOString().slice(0, 10)).toBe("2024-06-15");
 });

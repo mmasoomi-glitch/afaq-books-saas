@@ -45,6 +45,26 @@ export class NotPostedError extends LedgerError {
   }
 }
 
+/**
+ * No accounting period covers the requested date.
+ *
+ * Deliberately NOT a `NotFoundError`, even though the lookup that produced it
+ * returned nothing. "That entry does not exist" and "you have no period
+ * covering 13 September" are different facts: the first may be an attempt to
+ * reach another tenant's row and must stay opaque, the second is a gap in the
+ * caller's own books that only they can fix.
+ *
+ * Sharing one code made a reversal answer 404 "not found" when the real
+ * problem was that nobody had opened a period for the current year — a message
+ * that sends the user looking for a missing entry instead of at their period
+ * list.
+ */
+export class NoPeriodForDateError extends LedgerError {
+  constructor(message: string) {
+    super(message, "LEDGER_NO_PERIOD_FOR_DATE");
+  }
+}
+
 export class InvalidLineError extends LedgerError {
   constructor(message: string) {
     super(message, "LEDGER_INVALID_LINE");

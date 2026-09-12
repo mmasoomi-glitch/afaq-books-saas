@@ -5,6 +5,7 @@ import type { LedgerScope } from "./scope";
 import {
   AlreadyReversedError,
   InvalidLineError,
+  NoPeriodForDateError,
   NotFoundError,
   NotPostedError,
   PeriodNotOpenError,
@@ -347,8 +348,8 @@ export async function reverseJournalEntry(
       select: { id: true, status: true },
     });
     if (period === null) {
-      throw new NotFoundError(
-        `no period covers ${asOfDate.toISOString().slice(0, 10)}`,
+      throw new NoPeriodForDateError(
+        `no accounting period covers ${asOfDate.toISOString().slice(0, 10)}`,
       );
     }
     if (period.status !== "OPEN") {

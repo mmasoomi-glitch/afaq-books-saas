@@ -121,7 +121,8 @@ export default function ReverseButton({
       <p role="status">
         This does not delete or undo the entry. It posts a second, opposite
         entry dated today, and both stay in the journal permanently. The
-        original remains exactly as it was.
+        original remains exactly as it was. Today must fall inside an open
+        accounting period, or the reversal will be refused.
       </p>
       <button
         type="button"

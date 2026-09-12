@@ -273,7 +273,13 @@ role-based visibility"). That was the right call and the right warning. Still
 open, roughly in its stated order:
 
 - Report drill-down (a trial-balance line → the journal lines behind it).
-- Journal pagination and filtering — **currently returns every entry, unbounded.**
+- Journal pagination and filtering. **I first wrote here that it "returns
+  every entry, unbounded". That was wrong** — `listEntries` defaults to
+  `limit = 100`. The real defect is worse in a quieter way: it is capped at 100
+  and there is **no way to reach entry 101**, so an organization with 150
+  postings cannot see 50 of them, and the page reports "the 100 most recent"
+  without saying more exist. Checked the signature instead of trusting my own
+  note.
 - CSV export for the three statements.
 - `B-20260912-03` email uniqueness / the `migrate diff` gate decision.
 - `B-20260911-04` RLS (judge-deprioritised, owner decision).

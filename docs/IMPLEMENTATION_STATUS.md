@@ -65,7 +65,7 @@ than quietly deleted.
 | Trial balance | working + tested | REPORTING-ANALYTICS | posted rows only, summed in SQL, refuses to return an unbalanced result |
 | Profit and loss | working + tested | REPORTING-ANALYTICS | income credit-balance, expense debit-balance, inclusive date range, inverted range throws |
 | Balance sheet | working + tested | REPORTING-ANALYTICS | cumulative to a date; income and expense roll into retained earnings; the identity assets = liabilities + equity + retained earnings is enforced at exact Decimal equality with no tolerance |
-| GL drilldown | not started | REPORTING-ANALYTICS | next reporting slice. Journal listing is also still **unbounded** — no pagination, no filtering |
+| GL drilldown | not started | REPORTING-ANALYTICS | next reporting slice. Journal listing is capped at 100 with **no way to reach older entries** — no pagination, no filtering |
 | Row Level Security | **not started** | ARCHITECT | `B-20260911-04`. Tenant isolation currently rests on application-level filtering plus the `jl_org_consistency` trigger. Judged an acceptable deferral, not an acceptable permanent state |
 | Customers / Invoices / Customer payments / AR aging | not started | SALES-AR | sprint 002+ |
 | Suppliers / Bills / Supplier payments / AP aging | not started | PROCUREMENT-AP | sprint 002+ |
@@ -102,9 +102,10 @@ What is still **not** true:
   above. This is a general ledger, not yet an accounting product.
 - **There is no styling**, so "usable" means reachable and correct, not
   pleasant.
-- **The journal listing is unbounded.** It returns every entry an organization
-  has. That is fine at current volumes and is a real limit, not a rounding
-  error.
+- **The journal shows only the 100 most recent entries and offers no way to
+  see older ones.** Not unbounded — capped, which is the quieter problem: an
+  organization with 150 postings cannot reach 50 of them through any screen,
+  and the page does not say they exist.
 
 ## How to update this file
 

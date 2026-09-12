@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import SignInForm from "./SignInForm";
 
 export const metadata: Metadata = {
-  title: "Sign in · Nagdengi",
+  title: "Sign in · Naqdengi",
   // A sign-in page has nothing to gain from being indexed, and an indexed one
   // is a published inventory of where the login lives.
   robots: { index: false, follow: false },

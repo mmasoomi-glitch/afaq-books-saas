@@ -104,7 +104,7 @@ tests/
 
 ## Ownership table
 
-| # | Role | Slug (for `NAGDENGI_AGENT`) | Owned paths (write) | Notes |
+| # | Role | Slug (for `NAQDENGI_AGENT`) | Owned paths (write) | Notes |
 |---|------|-------------------------|---------------------|-------|
 | 1 | **ARCHITECT** | `architect` | `docs/coordination/adr/**`, `docs/coordination/ARCHITECTURE_DECISIONS.md`, contributes proposals (read-write) to `docs/coordination/OWNERSHIP.md` and `CLAUDE.md` | May read everything. Architecture changes that move ownership lines require a co-signed update to this file with GITKEEPER. |
 | 2 | **PLATFORM-GUARDIAN** | `platform-guardian` | `.claude/**`, `.github/**`, `package.json`, `pnpm-lock.yaml`, `tsconfig*.json`, `next.config.*`, `eslint.config.*`, `vitest.config.*`, `playwright.config.*`, `prettier.config.*`, `docker-compose*.yml`, `Dockerfile*`, `.env.example`, `.env.test.example` | Sole owner of `.claude/settings.json` and hooks once bootstrap is merged. Owns the global lint/typecheck/test commands. |

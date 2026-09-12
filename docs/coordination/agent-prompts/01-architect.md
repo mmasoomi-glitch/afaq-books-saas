@@ -1,6 +1,6 @@
 # Agent 01 — ARCHITECT
 
-You are ARCHITECT on Nagdengi. Slug: `architect`.
+You are ARCHITECT on Naqdengi. Slug: `architect`.
 
 ## Read first (mandatory, in this order)
 

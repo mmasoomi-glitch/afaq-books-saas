@@ -12,7 +12,7 @@
 export default function Home() {
   return (
     <main>
-      <h1>Nagdengi</h1>
+      <h1>Naqdengi</h1>
       <p>
         The accounting API is running. You can sign in, create an organization,
         manage who has access to it, build a chart of accounts, open and close

@@ -39,7 +39,7 @@ narrowed to exactly what the ledger needs. **No Next.js, no React** (C2).
 |----|------|--------|--------------|--------|
 | T1.1 | `package.json` + pinned `packageManager`, scripts: `typecheck`, `lint`, `test`, `test:db`, `db:migrate`, `db:reset` | C1 | `pnpm run` lists all scripts; lockfile committed | `todo` |
 | T1.2 | `tsconfig.json` with `"strict": true` | C1, ADR-0001 §1 | `pnpm typecheck` exits 0 | `todo` |
-| T1.3 | Vitest config with a real-Postgres integration project, no SQLite anywhere | C7.3 | `pnpm test` runs and connects to `nagdengi_test` | `todo` |
+| T1.3 | Vitest config with a real-Postgres integration project, no SQLite anywhere | C7.3 | `pnpm test` runs and connects to `naqdengi_test` | `todo` |
 | T1.4 | Prisma installed, `prisma/schema.prisma` created with the Postgres datasource | C1 | `pnpm prisma validate` exits 0 | `todo` |
 | T1.5 | `.env.example` with placeholder `DATABASE_URL` only — no real credential anywhere in the diff | C7.5 | `gitleaks` job green; `.env` is gitignored | `todo` |
 | T1.6 | Replace `governance-checks.yml` job set with typecheck + lint + test **in addition to** the existing governance jobs, keeping the five required check names intact | C6.2 | CI green; required contexts still resolve | `todo` |
@@ -56,7 +56,7 @@ Branch: `agent/04-ledger-core-sprint-001` · Role: LEDGER-CORE
 
 | ID | Task | Clause | Verification | Status |
 |----|------|--------|--------------|--------|
-| T2.1 | Models `Account`, `Period`, `PeriodLock`, `JournalEntry`, `JournalLine`, `AccountingConfig`, `JournalCounter`, `AuditLog` | C1 | `pnpm prisma validate`; migration applies to a fresh `nagdengi_test` | `todo` |
+| T2.1 | Models `Account`, `Period`, `PeriodLock`, `JournalEntry`, `JournalLine`, `AccountingConfig`, `JournalCounter`, `AuditLog` | C1 | `pnpm prisma validate`; migration applies to a fresh `naqdengi_test` | `todo` |
 | T2.2 | Every ledger table: `organization_id uuid NOT NULL`, no default, no FK (owner-directed) | C3.1 | introspection asserts `NOT NULL` + type `uuid` on all 8 tables | `todo` |
 | T2.3 | Every composite unique/index leads with `organization_id` | C3.2 | introspection asserts leading column on each index | `todo` |
 | T2.4 | Amounts as `Decimal(18,4)` → `numeric(18,4)` | C4.8 | introspection asserts the column type; 4-dp round-trip test | `todo` |
@@ -113,7 +113,7 @@ accepts an organization id from caller-supplied data (C3.1, and
 
 Branch: `agent/04-ledger-core-sprint-001` · Path: `tests/`
 
-Every test in this phase runs against `nagdengi_test` on PostgreSQL 14.24.
+Every test in this phase runs against `naqdengi_test` on PostgreSQL 14.24.
 A test that passes against SQLite proves nothing about C4.1-C4.3 (C7.3).
 
 | ID | Task | Clause | Verification | Status |

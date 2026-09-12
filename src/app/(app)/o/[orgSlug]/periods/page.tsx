@@ -5,7 +5,7 @@ import { can } from "../../../../../server/auth/permissions";
 import PeriodAdmin from "./PeriodAdmin";
 
 export const metadata: Metadata = {
-  title: "Accounting periods · Nagdengi",
+  title: "Accounting periods · Naqdengi",
   robots: { index: false, follow: false },
 };
 

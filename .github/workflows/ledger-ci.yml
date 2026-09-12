@@ -34,22 +34,22 @@ jobs:
       postgres:
         image: postgres:14
         env:
-          POSTGRES_USER: nagdengi
-          POSTGRES_PASSWORD: nagdengi_ci_local_only
-          POSTGRES_DB: nagdengi_test
+          POSTGRES_USER: naqdengi
+          POSTGRES_PASSWORD: naqdengi_ci_local_only
+          POSTGRES_DB: naqdengi_test
         ports:
           - 5432:5432
         # Without a health check the steps below race the container's
         # startup and fail intermittently on a cold runner.
         options: >-
-          --health-cmd "pg_isready -U nagdengi"
+          --health-cmd "pg_isready -U naqdengi"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
 
     env:
-      DATABASE_URL: postgresql://nagdengi:nagdengi_ci_local_only@127.0.0.1:5432/nagdengi_test
-      TEST_DATABASE_URL: postgresql://nagdengi:nagdengi_ci_local_only@127.0.0.1:5432/nagdengi_test
+      DATABASE_URL: postgresql://naqdengi:naqdengi_ci_local_only@127.0.0.1:5432/naqdengi_test
+      TEST_DATABASE_URL: postgresql://naqdengi:naqdengi_ci_local_only@127.0.0.1:5432/naqdengi_test
 
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +83,7 @@ jobs:
       # next `migrate deploy` failed with P3005 "schema is not empty". The
       # shadow database must be its own throwaway.
       - name: Create a throwaway shadow database
-        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE nagdengi_shadow OWNER nagdengi;'
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE naqdengi_shadow OWNER naqdengi;'
 
       - name: No migration drift between schema.prisma and migrations
         run: |
@@ -93,7 +93,7 @@ jobs:
             --shadow-database-url "$SHADOW_DATABASE_URL" \
             --exit-code
         env:
-          SHADOW_DATABASE_URL: postgresql://nagdengi:nagdengi_ci_local_only@127.0.0.1:5432/nagdengi_shadow
+          SHADOW_DATABASE_URL: postgresql://naqdengi:naqdengi_ci_local_only@127.0.0.1:5432/naqdengi_shadow
         # --exit-code makes this fail when a diff exists. A silent drift
         # between the schema and the migration history is exactly how a
         # ledger constraint gets dropped in production but not in review.

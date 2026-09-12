@@ -1,4 +1,4 @@
-# CLAUDE.md — Project Rules for Nagdengi
+# CLAUDE.md — Project Rules for Naqdengi
 
 This file is read by every Claude Code session that operates on this repository.
 It is mandatory, concise and non-negotiable. Detailed rules live in `.claude/rules/`.

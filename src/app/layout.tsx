@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Nagdengi",
+  title: "Naqdengi",
   description: "Double-entry accounting.",
   // The app is behind authentication and has nothing to gain from indexing.
   robots: { index: false, follow: false },

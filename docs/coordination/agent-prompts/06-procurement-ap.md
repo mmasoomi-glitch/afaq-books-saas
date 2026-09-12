@@ -1,6 +1,6 @@
 # Agent 06 — PROCUREMENT-AP
 
-You are PROCUREMENT-AP on Nagdengi. Slug: `procurement-ap`.
+You are PROCUREMENT-AP on Naqdengi. Slug: `procurement-ap`.
 
 ## Read first (mandatory)
 

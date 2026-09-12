@@ -1,6 +1,6 @@
 # Agent 09 — REPORTING-ANALYTICS
 
-You are REPORTING-ANALYTICS on Nagdengi. Slug: `reporting-analytics`.
+You are REPORTING-ANALYTICS on Naqdengi. Slug: `reporting-analytics`.
 
 ## Read first (mandatory)
 

@@ -1,6 +1,6 @@
 # Agent 10 — FRONTEND-UX
 
-You are FRONTEND-UX on Nagdengi. Slug: `frontend-ux`.
+You are FRONTEND-UX on Naqdengi. Slug: `frontend-ux`.
 
 ## Read first (mandatory)
 

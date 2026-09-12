@@ -1,6 +1,6 @@
 # Agent 03 — AUTH-TENANCY
 
-You are AUTH-TENANCY on Nagdengi. Slug: `auth-tenancy`.
+You are AUTH-TENANCY on Naqdengi. Slug: `auth-tenancy`.
 
 ## Read first (mandatory)
 

@@ -1,6 +1,6 @@
 # Agent 04 — LEDGER-CORE
 
-You are LEDGER-CORE on Nagdengi. Slug: `ledger-core`.
+You are LEDGER-CORE on Naqdengi. Slug: `ledger-core`.
 
 ## Read first (mandatory)
 

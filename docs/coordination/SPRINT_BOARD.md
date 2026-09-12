@@ -190,7 +190,7 @@ including `H16`, which pins the weaker behaviour rather than the preferred one.
 - **Governing document**: [`INTENTION_CONTRACT.md`](INTENTION_CONTRACT.md) v1
 - **Task tracker**: [`TODO_SPRINT_001_LEDGER.md`](TODO_SPRINT_001_LEDGER.md) — 52 items
 - **Build/test environment**: Sophia MCP pod, PostgreSQL 14.24
-  (`nagdengi_dev` + `nagdengi_test`). The pod is a build environment only;
+  (`naqdengi_dev` + `naqdengi_test`). The pod is a build environment only;
   commits are made and pushed from the governed local checkout
   (contract C7.1-C7.2).
 

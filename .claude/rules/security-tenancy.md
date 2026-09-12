@@ -1,6 +1,6 @@
 # .claude/rules/security-tenancy.md
 
-Multi-tenant security rules for Nagdengi. Applies to AUTH-TENANCY
+Multi-tenant security rules for Naqdengi. Applies to AUTH-TENANCY
 (owner) and to every other agent (consumer).
 
 ---
@@ -100,7 +100,7 @@ requires:
 
 - `.env*` is gitignored except `*.example` files.
 - `.env.example` shows variable names and harmless placeholder values
-  (e.g. `DATABASE_URL=postgresql://user:pass@localhost:5432/nagdengi_dev`).
+  (e.g. `DATABASE_URL=postgresql://user:pass@localhost:5432/naqdengi_dev`).
 - Real secrets live in the operator's deployment vault. Documenting
   them in commits, prompts, logs or memory is forbidden.
 - `AUTH_SECRET` must be sufficient entropy (≥32 random bytes,

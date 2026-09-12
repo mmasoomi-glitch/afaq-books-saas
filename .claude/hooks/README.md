@@ -71,19 +71,19 @@ This ensures granular rules take priority over broad catch-all rules.
 ### Owner matching
 
 * The allowed-agents list from each rule is split on whitespace.
-* The calling agent (`$NAGDENGI_AGENT`) is compared with **exact token equality**
+* The calling agent (`$NAQDENGI_AGENT`) is compared with **exact token equality**
   (`==`), not substring matching.
 * If the rule says `ANY`, every agent is permitted.
 * A path that matches **no** rule is **allowed** — this is a guardrail over
   shared areas, not a full whitelist.
 
-### NAGDENGI_AGENT convention
+### NAQDENGI_AGENT convention
 
 * The hook reads the calling agent's slug from the environment variable
-  `NAGDENGI_AGENT`.
+  `NAQDENGI_AGENT`.
 * This variable is set by the agent-prompt files in
   `docs/coordination/agent-prompts/0*.md`.
-* **If `NAGDENGI_AGENT` is unset**, the hook exits 0 (allow) — this covers the
+* **If `NAQDENGI_AGENT` is unset**, the hook exits 0 (allow) — this covers the
   human lead session which may need to write anywhere.
 
 ### Error output

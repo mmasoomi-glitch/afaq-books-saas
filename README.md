@@ -1,4 +1,4 @@
-# Nagdengi
+# Naqdengi
 
 Production-grade, multi-tenant, double-entry accounting platform.
 

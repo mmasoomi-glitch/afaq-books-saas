@@ -37,7 +37,7 @@ Sophia pod:
 | Branch protection is now configured | rulesets `protect-develop` (id 22882053) and `protect-main` (id 22882054), both `enforcement: active` — see `INTEGRATION_LOG.md` 2026-09-11 |
 | The ownership hook does not gate `Write`/`Edit` | `.claude/settings.json` registers both hooks under `"matcher": "Bash"` only |
 | The ownership hook does not know about `src/modules/**` | `check-agent-ownership.sh:44-58` — `protected_globs` has no `src/` entry |
-| Real PostgreSQL is available for invariant tests | Sophia pod cluster `14/main` online, `PostgreSQL 14.24`, databases `nagdengi_dev` + `nagdengi_test` reachable over TCP as role `nagdengi` |
+| Real PostgreSQL is available for invariant tests | Sophia pod cluster `14/main` online, `PostgreSQL 14.24`, databases `naqdengi_dev` + `naqdengi_test` reachable over TCP as role `naqdengi` |
 
 Every application row in `IMPLEMENTATION_STATUS.md` reading
 `not started` is accurate as of this date.
@@ -48,7 +48,7 @@ Every application row in `IMPLEMENTATION_STATUS.md` reading
 
 ### C1. What we are building in this contract's scope
 
-A **working double-entry ledger** for Nagdengi: chart of
+A **working double-entry ledger** for Naqdengi: chart of
 accounts, accounting periods, journal entries and lines, posting,
 reversal, and period locking — persisted in PostgreSQL, with the
 accounting invariants enforced **at the database level**, covered by
@@ -160,7 +160,7 @@ commitments. Each names the test that proves it.
 Development is accelerated by the Sophia MCP pod, under these limits:
 
 - **C7.1** — The pod is a **build and test environment**, not a source
-  of truth. `/workspace/repos/nagdengi` is a clone; the
+  of truth. `/workspace/repos/naqdengi` is a clone; the
   authoritative repository is GitHub.
 - **C7.2** — Code authored on the pod returns to the local governed
   checkout as a patch, and is committed and pushed from there, so every

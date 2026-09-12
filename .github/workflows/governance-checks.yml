@@ -74,58 +74,58 @@ jobs:
       - name: check-agent-ownership blocks cross-owner write
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo x > prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo x > prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=2'
       - name: check-agent-ownership allows owner write
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=ledger-core bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo x > prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=ledger-core bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"echo x > prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=0'
       - name: Write-tool call blocks cross-owner (sales-ar -> ledger)
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"src/modules/ledger/posting.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"src/modules/ledger/posting.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=2'
       - name: Write-tool call allows owner (ledger-core -> ledger)
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=ledger-core bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"src/modules/ledger/posting.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=ledger-core bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"src/modules/ledger/posting.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=0'
       - name: Edit-tool call blocks cross-owner (frontend-ux -> prisma)
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=frontend-ux bash -c "echo '{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=frontend-ux bash -c "echo '{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"prisma/schema.prisma\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=2'
       - name: Bash read (cat pipe) is allowed
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat prisma/schema.prisma | head\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cat prisma/schema.prisma | head\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=0'
       - name: Bash python write is blocked for non-owner
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"python3 -c \\\"open('prisma/schema.prisma','w').write('x')\\\"\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"python3 -c \\\"open('prisma/schema.prisma','w').write('x')\\\"\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=2'
       - name: Write-tool call allows qa-auditor on tests/integration/ledger/
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=qa-auditor bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"tests/integration/ledger/x.test.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=qa-auditor bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"tests/integration/ledger/x.test.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=0'
       - name: Write-tool call blocks sales-ar on tests/integration/ledger/
         run: |
           set -e
-          out=$(NAGDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"tests/integration/ledger/x.test.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
+          out=$(NAQDENGI_AGENT=sales-ar bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"tests/integration/ledger/x.test.ts\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")
           echo "$out"
           echo "$out" | grep -q 'exit=2'
-      - name: NAGDENGI_AGENT unset -> allowed
+      - name: NAQDENGI_AGENT unset -> allowed
         run: |
           set -e
           out=$(bash -c "echo '{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"CLAUDE.md\"}}' | bash .claude/hooks/check-agent-ownership.sh; echo exit=\$?")

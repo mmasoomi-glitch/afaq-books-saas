@@ -1,4 +1,4 @@
-# Contributing to Nagdengi
+# Contributing to Naqdengi
 
 This file is the short version. The binding rules are in:
 

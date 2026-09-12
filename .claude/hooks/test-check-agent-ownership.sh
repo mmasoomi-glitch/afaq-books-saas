@@ -15,7 +15,7 @@ FAIL=0
 TOTAL=0
 
 # Helper: run a case
-# Args: $1=test_name $2=NAGDENGI_AGENT $3=json_payload $4=expected_exit
+# Args: $1=test_name $2=NAQDENGI_AGENT $3=json_payload $4=expected_exit
 run_case() {
   local name="$1"
   local agent="${2:-}"
@@ -25,7 +25,7 @@ run_case() {
 
   local actual
   if [[ -n "$agent" ]]; then
-    actual=$(NAGDENGI_AGENT="$agent" bash "$HOOK" <<< "$payload" 2>/dev/null; echo $?)
+    actual=$(NAQDENGI_AGENT="$agent" bash "$HOOK" <<< "$payload" 2>/dev/null; echo $?)
   else
     actual=$(bash "$HOOK" <<< "$payload" 2>/dev/null; echo $?)
   fi
@@ -42,8 +42,8 @@ run_case() {
 echo "=== check-agent-ownership.sh test suite ==="
 echo ""
 
-# ── Case 1: NAGDENGI_AGENT unset -> allow any path ──────────────────
-run_case "unset NAGDENGI_AGENT -> allow" "" \
+# ── Case 1: NAQDENGI_AGENT unset -> allow any path ──────────────────
+run_case "unset NAQDENGI_AGENT -> allow" "" \
   '{"tool_name":"Write","tool_input":{"file_path":"CLAUDE.md"}}' \
   "0"
 

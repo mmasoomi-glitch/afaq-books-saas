@@ -78,7 +78,7 @@ $ git rev-parse origin/develop
 $ git rev-parse --abbrev-ref HEAD
 chore/agent-governance-bootstrap
 
-$ gh api repos/mmasoomi-glitch/nagdengi/rulesets
+$ gh api repos/mmasoomi-glitch/naqdengi/rulesets
 []
 
 $ gh api repos/.../branches/main/protection

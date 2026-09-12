@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import RegisterForm from "./RegisterForm";
 
 export const metadata: Metadata = {
-  title: "Create an account · Nagdengi",
+  title: "Create an account · Naqdengi",
   robots: { index: false, follow: false },
 };
 

@@ -6,7 +6,7 @@ import AsOfForm from "../AsOfForm";
 import AccountLink from "../AccountLink";
 
 export const metadata: Metadata = {
-  title: "Balance sheet · Nagdengi",
+  title: "Balance sheet · Naqdengi",
   robots: { index: false, follow: false },
 };
 

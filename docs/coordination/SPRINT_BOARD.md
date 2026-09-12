@@ -66,6 +66,31 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 | 002-6 | ARCHITECT | Row Level Security | not started | `B-20260911-04` |
 | 002-7 | AUTH-TENANCY | Web adapter: `Request`/`Response` at the edge, body cap, forwarded-header policy | done | PR #12 merged, 231 tests |
 | 002-8 | AUTH-TENANCY + FRONTEND-UX | Sign-in page and a page-issued CSRF token; `B-20260912-01` closed | done, awaiting review | `agent/10-signin-page-sprint-002`, 245 tests, build green, verified against the running server |
+| 002-9 | LEDGER-CORE | `request_id` on every audit row (I9), injected by a Prisma extension rather than added at eleven call sites | done | PR #40 merged, 371 tests. Found and fixed a bug I wrote: caching the *extended* client on `globalThis` silently nulls every id |
+| 002-10 | AUTH-TENANCY | Rate limit authenticated writes, enforced inside `withOrgScope` so a new endpoint cannot forget it | done | PR #42 merged, 389 tests. 300/min per user, shared across organizations |
+| 002-11 | PLATFORM-GUARDIAN | Maintenance reaper for expired `rate_limits` rows; shared-secret auth with a 32-char floor | done | PR #44 merged, 401 tests. PR #43 closed — see the gitleaks note below |
+| 002-12 | FRONTEND-UX | App shell: persistent nav in a layout under `/o/[orgSlug]`, links filtered by the same action key the destination asserts | done | PR #45 merged, 401 tests, build green. Verified against a running server: OWNER 9 links, VIEWER 7, no audit trail or new entry |
+
+**A gap in this board, recorded rather than backfilled.** Rows 002-9 onward were
+added retrospectively. The UI work that landed between 002-8 and 002-9 — the
+ledger screens, the reports screens, the audit page, the `/o` namespace fix —
+merged without board rows at all. The commits and PR descriptions are the
+record for those; this table is not. Writing rows now from memory would look
+more complete and be less true.
+
+### 002-11 note — the gitleaks episode
+
+PR #43 was **closed, not merged.** It committed a test secret as a high-entropy
+literal and `gitleaks` failed it, correctly. Generating the value with
+`randomUUID()` fixed the tip but **not the check**: gitleaks scans a PR's
+commits, so the literal remained at `6b57550`.
+
+That is the same reason a real leaked credential must be rotated rather than
+deleted in a follow-up commit. Force-push being forbidden, the recovery was the
+one `git-collaboration.md` prescribes — new branch from `develop`, one clean
+commit, new PR (#44), old branch deleted. No real secret was exposed; the value
+was a fixture that never existed outside this repository.
+
 
 ### 002-5 evidence
 

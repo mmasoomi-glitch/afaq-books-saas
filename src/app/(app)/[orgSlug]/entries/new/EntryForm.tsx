@@ -174,7 +174,7 @@ export default function EntryForm({
             : "?";
         setNotice({
           kind: "success",
-          text: `Posted as journal entry ${journalNumber}. It is now immutable — correct it with a reversal, not an edit.`,
+          text: `Posted as journal entry ${journalNumber}. It is now immutable — correct it with a reversal from the journal, not an edit.`,
         });
         setLines([blankLine(), blankLine()]);
         setDescription("");

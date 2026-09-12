@@ -38,6 +38,8 @@ export default async function AccountsPage({ params }: PageProps) {
           Trial balance
         </a>
         {" · "}
+        <a href={`/${orgSlug}/entries`}>Journal</a>
+        {" · "}
         <a href={`/${orgSlug}/entries/new`}>New journal entry</a>
         {" · "}
         <a href={`/${orgSlug}/members`}>Members</a>

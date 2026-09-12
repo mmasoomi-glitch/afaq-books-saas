@@ -1,9 +1,11 @@
 import { Prisma } from "@prisma/client";
+import { prisma } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "./scope";
 import {
   AlreadyReversedError,
   InvalidLineError,
+  NoPeriodForDateError,
   NotFoundError,
   NotPostedError,
   PeriodNotOpenError,
@@ -346,8 +348,8 @@ export async function reverseJournalEntry(
       select: { id: true, status: true },
     });
     if (period === null) {
-      throw new NotFoundError(
-        `no period covers ${asOfDate.toISOString().slice(0, 10)}`,
+      throw new NoPeriodForDateError(
+        `no accounting period covers ${asOfDate.toISOString().slice(0, 10)}`,
       );
     }
     if (period.status !== "OPEN") {
@@ -406,4 +408,70 @@ export async function reverseJournalEntry(
 
     return posted;
   });
+}
+
+export interface EntrySummaryLine {
+  readonly accountCode: string;
+  readonly accountName: string;
+  readonly debit: string;
+  readonly credit: string;
+  readonly memo: string | null;
+}
+
+export interface EntrySummary {
+  readonly id: string;
+  readonly journalNumber: number | null;
+  readonly entryDate: Date;
+  readonly description: string;
+  readonly currency: string;
+  readonly postedAt: Date | null;
+  readonly reversalOfId: string | null;
+  readonly reversedById: string | null;
+  readonly lines: readonly EntrySummaryLine[];
+}
+
+/**
+ * Posted entries, newest first, with their lines.
+ *
+ * Org-scoped like everything else: the `organizationId` comes from the resolved
+ * scope, so there is no "all entries" query to write by accident.
+ *
+ * Amounts are returned as STRINGS via `toFixed(4)`. Serialising a
+ * `Prisma.Decimal` to JSON produces an object, and letting one reach a React
+ * tree invites somebody to do arithmetic on it with `Number()` — which is the
+ * exact thing I8 forbids. A string cannot be added up by accident.
+ */
+export async function listEntries(
+  scope: LedgerScope,
+  limit = 100,
+): Promise<EntrySummary[]> {
+  const entries = await prisma.journalEntry.findMany({
+    where: { organizationId: scope.organizationId, postedAt: { not: null } },
+    orderBy: [{ entryDate: "desc" }, { journalNumber: "desc" }],
+    take: limit,
+    include: {
+      journalLines: {
+        orderBy: { lineNumber: "asc" },
+        include: { account: { select: { code: true, name: true } } },
+      },
+    },
+  });
+
+  return entries.map((entry) => ({
+    id: entry.id,
+    journalNumber: entry.journalNumber,
+    entryDate: entry.entryDate,
+    description: entry.description,
+    currency: entry.currency,
+    postedAt: entry.postedAt,
+    reversalOfId: entry.reversalOfId,
+    reversedById: entry.reversedById,
+    lines: entry.journalLines.map((line) => ({
+      accountCode: line.account.code,
+      accountName: line.account.name,
+      debit: line.debit.toFixed(4),
+      credit: line.credit.toFixed(4),
+      memo: line.memo,
+    })),
+  }));
 }

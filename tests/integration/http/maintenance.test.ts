@@ -16,7 +16,19 @@ import {
  * user per minute window.
  */
 
-const SECRET = "maintenance-secret-for-tests-0123456789";
+/**
+ * Generated per run rather than written as a literal.
+ *
+ * A high-entropy string assigned to a constant called SECRET is exactly the
+ * shape of a leaked credential, and the `gitleaks` gate flagged the literal
+ * this replaced — correctly. The fix is not an allowlist entry: an allowlist
+ * teaches the next person that flagged findings are something you silence.
+ *
+ * Generating it also makes the test slightly better. A fixed string could in
+ * principle be the value the code compares against; a fresh one each run
+ * cannot be.
+ */
+const SECRET = randomUUID();
 
 beforeEach(async () => {
   await resetDb();

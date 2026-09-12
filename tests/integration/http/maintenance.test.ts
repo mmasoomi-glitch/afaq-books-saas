@@ -196,3 +196,40 @@ test("M8: audit_logs are never touched", async () => {
 
   expect(await prisma.auditLog.count()).toBe(1);
 });
+
+test("M9: a WHITESPACE-ONLY configured secret is not a skeleton key either", async () => {
+  // Found by a Forge review of the handler, and it was right: whitespace is
+  // neither `undefined` nor `""`, so the original empty-string guard let it
+  // through and a caller sending the same whitespace would have been
+  // authorised. The guard is now a length floor after trimming, which covers
+  // this without a second special case.
+  process.env["MAINTENANCE_SECRET"] = "   ";
+  await seed();
+
+  expect((await reapHandler()(req("POST", "   "))).status).toBe(404);
+  expect(await prisma.rateLimit.count()).toBe(2);
+});
+
+test("M10: a secret shorter than the floor is refused even when it matches", async () => {
+  // Nothing rate-limits this route, so a short secret can be guessed at
+  // whatever speed the network allows. Refusing it is louder than hoping the
+  // operator chose well.
+  process.env["MAINTENANCE_SECRET"] = "hunter2";
+  await seed();
+
+  expect((await reapHandler()(req("POST", "hunter2"))).status).toBe(404);
+  expect(await prisma.rateLimit.count()).toBe(2);
+});
+
+test("M11: surrounding whitespace on the configured secret fails CLOSED", async () => {
+  // Documented rather than fixed. Trimming the configured value would make the
+  // comparison inexact, so a `.env` with a trailing space refuses the caller
+  // that sends the trimmed value — which is the safe direction, and the
+  // handler logs a warning saying exactly that, because otherwise the operator
+  // sees only a 404 they cannot explain.
+  process.env["MAINTENANCE_SECRET"] = `${SECRET} `;
+  await seed();
+
+  expect((await reapHandler()(req("POST", SECRET))).status).toBe(404);
+  expect((await reapHandler()(req("POST", `${SECRET} `))).status).toBe(200);
+});

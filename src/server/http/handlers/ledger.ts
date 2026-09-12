@@ -10,6 +10,7 @@ import {
   guardedCreateAccount,
   guardedCreatePeriod,
   guardedPostJournalEntry,
+  guardedReverseJournalEntry,
 } from "../../../modules/ledger/guarded";
 // Through `guarded`, not `posting` — that module is private to the ledger and
 // the CI gate treats a type-only import of it exactly like a value import.
@@ -347,6 +348,39 @@ export function postEntryHandler(): ScopedHandler {
     return json(201, {
       entryId: posted.entryId,
       journalNumber: posted.journalNumber,
+    });
+  });
+}
+
+/**
+ * `POST /api/[orgSlug]/entries/[entryId]/reverse` — reverse a posted entry.
+ *
+ * A reversal is the ONLY correction a posted entry admits. `accounting-
+ * integrity.md` I2 makes posted rows read-only at the database level, so there
+ * is no edit endpoint to write even if someone wanted one — and this is what
+ * the posting form has been telling users to do since it shipped.
+ *
+ * The reversal date defaults to TODAY rather than the original entry's date.
+ * Back-dating a correction into the period being corrected would change a
+ * period that may already have been reported on; posting it in the current
+ * period leaves both entries visible and the history intact, which is the whole
+ * point of correcting by reversal rather than by edit. A caller may still pass
+ * `asOf` explicitly, and the period-open check will refuse it if that period is
+ * closed.
+ */
+export function reverseEntryHandler(entryId: string): ScopedHandler {
+  return guarded(async (req, scope) => {
+    const asOfRaw = readString(req.body, "asOf");
+
+    const asOf = asOfRaw === undefined ? new Date() : new Date(asOfRaw);
+    if (Number.isNaN(asOf.getTime())) {
+      return badBody("asOf must be a date (YYYY-MM-DD)");
+    }
+
+    const reversal = await guardedReverseJournalEntry(scope, entryId, asOf);
+    return json(201, {
+      entryId: reversal.entryId,
+      journalNumber: reversal.journalNumber,
     });
   });
 }

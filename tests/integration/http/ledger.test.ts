@@ -17,7 +17,10 @@ import {
   createAccountHandler,
   createPeriodHandler,
   postEntryHandler,
+  reverseEntryHandler,
 } from "../../../src/server/http/handlers/ledger";
+import { guardedListEntries } from "../../../src/modules/ledger/guarded";
+import { resolveOrgScope } from "../../../src/server/auth/scope";
 
 /**
  * The ledger endpoints. The services behind them are covered elsewhere; what is
@@ -534,4 +537,187 @@ test("L19: posting into another tenant's organization is 404", async () => {
 
   expect(res.status).toBe(404);
   expect(await prisma.journalEntry.count()).toBe(0);
+});
+
+/** The BOOKKEEPER of a ledger-ready org, as a resolved scope. */
+async function scopeFor(organizationId: string, slug: string, role = "BOOKKEEPER") {
+  const membership = await prisma.membership.findFirstOrThrow({
+    where: { organizationId, role: role as MembershipRole },
+  });
+  return resolveOrgScope(membership.userId, slug);
+}
+
+/** Post one balanced entry and return its id. */
+async function postOne(env: {
+  token: string;
+  slug: string;
+  periodId: string;
+  cashId: string;
+  revenueId: string;
+}): Promise<string> {
+  const res = await withOrgScope(env.slug, postEntryHandler())(
+    req("POST", {
+      session: env.token,
+      body: {
+        periodId: env.periodId,
+        entryDate: "2024-03-01",
+        description: "Sale",
+        currency: "USD",
+        lines: [
+          { accountId: env.cashId, debit: "500" },
+          { accountId: env.revenueId, credit: "500" },
+        ],
+      },
+    }),
+  );
+  expect(res.status).toBe(201);
+  return String(bodyOf(res)["entryId"]);
+}
+
+test("L20: reversing a posted entry creates a second, opposite entry", async () => {
+  // A reversal does not undo anything. I2 makes posted rows read-only in the
+  // database, so there is no edit path to write even if someone wanted one.
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: {} }),
+  );
+
+  expect(res.status).toBe(201);
+  expect(await prisma.journalEntry.count()).toBe(2);
+
+  const original = await prisma.journalEntry.findUniqueOrThrow({
+    where: { id: entryId },
+  });
+  expect(original.reversedById).not.toBeNull();
+
+  const reversal = await prisma.journalEntry.findUniqueOrThrow({
+    where: { id: String(bodyOf(res)["entryId"]) },
+  });
+  expect(reversal.reversalOfId).toBe(entryId);
+});
+
+test("L21: the reversal inverts every line and the pair balances to zero", async () => {
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: {} }),
+  );
+
+  const entries = await guardedListEntries(
+    await scopeFor(env.organizationId, env.slug),
+  );
+  expect(entries).toHaveLength(2);
+
+  const shapes = entries.map((entry) =>
+    entry.lines.map((line) => `${line.debit}/${line.credit}`).join(","),
+  );
+  expect(shapes[0]).not.toBe(shapes[1]);
+
+  const lines = await prisma.journalLine.findMany({
+    where: { organizationId: env.organizationId },
+  });
+  const debit = lines.reduce((sum, line) => sum + Number(line.debit), 0);
+  const credit = lines.reduce((sum, line) => sum + Number(line.credit), 0);
+  expect(debit).toBe(credit);
+});
+
+test("L22: reversing twice is refused and the second attempt writes nothing", async () => {
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+  const reverse = withOrgScope(env.slug, reverseEntryHandler(entryId));
+
+  expect(
+    (await reverse(req("POST", { session: env.token, body: {} }))).status,
+  ).toBe(201);
+
+  const second = await reverse(req("POST", { session: env.token, body: {} }));
+  expect(second.status).toBe(422);
+  expect(errorCode(second)).toBe("LEDGER_ALREADY_REVERSED");
+  expect(await prisma.journalEntry.count()).toBe(2);
+});
+
+test("L23: a viewer cannot reverse", async () => {
+  // Demoted inside the SAME organization, so what is refused is the permission
+  // and not the tenancy.
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  await prisma.membership.updateMany({
+    where: { organizationId: env.organizationId, role: "BOOKKEEPER" },
+    data: { role: "VIEWER" },
+  });
+
+  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: {} }),
+  );
+
+  expect(res.status).toBe(403);
+  expect(await prisma.journalEntry.count()).toBe(1);
+});
+
+test("L24: another tenant cannot reverse your entry", async () => {
+  const mine = await ledgerReady();
+  const entryId = await postOne(mine);
+  const theirs = await actor("OWNER");
+
+  const res = await withOrgScope(mine.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: theirs.token, body: {} }),
+  );
+
+  expect(res.status).toBe(404);
+  expect(await prisma.journalEntry.count()).toBe(1);
+});
+
+test("L25: an unknown entry id is 404, not 500", async () => {
+  const env = await ledgerReady();
+
+  const res = await withOrgScope(
+    env.slug,
+    reverseEntryHandler("00000000-0000-0000-0000-000000000000"),
+  )(req("POST", { session: env.token, body: {} }));
+
+  expect(res.status).toBe(404);
+});
+
+test("L26: a malformed asOf is 400 and reverses nothing", async () => {
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: { asOf: "not a date" } }),
+  );
+
+  expect(res.status).toBe(400);
+  expect(await prisma.journalEntry.count()).toBe(1);
+});
+
+test("L27: the journal lists posted entries, with amounts as strings", async () => {
+  const env = await ledgerReady();
+  await postOne(env);
+
+  const entries = await guardedListEntries(
+    await scopeFor(env.organizationId, env.slug),
+  );
+
+  expect(entries).toHaveLength(1);
+  expect(entries[0]?.lines).toHaveLength(2);
+  // A Prisma.Decimal reaching a React tree invites someone to add it up with
+  // Number(), which is exactly what I8 forbids. A string cannot be totalled by
+  // accident.
+  expect(entries[0]?.lines[0]?.debit).toBe("500.0000");
+  expect(typeof entries[0]?.lines[0]?.credit).toBe("string");
+});
+
+test("L28: the journal never shows another tenant entries", async () => {
+  const mine = await ledgerReady();
+  await postOne(mine);
+  const theirs = await ledgerReady();
+
+  const entries = await guardedListEntries(
+    await scopeFor(theirs.organizationId, theirs.slug),
+  );
+  expect(entries).toHaveLength(0);
 });

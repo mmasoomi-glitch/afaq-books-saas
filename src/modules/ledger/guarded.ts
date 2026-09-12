@@ -2,7 +2,7 @@ import type { Account, Period } from "@prisma/client";
 import type { OrgScope } from "../../server/auth/scope";
 import { assertCanDo, toLedgerScope } from "../../server/auth/scope";
 import type { CreateAccountInput, CreatePeriodInput } from "./scope";
-import type { PostJournalInput, PostedEntry } from "./posting";
+import type { EntrySummary, PostJournalInput, PostedEntry } from "./posting";
 import {
   createAccount,
   getAccount,
@@ -15,7 +15,9 @@ import {
   unlockPeriod,
   listPeriods,
 } from "./periods";
-import { postJournalEntry, reverseJournalEntry } from "./posting";
+import { postJournalEntry, reverseJournalEntry,
+  listEntries,
+} from "./posting";
 
 /**
  * Authorization-gated wrappers around the ledger services.
@@ -110,6 +112,17 @@ export async function guardedReverseJournalEntry(
   return reverseJournalEntry(toLedgerScope(scope), originalId, asOfDate);
 }
 
+export async function guardedListEntries(
+  scope: OrgScope,
+  limit?: number,
+): Promise<EntrySummary[]> {
+  // `report.read`, not a new key. The journal IS a report — it is the most
+  // direct view of the posted ledger there is — and anyone who may read the
+  // trial balance can already derive every number in it.
+  assertCanDo(scope, "report.read");
+  return listEntries(toLedgerScope(scope), limit);
+}
+
 export async function guardedListPeriods(scope: OrgScope): Promise<Period[]> {
   // `ledger.account.read` rather than a new action key. Reading the period list
   // is the same class of thing as reading the chart — it is structural
@@ -135,4 +148,10 @@ export type {
   CreateAccountInput,
   CreatePeriodInput,
 } from "./scope";
-export type { PostJournalInput, PostLineInput, PostedEntry } from "./posting";
+export type {
+  EntrySummary,
+  EntrySummaryLine,
+  PostJournalInput,
+  PostLineInput,
+  PostedEntry,
+} from "./posting";

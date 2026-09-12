@@ -15,9 +15,9 @@ export default function Home() {
       <h1>Afaq Books</h1>
       <p>
         The accounting API is running. You can sign in, create an organization,
-        manage who has access to it, build a chart of accounts, post journal
-        entries and read the trial balance. Profit and loss, the balance sheet,
-        period management and reversals have no screen yet.
+        manage who has access to it, build a chart of accounts, post and
+        reverse journal entries, and read the trial balance. Profit and loss,
+        the balance sheet and period management have no screen yet.
       </p>
       <p>
         <a href="/register">Create an account</a> or{" "}

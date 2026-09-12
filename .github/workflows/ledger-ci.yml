@@ -218,6 +218,18 @@ jobs:
           # Greps across ALL migration files, not one: there is more than a
           # single migration now, and a quoted "$(ls ...)" collapses them into
           # one bogus path.
+          #
+          # A CAVEAT this gate cannot see: it matches the constraint NAME
+          # anywhere in the migration history, including inside a
+          # `DROP CONSTRAINT`. When `organizations_slug_not_reserved` was
+          # dropped, the needle for it kept matching — the drop statement
+          # contains the name — so the gate would have reported the constraint
+          # present while it no longer existed.
+          #
+          # It is left as a name-match because the alternative is parsing SQL,
+          # and every needle below is a constraint nobody intends to drop. If
+          # one is ever dropped deliberately, REMOVE ITS NEEDLE in the same
+          # commit; leaving it is how this gate becomes decoration.
           for needle in \
             "jl_debit_credit_sign" \
             "jl_reporting_amount_consistent" \
@@ -230,7 +242,7 @@ jobs:
             "append_only" \
             "organization_id_fkey" \
             "memberships_require_owner" \
-            "organizations_slug_not_reserved"
+            "organizations_slug_format"
           do
             if ! grep -rq -- "$needle" prisma/migrations/; then
               echo "::error::missing database-level invariant: $needle"

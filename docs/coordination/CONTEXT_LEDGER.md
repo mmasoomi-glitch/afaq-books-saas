@@ -915,8 +915,13 @@ ask for on day one.
    number looks wrong.
 5. **The journal has no pagination or filtering** — 100 most recent. Wrong at
    the first real month-end.
-6. **A reversal cannot be given a reason**, and writes no `audit_logs` row.
-   I9 lists "reverse" explicitly.
+6. **CORRECTED — reversal was always audited.** I recorded here that
+   `reverseJournalEntry` writes no `audit_logs` row, and repeated it in a PR
+   body. It always did: `action: "ledger.reverse"`, with actor, entity and
+   before/after. The claim came from re-reading my own note instead of the
+   source — the second time this session that a plausible recollection went
+   into prose unverified, after the P&L drafts footnote.
+   The reason field it *was* missing is now required and tested (`L38`–`L40`).
 7. **No app shell.** The home page is static so it cannot know whether a
    visitor is signed in.
 8. **`audit_logs.request_id` is null everywhere.**

@@ -312,10 +312,24 @@ export async function postJournalEntry(
  * Correction is never an edit — accounting-integrity I2. The original is left
  * exactly as it was apart from its reversed_by_id pointer.
  */
+/**
+ * `reason` is required, and it is the answer to the question an auditor asks
+ * third.
+ *
+ * "Who reversed it" and "when" were already recorded. "Why" was not, and it is
+ * the one that decides whether a reversal was a correction or a cover-up. The
+ * same argument made the reason mandatory on a period transition; a reversal
+ * moves money and deserves at least as much.
+ *
+ * It goes into the reversal entry DESCRIPTION as well as the audit row, so it
+ * is visible to anyone reading the journal without having to hold the audit
+ * page open beside it.
+ */
 export async function reverseJournalEntry(
   scope: LedgerScope,
   originalId: string,
   asOfDate: Date,
+  reason: string,
 ): Promise<PostedEntry> {
   return withTx(async (tx) => {
     const original = await tx.journalEntry.findFirst({
@@ -374,7 +388,7 @@ export async function reverseJournalEntry(
     const posted = await writePostedEntry(tx, scope, {
       periodId: period.id,
       entryDate: asOfDate,
-      description: `Reversal of ${original.description}`,
+      description: `Reversal of ${original.description} — ${reason}`,
       currency: original.currency,
       sourceModule: original.sourceModule,
       sourceId: original.sourceId,
@@ -402,6 +416,7 @@ export async function reverseJournalEntry(
           reversedById: posted.entryId,
           reversalJournalNumber: posted.journalNumber,
           periodId: period.id,
+          reason,
         },
       },
     });

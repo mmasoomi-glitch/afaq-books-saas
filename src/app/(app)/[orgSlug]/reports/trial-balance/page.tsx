@@ -68,6 +68,8 @@ export default async function TrialBalancePage({
       <p>
         <a href={`/${orgSlug}/accounts`}>Chart of accounts</a>
         {" · "}
+        <a href={`/${orgSlug}/entries/new`}>New journal entry</a>
+        {" · "}
         <a href={`/${orgSlug}/members`}>Members</a>
         {" · "}
         <a href="/organizations">All organizations</a>

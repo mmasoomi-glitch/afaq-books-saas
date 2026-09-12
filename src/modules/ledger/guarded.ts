@@ -13,6 +13,7 @@ import {
   createPeriod,
   lockPeriod,
   unlockPeriod,
+  listPeriods,
 } from "./periods";
 import { postJournalEntry, reverseJournalEntry } from "./posting";
 
@@ -107,4 +108,13 @@ export async function guardedReverseJournalEntry(
 ): Promise<PostedEntry> {
   assertCanDo(scope, "ledger.reverse");
   return reverseJournalEntry(toLedgerScope(scope), originalId, asOfDate);
+}
+
+export async function guardedListPeriods(scope: OrgScope): Promise<Period[]> {
+  // `ledger.account.read` rather than a new action key. Reading the period list
+  // is the same class of thing as reading the chart — it is structural
+  // information about the books, not their contents — and inventing a second
+  // key for it would mean two places to remember when a role changes.
+  assertCanDo(scope, "ledger.account.read");
+  return listPeriods(toLedgerScope(scope));
 }

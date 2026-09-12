@@ -100,7 +100,7 @@ export default async function BalanceSheetPage({
       <h1>Balance sheet</h1>
       <p>
         {scope.organizationSlug} · as at{" "}
-        <time dateTime={report.asOf}>{report.asOf}</time>
+        <time dateTime={report.asOf}>{report.asOf.slice(0, 10)}</time>
       </p>
 
       <AsOfForm asOf={report.asOf} />

@@ -70,6 +70,10 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 | 002-10 | AUTH-TENANCY | Rate limit authenticated writes, enforced inside `withOrgScope` so a new endpoint cannot forget it | done | PR #42 merged, 389 tests. 300/min per user, shared across organizations |
 | 002-11 | PLATFORM-GUARDIAN | Maintenance reaper for expired `rate_limits` rows; shared-secret auth with a 32-char floor | done | PR #44 merged, 401 tests. PR #43 closed — see the gitleaks note below |
 | 002-12 | FRONTEND-UX | App shell: persistent nav in a layout under `/o/[orgSlug]`, links filtered by the same action key the destination asserts | done | PR #45 merged, 401 tests, build green. Verified against a running server: OWNER 9 links, VIEWER 7, no audit trail or new entry |
+| 002-13 | LEDGER-CORE | Keyset paging for the journal, so entry 101 is reachable | done | PR #47 merged, 411 tests. Runtime verified: 5 entries over 3 pages, no repeat or gap. Two bugs caught by the tests before merge — a `@db.Uuid` crash on a mangled cursor, and a negative page size that would have returned the OLDEST entries under a heading saying newest |
+| 002-14 | LEDGER-CORE + FRONTEND-UX | Journal filtering by account and date range, with the cursor bound to the filter | done | PR #49 merged, 429 tests. **Sophia verdict: PASS.** Runtime verified: filtered account totals 600.0000 match the trial-balance row for the same account, and a cursor from one filter falls back to page one under another |
+| 002-15 | AUTH-TENANCY | Database-level case-insensitive email uniqueness | done | PR #48 merged, 416 tests. Closed `B-20260912-03`, whose deferral rested on a premise that turned out to be false — see the blocker |
+| 002-16 | PLATFORM-GUARDIAN | Maintenance reaper for expired `rate_limits` rows | done | PR #44 merged. PR #43 closed first: gitleaks caught a test-secret literal and the fix commit did not clear it, because the scanner reads a PR's commits rather than its tip |
 
 **A gap in this board, recorded rather than backfilled.** Rows 002-9 onward were
 added retrospectively. The UI work that landed between 002-8 and 002-9 — the

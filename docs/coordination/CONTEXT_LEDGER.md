@@ -162,7 +162,72 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-12 (a screen shows real ledger data)
+## State — last hydrated 2026-09-12 (tenancy administration is real)
+
+**Base branch @ `b56ef09`. No open PRs. 291 tests, lint clean, build green,
+typecheck clean, no drift.** PRs #21 and #22 merged since the last hydration.
+
+Organizations, memberships, role changes, removal and ownership transfer are
+all service operations with tests, and every one of them writes an audit row in
+the same transaction as the change.
+
+### The authorization rule, and the two wrong answers it is not
+
+A granter may assign a role **strictly below their own**, and **OWNER never
+through `role.grant` at all**.
+
+- **"You may not target yourself" is insufficient.** Two ADMINs escalate each
+  other — A promotes B, B promotes A — and neither ever targets themselves.
+  `M8`.
+- **"At or below" is insufficient.** An ADMIN who can mint another ADMIN can
+  mint an accomplice with every power they hold, which makes the boundary
+  unenforceable by headcount. `M7`.
+- **And the half that is easy to miss:** an ADMIN must not be able to reach UP
+  and DEMOTE an OWNER. Same takeover, faster route. `M9`.
+
+"At least one OWNER" is a `DEFERRABLE` trigger, not a service count. A
+check-then-act races: two concurrent demotions each read two owners, each
+conclude they are safe, and the organization ends with none.
+
+### Three of my own claims were wrong this round
+
+Recorded because the pattern is more useful than the individual corrections:
+
+| Claim | What was actually true |
+|-------|------------------------|
+| The trigger should refuse whenever the owner count is zero | Wrong question. An org that NEVER had an owner became frozen — its memberships could never be removed. Only removing or demoting an OWNER can take the count to zero. Four unrelated tests caught it |
+| `M3`: slug `"UPPER"` should be rejected | `createOrganization` lowercases before inserting, so it is a valid slug written loudly. The test was wrong about the service it tested |
+| `B-20260912-04` needs a schema decision | `audit_logs.entity_type` is a plain `String`. `"Membership"` fit with no migration. The obstacle was imagined and filing it cost a round trip |
+
+**All three were caught by running things, not by re-reading them.** The trigger
+by the suite, the slug by the suite, the audit schema by opening the model.
+
+### The running ledger of checks that could not fail
+
+Now at five, plus one that worked:
+
+1. CI grep for `posting.js` — would have matched nothing after the extension removal
+2. `sophia_review` — returned `FINDINGS: NONE` about a different repository
+3. `await expect(() => syncFn()).toThrow()` — the `await` did nothing and hid that the assertion is vacuous on a rejection
+4. A test mock hardcoding `"__Host-session"` — a rename would send every test down the "no session" path and still pass four of seven
+5. **The framework-import gate — worked, and caught its own author**
+
+### The judge, after five rounds
+
+**Its first answers have been right every time. Its follow-ups contradict them
+twice out of five.** It chose the page-embedded CSRF token and then described
+the rejected option as the mechanism; it chose a minimal type-aware lint set and
+then named its own two critical rules as the ones to disable.
+
+Both contradictions were caught by reading the answer against itself, and the
+second was resolvable without re-asking. Its call on the escalation rule (option
+B, strictly-below plus OWNER excluded) held up completely and shaped the whole
+of `membership.ts`.
+
+**Working rule: take the verdict, interrogate the elaboration, never let the
+elaboration overwrite the decision it was meant to explain.**
+
+## Superseded — hydrated 2026-09-12 (a screen shows real ledger data)
 
 **Base branch @ `cca2913`. No open PRs. 258 tests, lint clean, build green,
 typecheck clean, no drift.** PRs #18 and #19 merged since the last hydration.
@@ -544,19 +609,21 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **No way to create an organization or grant a membership through the UI.**
-   Both are raw database operations today, so reaching the trial balance
-   requires someone to insert a `Membership` row by hand. This is now the
-   narrowest thing between the product and a person using it, and it is an
-   authorization surface in its own right — who may grant what, and to whom.
-2. **Nothing links to the trial balance.** No navigation, no organization
-   switcher, so the URL must be typed. Cheap to fix and it makes everything
-   already built visible.
-3. **A redirect after sign-in**, once there is a destination. `SignInForm`
-   currently reports "Signed in." and stays put, deliberately.
-4. **Prettier**, or a decision not to have one. Formatting is by hand and by
-   convention. The question is whether a formatter's diffs are worth the churn
-   across an active branch set — a judgement call, not an oversight.
+1. **HTTP endpoints and screens for organizations and memberships.** The
+   services exist and are tested; nothing reaches them over a socket, so
+   creating an organization is still a direct service call. This is now the
+   only thing between what is built and a usable product — and every route
+   added here is an authorization surface, so the handlers must go through
+   `requirePageScope` / the guarded pattern rather than inventing their own.
+2. **Nothing links to anything.** No navigation, no organization switcher, so
+   every URL must be typed. Cheap, and it makes everything already built
+   visible for the first time.
+3. **A redirect after sign-in**, once there is a destination.
+4. **`audit_logs.request_id` is null everywhere.** Nothing threads a request id
+   from the adapter down to the services, and I9 lists it among the fields an
+   audit row stores. The adapter is the only place it can originate.
+5. **Prettier**, or a decision not to have one. A judgement call about whether
+   a formatter's diffs are worth the churn, not an oversight.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init

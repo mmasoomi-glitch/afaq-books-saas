@@ -76,6 +76,8 @@ export default async function OrganizationsPage() {
               <a href={`/o/${org.slug}/reports/balance-sheet`}>Balance sheet</a>
               {" · "}
               <a href={`/o/${org.slug}/members`}>Members</a>
+              {" · "}
+              <a href={`/o/${org.slug}/audit`}>Audit</a>
             </li>
           ))}
         </ul>

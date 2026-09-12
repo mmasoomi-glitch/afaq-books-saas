@@ -65,7 +65,8 @@ than quietly deleted.
 | Trial balance | working + tested | REPORTING-ANALYTICS | posted rows only, summed in SQL, refuses to return an unbalanced result |
 | Profit and loss | working + tested | REPORTING-ANALYTICS | income credit-balance, expense debit-balance, inclusive date range, inverted range throws |
 | Balance sheet | working + tested | REPORTING-ANALYTICS | cumulative to a date; income and expense roll into retained earnings; the identity assets = liabilities + equity + retained earnings is enforced at exact Decimal equality with no tolerance |
-| GL drilldown | not started | REPORTING-ANALYTICS | next reporting slice. Journal listing is capped at 100 with **no way to reach older entries** — no pagination, no filtering |
+| Journal listing | working + tested | LEDGER-CORE | Keyset paging (cursor, not offset, so an entry posted mid-walk cannot push an older one past a boundary the reader has already passed) plus filtering by account and inclusive date range. Filtering by account returns each entry **in full** — a debit without its credit is half a double entry — and carries account totals summed in SQL over the whole filtered set, which a test asserts equal the trial-balance row for the same account. The cursor is fingerprinted with the filter, so changing the filter serves page one instead of a silently truncated slice. 23 tests across `journal-paging` and `journal-filter` |
+| GL drilldown | not started | REPORTING-ANALYTICS | Next reporting slice, and now mostly plumbing: the filtered journal takes `account`, `from` and `to` as URL parameters and reconciles to the trial balance. What is missing is the link from a report line to it, in both directions |
 | Row Level Security | **not started** | ARCHITECT | `B-20260911-04`. Tenant isolation currently rests on application-level filtering plus the `jl_org_consistency` trigger. Judged an acceptable deferral, not an acceptable permanent state |
 | Customers / Invoices / Customer payments / AR aging | not started | SALES-AR | sprint 002+ |
 | Suppliers / Bills / Supplier payments / AP aging | not started | PROCUREMENT-AP | sprint 002+ |
@@ -102,10 +103,15 @@ What is still **not** true:
   above. This is a general ledger, not yet an accounting product.
 - **There is no styling**, so "usable" means reachable and correct, not
   pleasant.
-- **The journal shows only the 100 most recent entries and offers no way to
-  see older ones.** Not unbounded — capped, which is the quieter problem: an
-  organization with 150 postings cannot reach 50 of them through any screen,
-  and the page does not say they exist.
+- **The journal has no backwards paging.** "Older entries" walks forward and
+  "Most recent entries" returns to the start; there is no "previous page",
+  because a cursor names where the next page begins and walking back needs the
+  ordering reversed. Corrected from the previous entry here, which said the
+  journal could not reach entry 101 at all — that was true when it was written
+  and was fixed the same day.
+- **No total count anywhere.** The journal cannot say "showing 1–100 of 347"
+  without a second query that could disagree with the first under concurrent
+  posting. Deferred deliberately rather than inferred.
 
 ## How to update this file
 

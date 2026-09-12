@@ -107,9 +107,10 @@ export async function guardedReverseJournalEntry(
   scope: OrgScope,
   originalId: string,
   asOfDate: Date,
+  reason: string,
 ): Promise<PostedEntry> {
   assertCanDo(scope, "ledger.reverse");
-  return reverseJournalEntry(toLedgerScope(scope), originalId, asOfDate);
+  return reverseJournalEntry(toLedgerScope(scope), originalId, asOfDate, reason);
 }
 
 export async function guardedListEntries(

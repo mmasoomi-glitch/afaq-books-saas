@@ -375,13 +375,26 @@ export function postEntryHandler(): ScopedHandler {
 export function reverseEntryHandler(entryId: string): ScopedHandler {
   return guarded(async (req, scope) => {
     const asOfRaw = readString(req.body, "asOf");
+    const reason = readString(req.body, "reason");
 
     const asOf = asOfRaw === undefined ? new Date() : new Date(asOfRaw);
     if (Number.isNaN(asOf.getTime())) {
       return badBody("asOf must be a date (YYYY-MM-DD)");
     }
 
-    const reversal = await guardedReverseJournalEntry(scope, entryId, asOf);
+    // Required, like a period transition. A reason nobody had to type is a
+    // reason nobody thought about, and the audit row it produces is worse than
+    // no row because it looks like evidence.
+    if (reason === undefined) {
+      return badBody("a reason is required, and is recorded in the audit trail");
+    }
+
+    const reversal = await guardedReverseJournalEntry(
+      scope,
+      entryId,
+      asOf,
+      reason,
+    );
     return json(201, {
       entryId: reversal.entryId,
       journalNumber: reversal.journalNumber,

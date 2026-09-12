@@ -598,7 +598,7 @@ test("L20: reversing a posted entry creates a second, opposite entry", async () 
   const entryId = await postOne(env);
 
   const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: {} }),
+    req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }),
   );
 
   expect(res.status).toBe(201);
@@ -620,7 +620,7 @@ test("L21: the reversal inverts every line and the pair balances to zero", async
   const entryId = await postOne(env);
 
   await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: {} }),
+    req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }),
   );
 
   const entries = await guardedListEntries(
@@ -647,10 +647,10 @@ test("L22: reversing twice is refused and the second attempt writes nothing", as
   const reverse = withOrgScope(env.slug, reverseEntryHandler(entryId));
 
   expect(
-    (await reverse(req("POST", { session: env.token, body: {} }))).status,
+    (await reverse(req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }))).status,
   ).toBe(201);
 
-  const second = await reverse(req("POST", { session: env.token, body: {} }));
+  const second = await reverse(req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }));
   expect(second.status).toBe(422);
   expect(errorCode(second)).toBe("LEDGER_ALREADY_REVERSED");
   expect(await prisma.journalEntry.count()).toBe(2);
@@ -668,7 +668,7 @@ test("L23: a viewer cannot reverse", async () => {
   });
 
   const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: {} }),
+    req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }),
   );
 
   expect(res.status).toBe(403);
@@ -681,7 +681,7 @@ test("L24: another tenant cannot reverse your entry", async () => {
   const theirs = await actor("OWNER");
 
   const res = await withOrgScope(mine.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: theirs.token, body: {} }),
+    req("POST", { session: theirs.token, body: { reason: "mischief" } }),
   );
 
   expect(res.status).toBe(404);
@@ -694,7 +694,7 @@ test("L25: an unknown entry id is 404, not 500", async () => {
   const res = await withOrgScope(
     env.slug,
     reverseEntryHandler("00000000-0000-0000-0000-000000000000"),
-  )(req("POST", { session: env.token, body: {} }));
+  )(req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }));
 
   expect(res.status).toBe(404);
 });
@@ -704,7 +704,7 @@ test("L26: a malformed asOf is 400 and reverses nothing", async () => {
   const entryId = await postOne(env);
 
   const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { asOf: "not a date" } }),
+    req("POST", { session: env.token, body: { asOf: "not a date", reason: "x" } }),
   );
 
   expect(res.status).toBe(400);
@@ -749,7 +749,7 @@ test("L29: reversing with no period for that date is 422, not 404", async () => 
   const entryId = await postOne(env);
 
   const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { asOf: "1990-06-01" } }),
+    req("POST", { session: env.token, body: { asOf: "1990-06-01", reason: "wrong year" } }),
   );
 
   expect(res.status).toBe(422);
@@ -764,7 +764,7 @@ test("L30: an explicit asOf posts the reversal into that period", async () => {
   const entryId = await postOne(env);
 
   const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { asOf: "2024-06-15" } }),
+    req("POST", { session: env.token, body: { asOf: "2024-06-15", reason: "restate into June" } }),
   );
 
   expect(res.status).toBe(201);
@@ -928,4 +928,66 @@ test("L37: another tenant cannot transition your period", async () => {
     where: { id: mine.periodId },
   });
   expect(period.status).toBe("OPEN");
+});
+
+test("L38: a reversal with no reason is refused and reverses nothing", async () => {
+  // "Who" and "when" were already recorded. "Why" was not, and it is the one
+  // that decides whether a reversal was a correction or a cover-up. The same
+  // argument made the reason mandatory on a period transition; a reversal moves
+  // money and deserves at least as much.
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  for (const body of [{}, { reason: "   " }, { reason: "" }]) {
+    const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+      req("POST", { session: env.token, body }),
+    );
+    expect(res.status).toBe(400);
+  }
+
+  expect(await prisma.journalEntry.count()).toBe(1);
+});
+
+test("L39: the reason reaches the audit trail and the reversal description", async () => {
+  // Both, deliberately. The audit row is the record; the description is what
+  // anyone reading the journal sees without having to open the audit page
+  // beside it.
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+  const reason = "customer disputed the March invoice";
+
+  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: { reason } }),
+  );
+  expect(res.status).toBe(201);
+
+  const reversal = await prisma.journalEntry.findUniqueOrThrow({
+    where: { id: String(bodyOf(res)["entryId"]) },
+  });
+  expect(reversal.description).toContain(reason);
+
+  const audit = await prisma.auditLog.findFirstOrThrow({
+    where: { organizationId: env.organizationId, action: "ledger.reverse" },
+  });
+  expect(JSON.stringify(audit.after)).toContain(reason);
+});
+
+test("L40: reversing writes an audit row naming the actor", async () => {
+  // Asserted because I claimed in a PR body that it did NOT, having read my own
+  // earlier note instead of the source. It always did. This pins it so the
+  // claim cannot be made again without a failing test.
+  const env = await ledgerReady();
+  const entryId = await postOne(env);
+
+  await withOrgScope(env.slug, reverseEntryHandler(entryId))(
+    req("POST", { session: env.token, body: { reason: "duplicate posting" } }),
+  );
+
+  const audit = await prisma.auditLog.findFirstOrThrow({
+    where: { organizationId: env.organizationId, action: "ledger.reverse" },
+  });
+  expect(audit.entityType).toBe("JournalEntry");
+  expect(audit.entityId).toBe(entryId);
+  expect(audit.actorId).not.toBe("");
+  expect(audit.before).toEqual({ reversedById: null });
 });

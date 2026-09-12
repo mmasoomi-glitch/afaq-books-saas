@@ -47,6 +47,7 @@ export default function ReverseButton({
 }: ReverseButtonProps) {
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
 
   async function reverse(): Promise<void> {
@@ -63,7 +64,7 @@ export default function ReverseButton({
             "content-type": "application/json",
             "x-csrf-token": csrfToken(),
           },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ reason: reason.trim() }),
         },
       );
 
@@ -88,6 +89,11 @@ export default function ReverseButton({
 
       if (response.status === 404) {
         setError("That entry could not be found.");
+        return;
+      }
+
+      if (response.status === 400) {
+        setError("A reason is required.");
         return;
       }
 
@@ -124,9 +130,26 @@ export default function ReverseButton({
         original remains exactly as it was. Today must fall inside an open
         accounting period, or the reversal will be refused.
       </p>
+
+      <label htmlFor={`reverse-reason-${entryId}`}>
+        Reason (recorded permanently)
+      </label>
+      <input
+        id={`reverse-reason-${entryId}`}
+        type="text"
+        required
+        disabled={pending}
+        value={reason}
+        onChange={(event) => {
+          setReason(event.target.value);
+        }}
+      />
+
       <button
         type="button"
-        disabled={pending}
+        // Disabled until a reason exists. The server refuses without one
+        // regardless; this stops the user discovering that after deciding.
+        disabled={pending || reason.trim() === ""}
         onClick={() => {
           void reverse();
         }}

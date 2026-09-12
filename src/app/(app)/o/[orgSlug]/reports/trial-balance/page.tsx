@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
 import { guardedTrialBalance } from "../../../../../../modules/reports/guarded";
 import AsOfForm from "../AsOfForm";
+import AccountLink from "../AccountLink";
 
 export const metadata: Metadata = {
   title: "Trial balance · Afaq Books",
@@ -64,7 +65,7 @@ export default async function TrialBalancePage({
       <h1>Trial balance</h1>
       <p>
         {scope.organizationSlug} · as at{" "}
-        <time dateTime={report.asOf}>{report.asOf}</time>
+        <time dateTime={report.asOf}>{report.asOf.slice(0, 10)}</time>
       </p>
       <AsOfForm asOf={report.asOf} />
 
@@ -89,7 +90,21 @@ export default async function TrialBalancePage({
           <tbody>
             {report.rows.map((row) => (
               <tr key={row.accountId}>
-                <td>{row.accountCode}</td>
+                <td>
+                  {/*
+                    No `from`. A trial balance is everything up to a date, so a
+                    start date would open a journal showing a subset that does
+                    not sum to the figure just clicked — the opposite of what a
+                    drill-down is for.
+                  */}
+                  <AccountLink
+                    orgSlug={orgSlug}
+                    accountId={row.accountId}
+                    accountCode={row.accountCode}
+                    accountName={row.accountName}
+                    to={report.asOf.slice(0, 10)}
+                  />
+                </td>
                 <td>{row.accountName}</td>
                 <td>{row.debit}</td>
                 <td>{row.credit}</td>

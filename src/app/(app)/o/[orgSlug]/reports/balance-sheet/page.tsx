@@ -3,6 +3,7 @@ import { cachedPageScope } from "../../../../../../server/next/page-scope-cache"
 import { guardedBalanceSheet } from "../../../../../../modules/reports/guarded";
 import type { BalanceSheetRow } from "../../../../../../modules/reports/balance-sheet";
 import AsOfForm from "../AsOfForm";
+import AccountLink from "../AccountLink";
 
 export const metadata: Metadata = {
   title: "Balance sheet · Afaq Books",
@@ -26,7 +27,11 @@ function Section({
   title,
   rows,
   total,
+  orgSlug,
+  asOf,
 }: {
+  readonly orgSlug: string;
+  readonly asOf: string;
   readonly title: string;
   readonly rows: readonly BalanceSheetRow[];
   readonly total: string;
@@ -49,7 +54,15 @@ function Section({
         ) : (
           rows.map((row) => (
             <tr key={row.accountId}>
-              <td>{row.accountCode}</td>
+              <td>
+                <AccountLink
+                  orgSlug={orgSlug}
+                  accountId={row.accountId}
+                  accountCode={row.accountCode}
+                  accountName={row.accountName}
+                  to={asOf.slice(0, 10)}
+                />
+              </td>
               <td>{row.accountName}</td>
               <td>{row.amount}</td>
             </tr>
@@ -87,18 +100,32 @@ export default async function BalanceSheetPage({
       <h1>Balance sheet</h1>
       <p>
         {scope.organizationSlug} · as at{" "}
-        <time dateTime={report.asOf}>{report.asOf}</time>
+        <time dateTime={report.asOf}>{report.asOf.slice(0, 10)}</time>
       </p>
 
       <AsOfForm asOf={report.asOf} />
 
-      <Section title="Assets" rows={report.assets} total={report.totalAssets} />
+      <Section
+        title="Assets"
+        rows={report.assets}
+        total={report.totalAssets}
+        orgSlug={orgSlug}
+        asOf={report.asOf}
+      />
       <Section
         title="Liabilities"
         rows={report.liabilities}
         total={report.totalLiabilities}
+        orgSlug={orgSlug}
+        asOf={report.asOf}
       />
-      <Section title="Equity" rows={report.equity} total={report.totalEquity} />
+      <Section
+        title="Equity"
+        rows={report.equity}
+        total={report.totalEquity}
+        orgSlug={orgSlug}
+        asOf={report.asOf}
+      />
 
       <p>
         Retained earnings: <strong>{report.retainedEarnings}</strong>

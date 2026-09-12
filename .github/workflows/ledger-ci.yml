@@ -208,6 +208,34 @@ jobs:
 
           exit "$fail"
 
+      - name: Assert the organization namespace stays exclusive
+        run: |
+          set -euo pipefail
+          # B-20260913-01. Organizations live under `/o/{slug}` and `/api/o/{slug}`
+          # so that a route can never shadow a customer's address. That holds
+          # only while `/o` contains NOTHING but the dynamic segment.
+          #
+          # Add `src/app/(app)/o/settings/` and the whole problem is back inside
+          # the new namespace — and, exactly as before, it would not error: the
+          # static segment would win and the organization slugged "settings"
+          # would quietly stop being reachable.
+          #
+          # This is the check that did not exist when the reserved-word list was
+          # dropped, and its absence was named in that PR rather than left for
+          # someone to discover.
+          fail=0
+          for base in "src/app/(app)/o" "src/app/api/o"; do
+            for child in "$base"/*; do
+              name="$(basename "$child")"
+              if [ "$name" != "[orgSlug]" ]; then
+                echo "::error file=$child::only [orgSlug] may live under $base; a static segment here shadows an organization address"
+                fail=1
+              fi
+            done
+          done
+          echo "checked: /o contains only the dynamic organization segment"
+          exit "$fail"
+
       - name: Assert the invariants are enforced by the DATABASE, not only the schema
         run: |
           set -euo pipefail

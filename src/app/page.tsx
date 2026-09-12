@@ -14,13 +14,14 @@ export default function Home() {
     <main>
       <h1>Afaq Books</h1>
       <p>
-        The accounting API is running. Sign-in and registration have screens;
-        the ledger and reporting screens have not been built.
+        The accounting API is running. You can sign in, create an organization,
+        manage who has access to it, and read its trial balance. Posting entries
+        and every other report still have no screen.
       </p>
       <p>
-        You can <a href="/register">create an account</a> or{" "}
-        <a href="/signin">sign in</a>. There is nothing to see after signing in
-        yet — no ledger or reporting screens exist.
+        <a href="/register">Create an account</a> or{" "}
+        <a href="/signin">sign in</a>. A new account belongs to no organization
+        until you create one or an administrator adds you to theirs.
       </p>
       <p>
         Available endpoints: <code>POST /api/auth/register</code>,{" "}

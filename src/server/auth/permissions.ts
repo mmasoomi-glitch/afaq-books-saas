@@ -10,14 +10,26 @@ export type Action =
   | "ledger.post"
   | "ledger.reverse"
   | "report.read"
+  | "member.read"
   | "member.invite"
   | "member.remove"
   | "role.grant"
   | "ownership.transfer";
 
+/**
+ * `member.read` sits with VIEWER deliberately. Knowing who else is in an
+ * organization is not privileged information to someone already inside it —
+ * they see those people's postings in the audit trail either way — and hiding
+ * it would mean a bookkeeper could not tell who to ask about an entry.
+ *
+ * It is still an ACTION rather than something every member gets implicitly, so
+ * that a future role below VIEWER (an external auditor, a read-only
+ * integration) can be denied it without touching any call site.
+ */
 const VIEWER_ACTIONS: readonly Action[] = [
   "ledger.account.read",
   "report.read",
+  "member.read",
 ];
 
 const BOOKKEEPER_ACTIONS: readonly Action[] = [

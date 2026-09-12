@@ -61,10 +61,14 @@ export default function SignInForm({ csrfToken }: SignInFormProps) {
         // a password left in a mounted input survives until the tab closes.
         setEmail("");
         setPassword("");
-        // No redirect: there is nowhere to go yet. Sending the user to a route
-        // that does not exist would be worse than telling them what happened.
-        // A redirect belongs here once a destination does.
-        setNotice({ kind: "success", text: "Signed in." });
+        // There is a destination now. `/organizations` is the list you choose
+        // from: it needs no org slug, and for a brand-new account it says
+        // plainly that there is nothing to see yet and what to do about it.
+        //
+        // `assign` rather than `replace`, so Back returns to the sign-in page
+        // rather than skipping past it — a user who signed into the wrong
+        // account should be able to go back.
+        window.location.assign("/organizations");
         return;
       }
 

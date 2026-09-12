@@ -1,0 +1,319 @@
+import { randomUUID } from "node:crypto";
+import { beforeEach, expect, test } from "vitest";
+import type { MembershipRole } from "@prisma/client";
+import { resetDb } from "../../setup";
+import { prisma } from "../../../src/server/db/client";
+import { registerUser, signIn } from "../../../src/server/auth/session";
+import { createOrganization } from "../../../src/server/auth/membership";
+import { CSRF_COOKIE, SESSION_COOKIE } from "../../../src/server/http/cookies";
+import { CSRF_HEADER } from "../../../src/server/http/csrf";
+import type {
+  HttpMethod,
+  HttpRequest,
+  HttpResponse,
+} from "../../../src/server/http/types";
+import { withOrgScope } from "../../../src/server/http/handlers/scoped";
+import {
+  createAccountHandler,
+  createPeriodHandler,
+} from "../../../src/server/http/handlers/ledger";
+
+/**
+ * The ledger endpoints. The services behind them are covered elsewhere; what is
+ * asserted here is the part only the HTTP layer decides — which inputs are
+ * refused before a query runs, and what status a refusal carries.
+ */
+
+const PASSWORD = "correct horse battery staple";
+const CSRF = "csrf-token-for-tests-0123456789";
+
+beforeEach(async () => {
+  await resetDb();
+});
+
+function newSlug(): string {
+  return `org-${randomUUID().slice(0, 8)}`;
+}
+
+function req(
+  method: HttpMethod,
+  over?: Partial<HttpRequest> & { session?: string },
+): HttpRequest {
+  const { session, ...rest } = over ?? {};
+  return {
+    method,
+    path: "/",
+    ...rest,
+    headers: { [CSRF_HEADER]: CSRF, ...over?.headers },
+    cookies: {
+      [CSRF_COOKIE]: CSRF,
+      ...(session === undefined ? {} : { [SESSION_COOKIE]: session }),
+      ...over?.cookies,
+    },
+  };
+}
+
+function bodyOf(res: HttpResponse): Record<string, unknown> {
+  const body = res.body;
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new Error(`expected an object body, got ${String(body)}`);
+  }
+  return { ...body } as Record<string, unknown>;
+}
+
+function errorCode(res: HttpResponse): string {
+  const wrapper = bodyOf(res)["error"];
+  if (typeof wrapper !== "object" || wrapper === null) return "";
+  const code = (wrapper as Record<string, unknown>)["code"];
+  return typeof code === "string" ? code : "";
+}
+
+async function actor(role: MembershipRole): Promise<{
+  token: string;
+  slug: string;
+  organizationId: string;
+}> {
+  const email = `${randomUUID()}@example.test`;
+  const { userId } = await registerUser(email, PASSWORD);
+  const slug = newSlug();
+  const { organizationId } = await createOrganization(userId, {
+    slug,
+    name: "Acme",
+  });
+
+  if (role !== "OWNER") {
+    // Demote via a direct update: the service refuses to change your own role,
+    // and the trigger refuses to leave no owner — so give the org a second
+    // owner first, then step this one down.
+    const other = await prisma.user.create({
+      data: { email: `${randomUUID()}@example.test` },
+    });
+    await prisma.membership.create({
+      data: { userId: other.id, organizationId, role: "OWNER" },
+    });
+    await prisma.membership.updateMany({
+      where: { userId, organizationId },
+      data: { role },
+    });
+  }
+
+  const { rawToken } = await signIn(email, PASSWORD);
+  return { token: rawToken, slug, organizationId };
+}
+
+const VALID_ACCOUNT = {
+  code: "1000",
+  name: "Cash",
+  type: "ASSET",
+  currency: "USD",
+};
+
+test("L1: a bookkeeper can add an account", async () => {
+  const { token, slug, organizationId } = await actor("BOOKKEEPER");
+
+  const res = await withOrgScope(slug, createAccountHandler())(
+    req("POST", { session: token, body: VALID_ACCOUNT }),
+  );
+
+  expect(res.status).toBe(201);
+  expect(bodyOf(res)["code"]).toBe("1000");
+  expect(await prisma.account.count({ where: { organizationId } })).toBe(1);
+});
+
+test("L2: a viewer cannot, and nothing is written", async () => {
+  const { token, slug, organizationId } = await actor("VIEWER");
+
+  const res = await withOrgScope(slug, createAccountHandler())(
+    req("POST", { session: token, body: VALID_ACCOUNT }),
+  );
+
+  expect(res.status).toBe(403);
+  expect(await prisma.account.count({ where: { organizationId } })).toBe(0);
+});
+
+test("L3: a duplicate code is 409, not 500", async () => {
+  // `createAccount` lets the unique constraint do the work rather than checking
+  // first, because a check-then-insert races two concurrent creations into the
+  // same code. Without the mapping the violation would surface as a 500 and the
+  // user would be told "something went wrong" about a five-second fix.
+  const { token, slug } = await actor("BOOKKEEPER");
+  const create = withOrgScope(slug, createAccountHandler());
+
+  expect(
+    (await create(req("POST", { session: token, body: VALID_ACCOUNT }))).status,
+  ).toBe(201);
+
+  const second = await create(
+    req("POST", {
+      session: token,
+      body: { ...VALID_ACCOUNT, name: "Something else" },
+    }),
+  );
+  expect(second.status).toBe(409);
+  expect(errorCode(second)).toBe("ALREADY_EXISTS");
+});
+
+test("L4: an invented account type is 400 before any query runs", async () => {
+  const { token, slug, organizationId } = await actor("BOOKKEEPER");
+
+  for (const type of ["NONSENSE", "asset", "", "ASSETS"]) {
+    const res = await withOrgScope(slug, createAccountHandler())(
+      req("POST", { session: token, body: { ...VALID_ACCOUNT, type } }),
+    );
+    expect(res.status).toBe(400);
+  }
+
+  expect(await prisma.account.count({ where: { organizationId } })).toBe(0);
+});
+
+test("L5: a malformed currency is 400", async () => {
+  // `accounts.currency` is CHAR(3). Without the shape check the driver decides
+  // what happens to a longer value, and whatever it decides is not a message
+  // anybody can act on.
+  const { token, slug } = await actor("BOOKKEEPER");
+
+  for (const currency of ["DOLLARS", "US", "", "U$D", "12"]) {
+    const res = await withOrgScope(slug, createAccountHandler())(
+      req("POST", { session: token, body: { ...VALID_ACCOUNT, currency } }),
+    );
+    expect(res.status).toBe(400);
+  }
+});
+
+test("L6: a lowercase currency is accepted and stored upper-case", async () => {
+  // Normalising rather than refusing: "usd" is not a different currency from
+  // "USD", and rejecting it would be pedantry a user cannot learn from.
+  const { token, slug, organizationId } = await actor("BOOKKEEPER");
+
+  const res = await withOrgScope(slug, createAccountHandler())(
+    req("POST", { session: token, body: { ...VALID_ACCOUNT, currency: "usd" } }),
+  );
+
+  expect(res.status).toBe(201);
+  const account = await prisma.account.findFirstOrThrow({
+    where: { organizationId },
+  });
+  expect(account.currency).toBe("USD");
+});
+
+test("L7: a missing field is 400 and names what is required", async () => {
+  const { token, slug } = await actor("BOOKKEEPER");
+
+  for (const omit of ["code", "name", "type", "currency"]) {
+    const body: Record<string, unknown> = { ...VALID_ACCOUNT };
+    delete body[omit];
+    const res = await withOrgScope(slug, createAccountHandler())(
+      req("POST", { session: token, body }),
+    );
+    expect(res.status).toBe(400);
+    expect(errorCode(res)).toBe("INVALID_BODY");
+  }
+});
+
+test("L8: an object-shaped field is rejected rather than cast", async () => {
+  const { token, slug } = await actor("BOOKKEEPER");
+
+  const res = await withOrgScope(slug, createAccountHandler())(
+    req("POST", {
+      session: token,
+      body: { ...VALID_ACCOUNT, code: { toString: "1000" } },
+    }),
+  );
+
+  expect(res.status).toBe(400);
+});
+
+test("L9: creating an account without a csrf pair is 403 and writes nothing", async () => {
+  const { token, slug, organizationId } = await actor("BOOKKEEPER");
+
+  const res = await withOrgScope(slug, createAccountHandler())({
+    method: "POST",
+    path: "/",
+    headers: {},
+    cookies: { [SESSION_COOKIE]: token },
+    body: VALID_ACCOUNT,
+  });
+
+  expect(res.status).toBe(403);
+  expect(errorCode(res)).toBe("CSRF_INVALID");
+  expect(await prisma.account.count({ where: { organizationId } })).toBe(0);
+});
+
+test("L10: another tenant cannot add an account to your chart", async () => {
+  const mine = await actor("OWNER");
+  const theirs = await actor("OWNER");
+
+  const res = await withOrgScope(mine.slug, createAccountHandler())(
+    req("POST", { session: theirs.token, body: VALID_ACCOUNT }),
+  );
+
+  expect(res.status).toBe(404);
+  expect(
+    await prisma.account.count({ where: { organizationId: mine.organizationId } }),
+  ).toBe(0);
+});
+
+test("L11: a period is created with valid dates", async () => {
+  const { token, slug, organizationId } = await actor("BOOKKEEPER");
+
+  const res = await withOrgScope(slug, createPeriodHandler())(
+    req("POST", {
+      session: token,
+      body: { name: "2024", startDate: "2024-01-01", endDate: "2024-12-31" },
+    }),
+  );
+
+  expect(res.status).toBe(201);
+  expect(bodyOf(res)["status"]).toBe("OPEN");
+  expect(await prisma.period.count({ where: { organizationId } })).toBe(1);
+});
+
+test("L12: an unparseable date is 400, not a constraint violation", async () => {
+  // An `Invalid Date` reaches the driver as NULL or as a cast failure depending
+  // on the path, and the period non-overlap EXCLUSION constraint would then
+  // reject it for a reason that has nothing to do with what the user typed.
+  const { token, slug, organizationId } = await actor("BOOKKEEPER");
+
+  for (const dates of [
+    { startDate: "not a date", endDate: "2024-12-31" },
+    { startDate: "2024-01-01", endDate: "31/12/2024x" },
+    { startDate: "", endDate: "2024-12-31" },
+  ]) {
+    const res = await withOrgScope(slug, createPeriodHandler())(
+      req("POST", { session: token, body: { name: "2024", ...dates } }),
+    );
+    expect(res.status).toBe(400);
+  }
+
+  expect(await prisma.period.count({ where: { organizationId } })).toBe(0);
+});
+
+test("L13: overlapping periods are refused by the database, surfaced not swallowed", async () => {
+  // `period_no_overlap` is an EXCLUSION constraint. The handler does not
+  // re-implement it — it lets the database answer and does not turn the failure
+  // into a success.
+  const { token, slug, organizationId } = await actor("BOOKKEEPER");
+  const create = withOrgScope(slug, createPeriodHandler());
+
+  expect(
+    (
+      await create(
+        req("POST", {
+          session: token,
+          body: { name: "2024", startDate: "2024-01-01", endDate: "2024-12-31" },
+        }),
+      )
+    ).status,
+  ).toBe(201);
+
+  await expect(
+    create(
+      req("POST", {
+        session: token,
+        body: { name: "Overlap", startDate: "2024-06-01", endDate: "2025-06-01" },
+      }),
+    ),
+  ).rejects.toThrow();
+
+  expect(await prisma.period.count({ where: { organizationId } })).toBe(1);
+});

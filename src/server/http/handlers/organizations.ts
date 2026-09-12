@@ -7,6 +7,7 @@ import { readString } from "./scoped";
 import type { ScopedHandler } from "./scoped";
 import { toErrorResponse } from "./auth";
 import { resolveSession } from "../../auth/session";
+import { enforce } from "../../auth/rate-limit";
 import { AuthError } from "../../auth/errors";
 import {
   changeRole,
@@ -96,6 +97,20 @@ export function createOrganizationHandler(): HttpHandler {
       // organization being named here, so there is nothing whose existence a
       // 401 could confirm — the enumeration argument simply does not apply.
       const { userId } = await resolveSession(token);
+
+      // Limited explicitly, because this route does NOT pass through
+      // `withOrgScope` — it is what creates the organization a scope would
+      // resolve against. It is also the only write a brand-new account with no
+      // memberships can make, which makes it the one worth not leaving open.
+      //
+      // Same "write" budget as every other mutation, deliberately: a user who
+      // has spent their budget posting entries should not find a second,
+      // separate allowance for creating tenants.
+      //
+      // A `RateLimitedError` is already mapped to 429 with `Retry-After` by
+      // `toErrorResponse` below, so this needs no special handling — it only
+      // needs to be here at all.
+      await enforce("write", req.ip, userId);
 
       const slug = readString(req.body, "slug");
       const name = readString(req.body, "name");

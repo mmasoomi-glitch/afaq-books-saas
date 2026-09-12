@@ -4,7 +4,10 @@ import { ensureOrg, pool, resetDb } from "../../setup";
 import { prisma } from "../../../src/server/db/client";
 import { createAccount } from "../../../src/modules/ledger/accounts";
 import { createPeriod } from "../../../src/modules/ledger/periods";
-import { listEntries, postJournalEntry } from "../../../src/modules/ledger/posting";
+import {
+  listEntries,
+  postJournalEntry,
+} from "../../../src/modules/ledger/posting";
 import { trialBalance } from "../../../src/modules/reports/trial-balance";
 import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 
@@ -300,5 +303,7 @@ test("F13: filtering never crosses a tenant boundary", async () => {
   });
 
   expect(page.entries).toHaveLength(1);
-  expect(page.entries[0]?.lines.some((l) => l.debit === "999.0000")).toBe(false);
+  expect(page.entries[0]?.lines.some((l) => l.debit === "999.0000")).toBe(
+    false,
+  );
 });

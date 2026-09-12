@@ -14,20 +14,32 @@ import { normaliseEmail } from "./session";
  * that, and nothing here should be called with a scope assembled by hand.
  */
 
-export const ROLE_RANK: Readonly<Record<MembershipRole, number>> = Object.freeze(
-  { VIEWER: 0, BOOKKEEPER: 1, APPROVER: 2, ACCOUNTANT: 3, ADMIN: 4, OWNER: 5 },
-);
+export const ROLE_RANK: Readonly<Record<MembershipRole, number>> =
+  Object.freeze({
+    VIEWER: 0,
+    BOOKKEEPER: 1,
+    APPROVER: 2,
+    ACCOUNTANT: 3,
+    ADMIN: 4,
+    OWNER: 5,
+  });
 
 export class RoleEscalationError extends AuthError {
   constructor(granterRole: MembershipRole, targetRole: MembershipRole) {
-    super(`a ${granterRole} may not grant ${targetRole}`, "AUTH_ROLE_ESCALATION");
+    super(
+      `a ${granterRole} may not grant ${targetRole}`,
+      "AUTH_ROLE_ESCALATION",
+    );
     this.name = "RoleEscalationError";
   }
 }
 
 export class OwnershipTransferError extends AuthError {
   constructor() {
-    super("ownership is transferred, not granted", "AUTH_OWNERSHIP_NOT_GRANTABLE");
+    super(
+      "ownership is transferred, not granted",
+      "AUTH_OWNERSHIP_NOT_GRANTABLE",
+    );
     this.name = "OwnershipTransferError";
   }
 }
@@ -259,7 +271,10 @@ export async function changeRole(
   // trigger is DEFERRABLE and evaluated at COMMIT, which is the only point at
   // which the question has a stable answer.
   await prisma.$transaction(async (tx) => {
-    await tx.membership.update({ where: { id: membership.id }, data: { role } });
+    await tx.membership.update({
+      where: { id: membership.id },
+      data: { role },
+    });
     await tx.auditLog.create({
       data: {
         organizationId: scope.organizationId,

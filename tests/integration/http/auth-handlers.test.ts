@@ -3,10 +3,7 @@ import { beforeEach, expect, test } from "vitest";
 import { resetDb } from "../../setup";
 import { prisma } from "../../../src/server/db/client";
 import { registerUser } from "../../../src/server/auth/session";
-import {
-  CSRF_COOKIE,
-  SESSION_COOKIE,
-} from "../../../src/server/http/cookies";
+import { CSRF_COOKIE, SESSION_COOKIE } from "../../../src/server/http/cookies";
 import { CSRF_HEADER } from "../../../src/server/http/csrf";
 import type {
   HttpMethod,
@@ -250,7 +247,9 @@ test("H9: the security headers ride on every response, success or failure", asyn
   await registerUser(email, PASSWORD);
   const handler = signInHandler();
 
-  const ok = await handler(req("POST", { body: { email, password: PASSWORD } }));
+  const ok = await handler(
+    req("POST", { body: { email, password: PASSWORD } }),
+  );
   const denied = await handler(
     req("POST", { body: { email, password: "wrong password entirely" } }),
   );
@@ -417,7 +416,8 @@ test("H19: registering the same email twice is 409", async () => {
   const handler = registerHandler();
 
   expect(
-    (await handler(req("POST", { body: { email, password: PASSWORD } }))).status,
+    (await handler(req("POST", { body: { email, password: PASSWORD } })))
+      .status,
   ).toBe(201);
 
   const second = await handler(

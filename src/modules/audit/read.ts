@@ -47,10 +47,7 @@ export async function listAuditLog(
   // Clamped rather than trusted. `limit` arrives from a query string, and an
   // unbounded one on a table that only ever grows is a denial of service that
   // any authenticated member could trigger by editing a URL.
-  const take = Math.min(
-    Math.max(1, query.limit ?? 100),
-    MAX_AUDIT_PAGE,
-  );
+  const take = Math.min(Math.max(1, query.limit ?? 100), MAX_AUDIT_PAGE);
 
   const rows = await prisma.auditLog.findMany({
     where: {

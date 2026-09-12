@@ -91,7 +91,12 @@ test("P8: the dummy verification always returns false, whatever it is given", as
   // (`dummyHash ??= hash(...)`). It is simply not something a stopwatch can
   // assert reliably, so what is asserted here is the contract that can be:
   // never throws, never true, regardless of input.
-  for (const input of [PASSWORD, "something else entirely", "", "x".repeat(500)]) {
+  for (const input of [
+    PASSWORD,
+    "something else entirely",
+    "",
+    "x".repeat(500),
+  ]) {
     expect(await verifyAgainstDummy(input)).toBe(false);
   }
 });

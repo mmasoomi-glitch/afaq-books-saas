@@ -17,7 +17,9 @@ export interface AccountLinkProps {
  * paper. A button would need JavaScript to do a worse version of what an
  * anchor already does.
  */
-export default function AccountLink(props: AccountLinkProps): React.JSX.Element {
+export default function AccountLink(
+  props: AccountLinkProps,
+): React.JSX.Element {
   const href = journalHref({
     orgSlug: props.orgSlug,
     accountId: props.accountId,

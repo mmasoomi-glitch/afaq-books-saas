@@ -12,7 +12,10 @@ import type {
   HttpRequest,
   HttpResponse,
 } from "../../../src/server/http/types";
-import { withOrgScope, readString } from "../../../src/server/http/handlers/scoped";
+import {
+  withOrgScope,
+  readString,
+} from "../../../src/server/http/handlers/scoped";
 import {
   changeRoleHandler,
   createOrganizationHandler,
@@ -80,7 +83,11 @@ function errorCode(res: HttpResponse): string {
 }
 
 /** A registered, signed-in user. */
-async function signedIn(): Promise<{ userId: string; token: string; email: string }> {
+async function signedIn(): Promise<{
+  userId: string;
+  token: string;
+  email: string;
+}> {
   const email = newEmail();
   await registerUser(email, PASSWORD);
   const { rawToken, userId } = await signIn(email, PASSWORD);
@@ -167,7 +174,13 @@ test("O4: a reserved or malformed slug is 400, not 500", async () => {
   // Only the FORMAT constraint remains. The reserved-word list was dropped
   // when organizations moved under `/o/`, because a slug can no longer shadow
   // a route — see B-20260913-01.
-  for (const slug of ["UP PER", "ab", "-leading", "under_score", "a".repeat(41)]) {
+  for (const slug of [
+    "UP PER",
+    "ab",
+    "-leading",
+    "under_score",
+    "a".repeat(41),
+  ]) {
     const res = await createOrganizationHandler()(
       req("POST", { session: user.token, body: { slug, name: "Acme" } }),
     );
@@ -179,7 +192,10 @@ test("O4: a reserved or malformed slug is 400, not 500", async () => {
 
   // And a name that used to be forbidden is now ordinary.
   const ok = await createOrganizationHandler()(
-    req("POST", { session: user.token, body: { slug: "members", name: "Acme" } }),
+    req("POST", {
+      session: user.token,
+      body: { slug: "members", name: "Acme" },
+    }),
   );
   expect(ok.status).toBe(201);
 });
@@ -189,7 +205,10 @@ test("O5: a duplicate slug is 409", async () => {
   const other = await signedIn();
 
   const res = await createOrganizationHandler()(
-    req("POST", { session: other.token, body: { slug: owner.slug, name: "B" } }),
+    req("POST", {
+      session: other.token,
+      body: { slug: owner.slug, name: "B" },
+    }),
   );
 
   expect(res.status).toBe(409);
@@ -202,7 +221,9 @@ test("O6: a scoped route with no session is 404, not 401", async () => {
   const owner = await ownerOf();
 
   const handler = withOrgScope(owner.slug, grantMemberHandler());
-  const res = await handler(req("POST", { body: { email: newEmail(), role: "VIEWER" } }));
+  const res = await handler(
+    req("POST", { body: { email: newEmail(), role: "VIEWER" } }),
+  );
 
   expect(res.status).toBe(404);
   expect(errorCode(res)).toBe("NOT_FOUND");
@@ -214,13 +235,19 @@ test("O7: a non-member and a non-existent organization answer identically", asyn
   const owner = await ownerOf();
   const stranger = await signedIn();
 
-  const notAMember = await withOrgScope(owner.slug, grantMemberHandler())(
+  const notAMember = await withOrgScope(
+    owner.slug,
+    grantMemberHandler(),
+  )(
     req("POST", {
       session: stranger.token,
       body: { email: newEmail(), role: "VIEWER" },
     }),
   );
-  const noSuchOrg = await withOrgScope(newSlug(), grantMemberHandler())(
+  const noSuchOrg = await withOrgScope(
+    newSlug(),
+    grantMemberHandler(),
+  )(
     req("POST", {
       session: stranger.token,
       body: { email: newEmail(), role: "VIEWER" },
@@ -236,7 +263,10 @@ test("O8: granting a membership returns 201 and writes the row", async () => {
   const owner = await ownerOf();
   const target = await signedIn();
 
-  const res = await withOrgScope(owner.slug, grantMemberHandler())(
+  const res = await withOrgScope(
+    owner.slug,
+    grantMemberHandler(),
+  )(
     req("POST", {
       session: owner.token,
       body: { email: target.email, role: "BOOKKEEPER" },
@@ -255,7 +285,10 @@ test("O9: a role the caller may not grant is 403 and writes nothing", async () =
   const admin = await memberOf(owner.organizationId, "ADMIN");
   const target = await signedIn();
 
-  const res = await withOrgScope(owner.slug, grantMemberHandler())(
+  const res = await withOrgScope(
+    owner.slug,
+    grantMemberHandler(),
+  )(
     req("POST", {
       session: admin.token,
       body: { email: target.email, role: "ADMIN" },
@@ -273,7 +306,10 @@ test("O10: OWNER is refused through the grant route, by an owner", async () => {
   const owner = await ownerOf();
   const target = await signedIn();
 
-  const res = await withOrgScope(owner.slug, grantMemberHandler())(
+  const res = await withOrgScope(
+    owner.slug,
+    grantMemberHandler(),
+  )(
     req("POST", {
       session: owner.token,
       body: { email: target.email, role: "OWNER" },
@@ -292,8 +328,14 @@ test("O11: an invented role is 400, not a database error", async () => {
   const target = await signedIn();
 
   for (const role of ["SUPERUSER", "owner", "", "ADMINISTRATOR"]) {
-    const res = await withOrgScope(owner.slug, grantMemberHandler())(
-      req("POST", { session: owner.token, body: { email: target.email, role } }),
+    const res = await withOrgScope(
+      owner.slug,
+      grantMemberHandler(),
+    )(
+      req("POST", {
+        session: owner.token,
+        body: { email: target.email, role },
+      }),
     );
     expect(res.status).toBe(400);
   }
@@ -302,8 +344,14 @@ test("O11: an invented role is 400, not a database error", async () => {
 test("O12: granting to an unknown address is 404", async () => {
   const owner = await ownerOf();
 
-  const res = await withOrgScope(owner.slug, grantMemberHandler())(
-    req("POST", { session: owner.token, body: { email: newEmail(), role: "VIEWER" } }),
+  const res = await withOrgScope(
+    owner.slug,
+    grantMemberHandler(),
+  )(
+    req("POST", {
+      session: owner.token,
+      body: { email: newEmail(), role: "VIEWER" },
+    }),
   );
 
   expect(res.status).toBe(404);
@@ -316,10 +364,16 @@ test("O13: granting twice is 409", async () => {
   const grant = withOrgScope(owner.slug, grantMemberHandler());
 
   await grant(
-    req("POST", { session: owner.token, body: { email: target.email, role: "VIEWER" } }),
+    req("POST", {
+      session: owner.token,
+      body: { email: target.email, role: "VIEWER" },
+    }),
   );
   const second = await grant(
-    req("POST", { session: owner.token, body: { email: target.email, role: "VIEWER" } }),
+    req("POST", {
+      session: owner.token,
+      body: { email: target.email, role: "VIEWER" },
+    }),
   );
 
   expect(second.status).toBe(409);
@@ -330,9 +384,10 @@ test("O14: changing a role is 204 and takes effect", async () => {
   const owner = await ownerOf();
   const member = await memberOf(owner.organizationId, "VIEWER");
 
-  const res = await withOrgScope(owner.slug, changeRoleHandler(member.userId))(
-    req("PATCH", { session: owner.token, body: { role: "ACCOUNTANT" } }),
-  );
+  const res = await withOrgScope(
+    owner.slug,
+    changeRoleHandler(member.userId),
+  )(req("PATCH", { session: owner.token, body: { role: "ACCOUNTANT" } }));
 
   expect(res.status).toBe(204);
   const updated = await prisma.membership.findFirstOrThrow({
@@ -349,10 +404,17 @@ test("O15: the target user comes from the URL, never from the body", async () =>
   const victim = await memberOf(owner.organizationId, "ADMIN");
   const intended = await memberOf(owner.organizationId, "VIEWER");
 
-  await withOrgScope(owner.slug, changeRoleHandler(intended.userId))(
+  await withOrgScope(
+    owner.slug,
+    changeRoleHandler(intended.userId),
+  )(
     req("PATCH", {
       session: owner.token,
-      body: { role: "BOOKKEEPER", userId: victim.userId, targetUserId: victim.userId },
+      body: {
+        role: "BOOKKEEPER",
+        userId: victim.userId,
+        targetUserId: victim.userId,
+      },
     }),
   );
 
@@ -371,9 +433,10 @@ test("O16: an ADMIN cannot demote an OWNER through the route", async () => {
   const owner = await ownerOf();
   const admin = await memberOf(owner.organizationId, "ADMIN");
 
-  const res = await withOrgScope(owner.slug, changeRoleHandler(owner.userId))(
-    req("PATCH", { session: admin.token, body: { role: "VIEWER" } }),
-  );
+  const res = await withOrgScope(
+    owner.slug,
+    changeRoleHandler(owner.userId),
+  )(req("PATCH", { session: admin.token, body: { role: "VIEWER" } }));
 
   expect(res.status).toBe(403);
   const still = await prisma.membership.findFirstOrThrow({
@@ -387,14 +450,16 @@ test("O17: removing a member is 204, and only an OWNER may do it", async () => {
   const admin = await memberOf(owner.organizationId, "ADMIN");
   const victim = await memberOf(owner.organizationId, "VIEWER");
 
-  const refused = await withOrgScope(owner.slug, removeMemberHandler(victim.userId))(
-    req("DELETE", { session: admin.token }),
-  );
+  const refused = await withOrgScope(
+    owner.slug,
+    removeMemberHandler(victim.userId),
+  )(req("DELETE", { session: admin.token }));
   expect(refused.status).toBe(403);
 
-  const allowed = await withOrgScope(owner.slug, removeMemberHandler(victim.userId))(
-    req("DELETE", { session: owner.token }),
-  );
+  const allowed = await withOrgScope(
+    owner.slug,
+    removeMemberHandler(victim.userId),
+  )(req("DELETE", { session: owner.token }));
   expect(allowed.status).toBe(204);
   expect(
     await prisma.membership.count({ where: { userId: victim.userId } }),
@@ -405,9 +470,10 @@ test("O18: transferring ownership is 204 and moves the role", async () => {
   const owner = await ownerOf();
   const successor = await memberOf(owner.organizationId, "ADMIN");
 
-  const res = await withOrgScope(owner.slug, transferOwnershipHandler())(
-    req("POST", { session: owner.token, body: { userId: successor.userId } }),
-  );
+  const res = await withOrgScope(
+    owner.slug,
+    transferOwnershipHandler(),
+  )(req("POST", { session: owner.token, body: { userId: successor.userId } }));
 
   expect(res.status).toBe(204);
   const owners = await prisma.membership.findMany({
@@ -430,16 +496,22 @@ test("O19: every mutation requires a csrf pair", async () => {
   });
 
   const responses = await Promise.all([
-    withOrgScope(owner.slug, grantMemberHandler())(
-      bare("POST", { email: member.email, role: "VIEWER" }),
-    ),
-    withOrgScope(owner.slug, changeRoleHandler(member.userId))(
-      bare("PATCH", { role: "ADMIN" }),
-    ),
-    withOrgScope(owner.slug, removeMemberHandler(member.userId))(bare("DELETE")),
-    withOrgScope(owner.slug, transferOwnershipHandler())(
-      bare("POST", { userId: member.userId }),
-    ),
+    withOrgScope(
+      owner.slug,
+      grantMemberHandler(),
+    )(bare("POST", { email: member.email, role: "VIEWER" })),
+    withOrgScope(
+      owner.slug,
+      changeRoleHandler(member.userId),
+    )(bare("PATCH", { role: "ADMIN" })),
+    withOrgScope(
+      owner.slug,
+      removeMemberHandler(member.userId),
+    )(bare("DELETE")),
+    withOrgScope(
+      owner.slug,
+      transferOwnershipHandler(),
+    )(bare("POST", { userId: member.userId })),
   ]);
 
   for (const res of responses) {

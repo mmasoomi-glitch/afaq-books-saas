@@ -78,7 +78,10 @@ export class PayloadTooLargeError extends Error {
  * read — a limit applied after `text()` has already buffered the body has
  * already lost.
  */
-async function readBodyText(request: Request, maxBytes: number): Promise<string> {
+async function readBodyText(
+  request: Request,
+  maxBytes: number,
+): Promise<string> {
   const stream = request.body;
   if (stream === null) return "";
 
@@ -228,7 +231,9 @@ export function clientIp(
  * body: null }` would turn a correct 204 into an unhandled exception and then a
  * 500, and the cause would be three layers away from the symptom.
  */
-const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 103, 204, 205, 304]);
+const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([
+  101, 103, 204, 205, 304,
+]);
 
 export function toResponse(res: HttpResponse): Response {
   const headers = new Headers(res.headers ?? {});
@@ -266,52 +271,52 @@ export function toRouteHandler(
     const requestId = newRequestId();
 
     return runWithRequestId(requestId, async () => {
-    try {
-      const response = toResponse(
-        await handler(await toHttpRequest(request, config)),
-      );
-      // Echoed so a caller reporting a problem can quote it, and so it can be
-      // matched against the audit row without database access.
-      response.headers.set("x-request-id", requestId);
-      return response;
-    } catch (err) {
-      if (err instanceof UnsupportedMethodError) {
+      try {
+        const response = toResponse(
+          await handler(await toHttpRequest(request, config)),
+        );
+        // Echoed so a caller reporting a problem can quote it, and so it can be
+        // matched against the audit row without database access.
+        response.headers.set("x-request-id", requestId);
+        return response;
+      } catch (err) {
+        if (err instanceof UnsupportedMethodError) {
+          return toResponse(
+            error(405, err.code, "unsupported method", {
+              headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
+            }),
+          );
+        }
+
+        if (err instanceof PayloadTooLargeError) {
+          return toResponse(
+            error(413, err.code, "request body too large", {
+              headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
+            }),
+          );
+        }
+
+        // The one place a catch-all is correct.
+        //
+        // `toErrorResponse` in the handlers deliberately RETHROWS what it does
+        // not recognise, so a Prisma failure or a null dereference is not
+        // flattened into a tidy JSON error that looks handled. Those exceptions
+        // have to be caught somewhere, and this is the altitude where the only
+        // alternative is an unhandled rejection and a dropped connection.
+        //
+        // The message is generic on purpose. An exception message routinely
+        // carries a query fragment, a file path, a column name or a constraint
+        // name, and returning it would hand an attacker a map of the schema.
+        // Logged WITH the request id, which is the point of having one: the
+        // generic body tells the user nothing, and this is what connects their
+        // report to the stack trace.
+        console.error(`[http] unhandled error (request ${requestId})`, err);
         return toResponse(
-          error(405, err.code, "unsupported method", {
+          error(500, "INTERNAL", "internal error", {
             headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
           }),
         );
       }
-
-      if (err instanceof PayloadTooLargeError) {
-        return toResponse(
-          error(413, err.code, "request body too large", {
-            headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
-          }),
-        );
-      }
-
-      // The one place a catch-all is correct.
-      //
-      // `toErrorResponse` in the handlers deliberately RETHROWS what it does
-      // not recognise, so a Prisma failure or a null dereference is not
-      // flattened into a tidy JSON error that looks handled. Those exceptions
-      // have to be caught somewhere, and this is the altitude where the only
-      // alternative is an unhandled rejection and a dropped connection.
-      //
-      // The message is generic on purpose. An exception message routinely
-      // carries a query fragment, a file path, a column name or a constraint
-      // name, and returning it would hand an attacker a map of the schema.
-      // Logged WITH the request id, which is the point of having one: the
-      // generic body tells the user nothing, and this is what connects their
-      // report to the stack trace.
-      console.error(`[http] unhandled error (request ${requestId})`, err);
-      return toResponse(
-        error(500, "INTERNAL", "internal error", {
-          headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
-        }),
-      );
-    }
     });
   };
 }

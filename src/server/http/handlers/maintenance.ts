@@ -49,7 +49,10 @@ const MIN_SECRET_LENGTH = 32;
 function authorised(req: HttpRequest): boolean {
   const configured = process.env["MAINTENANCE_SECRET"];
 
-  if (configured === undefined || configured.trim().length < MIN_SECRET_LENGTH) {
+  if (
+    configured === undefined ||
+    configured.trim().length < MIN_SECRET_LENGTH
+  ) {
     console.warn(
       "[maintenance] MAINTENANCE_SECRET is unset, blank or shorter than " +
         `${String(MIN_SECRET_LENGTH)} characters; the reaper endpoint is ` +

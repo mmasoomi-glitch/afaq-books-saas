@@ -8,7 +8,11 @@ function one<T>(arr: T[], msg = "expected at least one row"): T {
   return v;
 }
 
-function computeReportingAmount(debit: string, credit: string, fxRate: string): string {
+function computeReportingAmount(
+  debit: string,
+  credit: string,
+  fxRate: string,
+): string {
   const d = parseFloat(debit);
   const c = parseFloat(credit);
   const f = parseFloat(fxRate);
@@ -17,7 +21,7 @@ function computeReportingAmount(debit: string, credit: string, fxRate: string): 
 
 async function query<T extends QueryResultRow>(
   sql: string,
-  params: unknown[] = []
+  params: unknown[] = [],
 ): Promise<T[]> {
   const client = await pool.connect();
   try {
@@ -34,12 +38,12 @@ async function createAccount(
   code: string,
   type: string,
   currency = "USD",
-  parentId?: string
+  parentId?: string,
 ): Promise<string> {
   const id = crypto.randomUUID();
   await query(
     "INSERT INTO accounts (id, organization_id, code, name, type, currency, parent_id, is_active) VALUES ($1, $2, $3, $3, $4, $5, $6, true)",
-    [id, orgId, code, type, currency, parentId]
+    [id, orgId, code, type, currency, parentId],
   );
   return id;
 }
@@ -49,12 +53,12 @@ async function createPeriod(
   name: string,
   startDate: string,
   endDate: string,
-  status = "OPEN"
+  status = "OPEN",
 ): Promise<string> {
   const id = crypto.randomUUID();
   await query(
     "INSERT INTO periods (id, organization_id, name, start_date, end_date, status) VALUES ($1, $2, $3, $4, $5, $6)",
-    [id, orgId, name, startDate, endDate, status]
+    [id, orgId, name, startDate, endDate, status],
   );
   return id;
 }
@@ -68,7 +72,7 @@ async function createJournalEntry(
   postedAt: string | null,
   postedBy: string | null,
   reversalOfId?: string,
-  reversedById?: string
+  reversedById?: string,
 ): Promise<string> {
   const id = crypto.randomUUID();
   await query(
@@ -86,7 +90,7 @@ async function createJournalEntry(
       postedBy,
       reversalOfId || null,
       reversedById || null,
-    ]
+    ],
   );
   return id;
 }
@@ -100,11 +104,22 @@ async function createJournalLine(
   credit: string,
   currency: string = "USD",
   fxRate: string = "1",
-  reportingAmount: string = computeReportingAmount(debit, credit, fxRate)
+  reportingAmount: string = computeReportingAmount(debit, credit, fxRate),
 ): Promise<void> {
   await query(
     `INSERT INTO journal_lines (id, organization_id, journal_entry_id, account_id, line_number, debit, credit, currency, fx_rate, reporting_amount) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [crypto.randomUUID(), orgId, journalEntryId, accountId, lineNumber, debit, credit, currency, fxRate, reportingAmount]
+    [
+      crypto.randomUUID(),
+      orgId,
+      journalEntryId,
+      accountId,
+      lineNumber,
+      debit,
+      credit,
+      currency,
+      fxRate,
+      reportingAmount,
+    ],
   );
 }
 
@@ -115,7 +130,12 @@ async function createPostedEntry(
   entryDate: string,
   description: string,
   postedBy: string,
-  lines?: Array<{ accountId: string; lineNumber: number; debit: string; credit: string }>
+  lines?: Array<{
+    accountId: string;
+    lineNumber: number;
+    debit: string;
+    credit: string;
+  }>,
 ): Promise<{ entryId: string; lineIds: string[] }> {
   const client = await pool.connect();
   try {
@@ -123,7 +143,18 @@ async function createPostedEntry(
     const entryId = crypto.randomUUID();
     await client.query(
       `INSERT INTO journal_entries (id, organization_id, period_id, journal_number, entry_date, description, source_module, currency, posted_at, posted_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [entryId, orgId, periodId, null, entryDate, description, "manual", "USD", null, null]
+      [
+        entryId,
+        orgId,
+        periodId,
+        null,
+        entryDate,
+        description,
+        "manual",
+        "USD",
+        null,
+        null,
+      ],
     );
     // A posted entry must have balanced lines, so when the caller does not
     // care about the specific lines we create a balanced pair (and the two
@@ -136,11 +167,11 @@ async function createPostedEntry(
       const suffix = entryId.slice(0, 8);
       await client.query(
         "INSERT INTO accounts (id, organization_id, code, name, type, currency, is_active) VALUES ($1, $2, $3, $3, $4, $5, true)",
-        [drId, orgId, `AUTO-DR-${suffix}`, "ASSET", "USD"]
+        [drId, orgId, `AUTO-DR-${suffix}`, "ASSET", "USD"],
       );
       await client.query(
         "INSERT INTO accounts (id, organization_id, code, name, type, currency, is_active) VALUES ($1, $2, $3, $3, $4, $5, true)",
-        [crId, orgId, `AUTO-CR-${suffix}`, "INCOME", "USD"]
+        [crId, orgId, `AUTO-CR-${suffix}`, "INCOME", "USD"],
       );
       effectiveLines = [
         { accountId: drId, lineNumber: 1, debit: "100", credit: "0" },
@@ -155,7 +186,18 @@ async function createPostedEntry(
         const r = computeReportingAmount(line.debit, line.credit, "1");
         await client.query(
           `INSERT INTO journal_lines (id, organization_id, journal_entry_id, account_id, line_number, debit, credit, currency, fx_rate, reporting_amount) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [lineId, orgId, entryId, line.accountId, line.lineNumber, line.debit, line.credit, "USD", "1", r]
+          [
+            lineId,
+            orgId,
+            entryId,
+            line.accountId,
+            line.lineNumber,
+            line.debit,
+            line.credit,
+            "USD",
+            "1",
+            r,
+          ],
         );
         lineIds.push(lineId);
       }
@@ -163,7 +205,7 @@ async function createPostedEntry(
     const postedAt = new Date().toISOString();
     await client.query(
       `UPDATE journal_entries SET posted_at = $1, journal_number = $2, posted_by = $3 WHERE id = $4`,
-      [postedAt, journalNumber, postedBy, entryId]
+      [postedAt, journalNumber, postedBy, entryId],
     );
     await client.query("COMMIT");
     return { entryId, lineIds };
@@ -193,14 +235,28 @@ test("A1: jl_debit_credit_sign - rejects row where both debit and credit are pos
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const accountId = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const accountId = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   try {
     await createJournalLine(orgId, entryId, one(accountId).id, 1, "100", "100");
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("jl_debit_credit_sign")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("jl_debit_credit_sign")
+    ) {
       return;
     }
     throw e;
@@ -212,10 +268,24 @@ test("A2: jl_debit_credit_sign - allows row where debit is positive and credit i
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0");
-  const rows = await query("SELECT * FROM journal_lines WHERE journal_entry_id = $1", [entryId]);
+  const rows = await query(
+    "SELECT * FROM journal_lines WHERE journal_entry_id = $1",
+    [entryId],
+  );
   if (rows.length !== 1) throw new Error("Row not inserted");
 });
 
@@ -223,10 +293,24 @@ test("A3: jl_debit_credit_sign - allows row where credit is positive and debit i
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   await createJournalLine(orgId, entryId, one(acc).id, 1, "0", "100");
-  const rows = await query("SELECT * FROM journal_lines WHERE journal_entry_id = $1", [entryId]);
+  const rows = await query(
+    "SELECT * FROM journal_lines WHERE journal_entry_id = $1",
+    [entryId],
+  );
   if (rows.length !== 1) throw new Error("Row not inserted");
 });
 
@@ -234,14 +318,28 @@ test("A4: jl_nonzero - rejects row where both debit and credit are zero", async 
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   try {
     await createJournalLine(orgId, entryId, one(acc).id, 1, "0", "0");
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("jl_nonzero")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("jl_nonzero")
+    ) {
       return;
     }
     throw e;
@@ -252,14 +350,38 @@ test("A5: jl_fx_rate_positive - rejects row where fx_rate is zero", async () => 
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   try {
-    await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0", "USD", "0", "100");
+    await createJournalLine(
+      orgId,
+      entryId,
+      one(acc).id,
+      1,
+      "100",
+      "0",
+      "USD",
+      "0",
+      "100",
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("jl_fx_rate_positive")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("jl_fx_rate_positive")
+    ) {
       return;
     }
     throw e;
@@ -270,10 +392,34 @@ test("A6: jl_fx_rate_positive - allows row where fx_rate is positive", async () 
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
-  await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0", "USD", "1.5", "150");
-  const rows = await query("SELECT * FROM journal_lines WHERE journal_entry_id = $1", [entryId]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
+  await createJournalLine(
+    orgId,
+    entryId,
+    one(acc).id,
+    1,
+    "100",
+    "0",
+    "USD",
+    "1.5",
+    "150",
+  );
+  const rows = await query(
+    "SELECT * FROM journal_lines WHERE journal_entry_id = $1",
+    [entryId],
+  );
   if (rows.length !== 1) throw new Error("Row not inserted");
 });
 
@@ -281,15 +427,39 @@ test("A7: jl_reporting_amount_consistent - rejects mismatched reporting_amount",
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   try {
     // debit=100, credit=0, fx_rate=1, so reporting_amount should be 100, but we pass 999
-    await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0", "USD", "1", "999");
+    await createJournalLine(
+      orgId,
+      entryId,
+      one(acc).id,
+      1,
+      "100",
+      "0",
+      "USD",
+      "1",
+      "999",
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("jl_reporting_amount_consistent")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("jl_reporting_amount_consistent")
+    ) {
       return;
     }
     throw e;
@@ -300,10 +470,34 @@ test("A8: jl_reporting_amount_consistent - allows correct reporting_amount", asy
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
-  await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0", "USD", "1", "100");
-  const rows = await query("SELECT * FROM journal_lines WHERE journal_entry_id = $1", [entryId]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
+  await createJournalLine(
+    orgId,
+    entryId,
+    one(acc).id,
+    1,
+    "100",
+    "0",
+    "USD",
+    "1",
+    "100",
+  );
+  const rows = await query(
+    "SELECT * FROM journal_lines WHERE journal_entry_id = $1",
+    [entryId],
+  );
   if (rows.length !== 1) throw new Error("Row not inserted");
 });
 
@@ -315,11 +509,22 @@ test("B1: je_number_iff_posted - rejects row where posted_at is set but journal_
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   try {
-    await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", "2024-01-01 12:00:00+00", null);
+    await createJournalEntry(
+      orgId,
+      periodId,
+      null,
+      "2024-01-01",
+      "Test",
+      "2024-01-01 12:00:00+00",
+      null,
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("je_number_iff_posted")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("je_number_iff_posted")
+    ) {
       return;
     }
     throw e;
@@ -330,11 +535,22 @@ test("B2: je_number_iff_posted - rejects row where journal_number is set but pos
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   try {
-    await createJournalEntry(orgId, periodId, 1, "2024-01-01", "Test", null, null);
+    await createJournalEntry(
+      orgId,
+      periodId,
+      1,
+      "2024-01-01",
+      "Test",
+      null,
+      null,
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("je_number_iff_posted")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("je_number_iff_posted")
+    ) {
       return;
     }
     throw e;
@@ -344,16 +560,37 @@ test("B2: je_number_iff_posted - rejects row where journal_number is set but pos
 test("B3: je_number_iff_posted - allows row where both journal_number and posted_at are null (unposted)", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const rows = await query("SELECT * FROM journal_entries WHERE description = $1", ["Test"]);
+  await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const rows = await query(
+    "SELECT * FROM journal_entries WHERE description = $1",
+    ["Test"],
+  );
   if (rows.length !== 1) throw new Error("Row not inserted");
 });
 
 test("B4: je_number_iff_posted - allows row where both journal_number and posted_at are set (posted)", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
-  const rows = await query("SELECT * FROM journal_entries WHERE description = $1", ["Test"]);
+  await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Test",
+    "00000000-0000-0000-0000-000000000001",
+  );
+  const rows = await query(
+    "SELECT * FROM journal_entries WHERE description = $1",
+    ["Test"],
+  );
   if (rows.length !== 1) throw new Error("Row not inserted");
 });
 
@@ -361,11 +598,22 @@ test("B5: je_posted_by_iff_posted - rejects posted_at without posted_by", async 
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   try {
-    await createJournalEntry(orgId, periodId, 1, "2024-01-01", "Test", "2024-01-01 12:00:00+00", null);
+    await createJournalEntry(
+      orgId,
+      periodId,
+      1,
+      "2024-01-01",
+      "Test",
+      "2024-01-01 12:00:00+00",
+      null,
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("je_posted_by_iff_posted")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("je_posted_by_iff_posted")
+    ) {
       return;
     }
     throw e;
@@ -377,7 +625,10 @@ test("B6: je_posted_by_iff_posted - allows posted_at with posted_by", async () =
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const byId = "00000000-0000-0000-0000-000000000001";
   await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", byId);
-  const rows = await query("SELECT * FROM journal_entries WHERE description = $1", ["Test"]);
+  const rows = await query(
+    "SELECT * FROM journal_entries WHERE description = $1",
+    ["Test"],
+  );
   if (rows.length !== 1) throw new Error("Row not inserted");
 });
 
@@ -392,7 +643,10 @@ test("C1: period_dates_ordered - rejects period where end_date < start_date", as
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("period_dates_ordered")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("period_dates_ordered")
+    ) {
       return;
     }
     throw e;
@@ -419,7 +673,11 @@ test("C4: period_no_overlap - rejects overlapping period for same organization",
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("conflicting key") || err.message.includes("period_no_overlap") || err.message.includes("ExclusionConstraint")) {
+    if (
+      err.message.includes("conflicting key") ||
+      err.message.includes("period_no_overlap") ||
+      err.message.includes("ExclusionConstraint")
+    ) {
       return;
     }
     throw e;
@@ -438,12 +696,15 @@ test("C6: fiscal_month_range - rejects fiscal_year_start_month < 1", async () =>
   try {
     await query(
       "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
-      [crypto.randomUUID(), orgId, "USD", 0]
+      [crypto.randomUUID(), orgId, "USD", 0],
     );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("fiscal_month_range")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("fiscal_month_range")
+    ) {
       return;
     }
     throw e;
@@ -455,12 +716,15 @@ test("C7: fiscal_month_range - rejects fiscal_year_start_month > 12", async () =
   try {
     await query(
       "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
-      [crypto.randomUUID(), orgId, "USD", 13]
+      [crypto.randomUUID(), orgId, "USD", 13],
     );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("violates constraint") || err.message.includes("fiscal_month_range")) {
+    if (
+      err.message.includes("violates constraint") ||
+      err.message.includes("fiscal_month_range")
+    ) {
       return;
     }
     throw e;
@@ -471,9 +735,12 @@ test("C8: fiscal_month_range - allows fiscal_year_start_month = 1", async () => 
   const orgId = await ensureOrg(crypto.randomUUID());
   await query(
     "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
-    [crypto.randomUUID(), orgId, "USD", 1]
+    [crypto.randomUUID(), orgId, "USD", 1],
   );
-  const rows = await query("SELECT * FROM accounting_configs WHERE organization_id = $1", [orgId]);
+  const rows = await query(
+    "SELECT * FROM accounting_configs WHERE organization_id = $1",
+    [orgId],
+  );
   if (rows.length !== 1) throw new Error("Config not created");
 });
 
@@ -481,9 +748,12 @@ test("C9: fiscal_month_range - allows fiscal_year_start_month = 12", async () =>
   const orgId = await ensureOrg(crypto.randomUUID());
   await query(
     "INSERT INTO accounting_configs (id, organization_id, base_currency, fiscal_year_start_month) VALUES ($1, $2, $3, $4)",
-    [crypto.randomUUID(), orgId, "USD", 12]
+    [crypto.randomUUID(), orgId, "USD", 12],
   );
-  const rows = await query("SELECT * FROM accounting_configs WHERE organization_id = $1", [orgId]);
+  const rows = await query(
+    "SELECT * FROM accounting_configs WHERE organization_id = $1",
+    [orgId],
+  );
   if (rows.length !== 1) throw new Error("Config not created");
 });
 
@@ -495,15 +765,29 @@ test("D1: jl_org_consistency - rejects line with mismatched organization_id", as
   const orgId = await ensureOrg(crypto.randomUUID());
   const org2Id = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
-  const account = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const account = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
   try {
     await createJournalLine(org2Id, entryId, one(account).id, 1, "100", "0");
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("organization mismatch") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("organization mismatch") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -517,13 +801,26 @@ test("D1: jl_org_consistency - rejects line with mismatched organization_id", as
 test("E1: je_immutable - rejects UPDATE on posted journal entry", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
+  const { entryId } = await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Test",
+    "00000000-0000-0000-0000-000000000001",
+  );
   try {
-    await query("UPDATE journal_entries SET description = 'Modified' WHERE id = $1", [entryId]);
+    await query(
+      "UPDATE journal_entries SET description = 'Modified' WHERE id = $1",
+      [entryId],
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("cannot be modified") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("cannot be modified") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -533,13 +830,23 @@ test("E1: je_immutable - rejects UPDATE on posted journal entry", async () => {
 test("E2: je_immutable - rejects DELETE on posted journal entry", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
+  const { entryId } = await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Test",
+    "00000000-0000-0000-0000-000000000001",
+  );
   try {
     await query("DELETE FROM journal_entries WHERE id = $1", [entryId]);
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("cannot be deleted") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("cannot be deleted") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -549,24 +856,52 @@ test("E2: je_immutable - rejects DELETE on posted journal entry", async () => {
 test("E3: je_immutable - allows UPDATE on unposted journal entry", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  await query("UPDATE journal_entries SET description = 'Modified' WHERE id = $1", [entryId]);
-  const rows = await query("SELECT description FROM journal_entries WHERE id = $1", [entryId]);
-  if (one(rows).description !== "Modified") throw new Error("Update did not apply");
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  await query(
+    "UPDATE journal_entries SET description = 'Modified' WHERE id = $1",
+    [entryId],
+  );
+  const rows = await query(
+    "SELECT description FROM journal_entries WHERE id = $1",
+    [entryId],
+  );
+  if (one(rows).description !== "Modified")
+    throw new Error("Update did not apply");
 });
 
 test("E4: jl_immutable - rejects INSERT line on posted journal entry", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const { entryId } = await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Test",
+    "00000000-0000-0000-0000-000000000001",
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   try {
     await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0");
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("cannot add a line") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("cannot add a line") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -578,18 +913,35 @@ test("E5: jl_immutable - rejects DELETE on posted journal line", async () => {
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
-  const rev = await query<{ id: string }>("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "REV"]);
-  const { lineIds } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001", [
-    { accountId: one(acc).id, lineNumber: 1, debit: "100", credit: "0" },
-    { accountId: one(rev).id, lineNumber: 2, debit: "0", credit: "100" },
-  ]);
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
+  const rev = await query<{ id: string }>(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "REV"],
+  );
+  const { lineIds } = await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Test",
+    "00000000-0000-0000-0000-000000000001",
+    [
+      { accountId: one(acc).id, lineNumber: 1, debit: "100", credit: "0" },
+      { accountId: one(rev).id, lineNumber: 2, debit: "0", credit: "100" },
+    ],
+  );
   try {
     await query("DELETE FROM journal_lines WHERE id = $1", [lineIds[0]!]);
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("cannot be modified") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("cannot be modified") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -604,15 +956,38 @@ test("F1: je_assert_balanced - rejects posting unbalanced entry", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
   await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
   await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0");
   try {
-    await query("UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4", ["2024-01-01 12:00:00+00", "00000000-0000-0000-0000-000000000001", 1, entryId]);
+    await query(
+      "UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4",
+      [
+        "2024-01-01 12:00:00+00",
+        "00000000-0000-0000-0000-000000000001",
+        1,
+        entryId,
+      ],
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("unbalanced") || err.message.includes("trigger") || err.message.includes("constraint")) {
+    if (
+      err.message.includes("unbalanced") ||
+      err.message.includes("trigger") ||
+      err.message.includes("constraint")
+    ) {
       return;
     }
     throw e;
@@ -624,13 +999,37 @@ test("F2: je_assert_balanced - allows posting balanced entry", async () => {
   await createAccount(orgId, "CASH", "ASSET");
   await createAccount(orgId, "REV", "INCOME");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
-  const acc = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "CASH"]);
-  const rev = await query("SELECT id FROM accounts WHERE organization_id = $1 AND code = $2", [orgId, "REV"]);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
+  const acc = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "CASH"],
+  );
+  const rev = await query(
+    "SELECT id FROM accounts WHERE organization_id = $1 AND code = $2",
+    [orgId, "REV"],
+  );
   await createJournalLine(orgId, entryId, one(acc).id, 1, "100", "0");
   await createJournalLine(orgId, entryId, one(rev).id, 2, "0", "100");
-  await query("UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4", ["2024-01-01 12:00:00+00", "00000000-0000-0000-0000-000000000001", 1, entryId]);
-  const rows = await query("SELECT * FROM journal_entries WHERE id = $1", [entryId]);
+  await query(
+    "UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4",
+    [
+      "2024-01-01 12:00:00+00",
+      "00000000-0000-0000-0000-000000000001",
+      1,
+      entryId,
+    ],
+  );
+  const rows = await query("SELECT * FROM journal_entries WHERE id = $1", [
+    entryId,
+  ]);
   if (one(rows).posted_at === null) throw new Error("Entry was not posted");
 });
 
@@ -640,14 +1039,39 @@ test("F2: je_assert_balanced - allows posting balanced entry", async () => {
 
 test("G1: je_period_open - rejects posting into CLOSED period", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
-  const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31", "CLOSED");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
+  const periodId = await createPeriod(
+    orgId,
+    "P1",
+    "2024-01-01",
+    "2024-01-31",
+    "CLOSED",
+  );
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
   try {
-    await query("UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4", ["2024-01-01 12:00:00+00", "00000000-0000-0000-0000-000000000001", 1, entryId]);
+    await query(
+      "UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4",
+      [
+        "2024-01-01 12:00:00+00",
+        "00000000-0000-0000-0000-000000000001",
+        1,
+        entryId,
+      ],
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("cannot post") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("cannot post") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -656,14 +1080,39 @@ test("G1: je_period_open - rejects posting into CLOSED period", async () => {
 
 test("G2: je_period_open - rejects posting into LOCKED period", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
-  const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31", "LOCKED");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Test", null, null);
+  const periodId = await createPeriod(
+    orgId,
+    "P1",
+    "2024-01-01",
+    "2024-01-31",
+    "LOCKED",
+  );
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Test",
+    null,
+    null,
+  );
   try {
-    await query("UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4", ["2024-01-01 12:00:00+00", "00000000-0000-0000-0000-000000000001", 1, entryId]);
+    await query(
+      "UPDATE journal_entries SET posted_at = $1, posted_by = $2, journal_number = $3 WHERE id = $4",
+      [
+        "2024-01-01 12:00:00+00",
+        "00000000-0000-0000-0000-000000000001",
+        1,
+        entryId,
+      ],
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("cannot post") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("cannot post") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -672,9 +1121,24 @@ test("G2: je_period_open - rejects posting into LOCKED period", async () => {
 
 test("G3: je_period_open - allows posting into OPEN period", async () => {
   const orgId = await ensureOrg(crypto.randomUUID());
-  const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31", "OPEN");
-  const { entryId } = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Test", "00000000-0000-0000-0000-000000000001");
-  const rows = await query("SELECT * FROM journal_entries WHERE id = $1", [entryId]);
+  const periodId = await createPeriod(
+    orgId,
+    "P1",
+    "2024-01-01",
+    "2024-01-31",
+    "OPEN",
+  );
+  const { entryId } = await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Test",
+    "00000000-0000-0000-0000-000000000001",
+  );
+  const rows = await query("SELECT * FROM journal_entries WHERE id = $1", [
+    entryId,
+  ]);
   if (one(rows).posted_at === null) throw new Error("Entry was not posted");
 });
 
@@ -687,14 +1151,27 @@ test("H1: audit_logs is append-only - rejects UPDATE on audit_logs", async () =>
   const actorId = "00000000-0000-0000-0000-000000000001";
   await query(
     "INSERT INTO audit_logs (id, organization_id, actor_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4, $5, $6)",
-    [crypto.randomUUID(), orgId, actorId, "CREATE", "account", crypto.randomUUID()]
+    [
+      crypto.randomUUID(),
+      orgId,
+      actorId,
+      "CREATE",
+      "account",
+      crypto.randomUUID(),
+    ],
   );
   try {
-    await query("UPDATE audit_logs SET action = 'UPDATED' WHERE organization_id = $1", [orgId]);
+    await query(
+      "UPDATE audit_logs SET action = 'UPDATED' WHERE organization_id = $1",
+      [orgId],
+    );
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("append-only") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("append-only") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -707,14 +1184,17 @@ test("H2: audit_logs is append-only - rejects DELETE on audit_logs", async () =>
   const logId = crypto.randomUUID();
   await query(
     "INSERT INTO audit_logs (id, organization_id, actor_id, action, entity_type, entity_id) VALUES ($1, $2, $3, $4, $5, $6)",
-    [logId, orgId, actorId, "CREATE", "account", crypto.randomUUID()]
+    [logId, orgId, actorId, "CREATE", "account", crypto.randomUUID()],
   );
   try {
     await query("DELETE FROM audit_logs WHERE id = $1", [logId]);
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("append-only") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("append-only") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -728,14 +1208,19 @@ test("H3: period_locks is append-only - rejects UPDATE on period_locks", async (
   const lockId = crypto.randomUUID();
   await query(
     "INSERT INTO period_locks (id, organization_id, period_id, action, reason, actor_id) VALUES ($1, $2, $3, $4, $5, $6)",
-    [lockId, orgId, periodId, "LOCK", "Audit", actorId]
+    [lockId, orgId, periodId, "LOCK", "Audit", actorId],
   );
   try {
-    await query("UPDATE period_locks SET reason = 'Updated' WHERE id = $1", [lockId]);
+    await query("UPDATE period_locks SET reason = 'Updated' WHERE id = $1", [
+      lockId,
+    ]);
     throw new Error("Should have failed");
   } catch (e: unknown) {
     const err = e as Error;
-    if (err.message.includes("append-only") || err.message.includes("trigger")) {
+    if (
+      err.message.includes("append-only") ||
+      err.message.includes("trigger")
+    ) {
       return;
     }
     throw e;
@@ -754,13 +1239,25 @@ test("E6: je_immutable - DELETE on an UNPOSTED entry actually deletes it", async
   // entry a silent no-op: no error, row still there.
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Draft", null, null);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Draft",
+    null,
+    null,
+  );
 
   await query("DELETE FROM journal_entries WHERE id = $1", [entryId]);
 
-  const rows = await query("SELECT id FROM journal_entries WHERE id = $1", [entryId]);
+  const rows = await query("SELECT id FROM journal_entries WHERE id = $1", [
+    entryId,
+  ]);
   if (rows.length !== 0) {
-    throw new Error("draft entry survived DELETE - the trigger cancelled the operation");
+    throw new Error(
+      "draft entry survived DELETE - the trigger cancelled the operation",
+    );
   }
 });
 
@@ -768,18 +1265,31 @@ test("E7: jl_immutable - DELETE on a line of an UNPOSTED entry actually deletes 
   const orgId = await ensureOrg(crypto.randomUUID());
   const accountId = await createAccount(orgId, "CASH", "ASSET");
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
-  const entryId = await createJournalEntry(orgId, periodId, null, "2024-01-01", "Draft", null, null);
+  const entryId = await createJournalEntry(
+    orgId,
+    periodId,
+    null,
+    "2024-01-01",
+    "Draft",
+    null,
+    null,
+  );
   await createJournalLine(orgId, entryId, accountId, 1, "100", "0");
 
   const before = await query<{ id: string }>(
     "SELECT id FROM journal_lines WHERE journal_entry_id = $1",
-    [entryId]
+    [entryId],
   );
   await query("DELETE FROM journal_lines WHERE id = $1", [one(before).id]);
 
-  const after = await query("SELECT id FROM journal_lines WHERE journal_entry_id = $1", [entryId]);
+  const after = await query(
+    "SELECT id FROM journal_lines WHERE journal_entry_id = $1",
+    [entryId],
+  );
   if (after.length !== 0) {
-    throw new Error("draft line survived DELETE - the trigger cancelled the operation");
+    throw new Error(
+      "draft line survived DELETE - the trigger cancelled the operation",
+    );
   }
 });
 
@@ -792,8 +1302,22 @@ test("E8: je_immutable - reversal link is allowed on a posted entry with NULL so
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const actor = "00000000-0000-0000-0000-000000000001";
 
-  const original = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Original", actor);
-  const reversal = await createPostedEntry(orgId, periodId, 2, "2024-01-02", "Reversal", actor);
+  const original = await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Original",
+    actor,
+  );
+  const reversal = await createPostedEntry(
+    orgId,
+    periodId,
+    2,
+    "2024-01-02",
+    "Reversal",
+    actor,
+  );
 
   // This is the only UPDATE a posted entry may ever accept.
   await query("UPDATE journal_entries SET reversed_by_id = $1 WHERE id = $2", [
@@ -803,7 +1327,7 @@ test("E8: je_immutable - reversal link is allowed on a posted entry with NULL so
 
   const rows = await query<{ reversed_by_id: string | null }>(
     "SELECT reversed_by_id FROM journal_entries WHERE id = $1",
-    [original.entryId]
+    [original.entryId],
   );
   if (one(rows).reversed_by_id !== reversal.entryId) {
     throw new Error("reversal link was not written");
@@ -816,13 +1340,27 @@ test("E9: je_immutable - any OTHER update to a posted entry is still rejected", 
   const orgId = await ensureOrg(crypto.randomUUID());
   const periodId = await createPeriod(orgId, "P1", "2024-01-01", "2024-01-31");
   const actor = "00000000-0000-0000-0000-000000000001";
-  const posted = await createPostedEntry(orgId, periodId, 1, "2024-01-01", "Original", actor);
-  const reversal = await createPostedEntry(orgId, periodId, 2, "2024-01-02", "Reversal", actor);
+  const posted = await createPostedEntry(
+    orgId,
+    periodId,
+    1,
+    "2024-01-01",
+    "Original",
+    actor,
+  );
+  const reversal = await createPostedEntry(
+    orgId,
+    periodId,
+    2,
+    "2024-01-02",
+    "Reversal",
+    actor,
+  );
 
   try {
     await query(
       "UPDATE journal_entries SET reversed_by_id = $1, description = 'Tampered' WHERE id = $2",
-      [reversal.entryId, posted.entryId]
+      [reversal.entryId, posted.entryId],
     );
     throw new Error("Should have failed");
   } catch (e: unknown) {

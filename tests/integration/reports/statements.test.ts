@@ -264,9 +264,9 @@ test("PL7: four-decimal amounts survive exactly", async () => {
 
 test("PL8: an inverted date range is refused", async () => {
   const scope = await scopeWithOrg();
-  await expect(
-    profitAndLoss(scope, YEAR_END, YEAR_START),
-  ).rejects.toThrow(/before/i);
+  await expect(profitAndLoss(scope, YEAR_END, YEAR_START)).rejects.toThrow(
+    /before/i,
+  );
 });
 
 // ── Balance sheet ───────────────────────────────────────────────────

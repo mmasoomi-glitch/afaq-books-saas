@@ -49,9 +49,8 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-const { requirePageScope, optionalPageScope } = await import(
-  "../../../src/server/next/page-scope"
-);
+const { requirePageScope, optionalPageScope } =
+  await import("../../../src/server/next/page-scope");
 
 const PASSWORD = "correct horse battery staple";
 
@@ -159,7 +158,9 @@ test("P4: all four authorization failures are indistinguishable", async () => {
   expect(notAMember).toBe(NOT_FOUND);
   expect(noSuchSession).toBe(NOT_FOUND);
   expect(sessionExpired).toBe(NOT_FOUND);
-  expect(new Set([noSuchOrg, notAMember, noSuchSession, sessionExpired]).size).toBe(1);
+  expect(
+    new Set([noSuchOrg, notAMember, noSuchSession, sessionExpired]).size,
+  ).toBe(1);
 });
 
 test("P5: revoking a membership takes effect on the next page load", async () => {

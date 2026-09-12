@@ -10,7 +10,10 @@ import { createOrganizationHandler } from "../../../server/http/handlers/organiz
  * existence a 401 could confirm — the enumeration argument that shapes every
  * other route simply does not apply.
  */
-export const POST = toRouteHandler(createOrganizationHandler(), adapterConfig());
+export const POST = toRouteHandler(
+  createOrganizationHandler(),
+  adapterConfig(),
+);
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

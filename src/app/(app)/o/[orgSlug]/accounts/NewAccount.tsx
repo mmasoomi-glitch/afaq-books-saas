@@ -38,7 +38,9 @@ export default function NewAccount({ orgSlug }: NewAccountProps) {
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setNotice(undefined);
     setPending(true);

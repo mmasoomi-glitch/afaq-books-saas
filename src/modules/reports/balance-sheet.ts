@@ -11,7 +11,11 @@ import type { LedgerScope } from "../ledger/scope";
  */
 export class BalanceSheetUnbalancedError extends Error {
   readonly code = "REPORT_BS_UNBALANCED";
-  constructor(assets: string, liabilitiesPlusEquity: string, difference: string) {
+  constructor(
+    assets: string,
+    liabilitiesPlusEquity: string,
+    difference: string,
+  ) {
     super(
       `balance sheet does not balance: assets ${assets} != ` +
         `liabilities + equity + retained earnings ${liabilitiesPlusEquity} ` +
@@ -147,7 +151,9 @@ export async function balanceSheet(
   // balance sheet then failed its own identity check by exactly twice the
   // expenses. Expenses are debits, so credit - debit makes them negative on
   // their own, which is precisely what retained earnings needs.
-  const earnings = await prisma.$queryRaw<Array<{ retained_earnings: unknown }>>`
+  const earnings = await prisma.$queryRaw<
+    Array<{ retained_earnings: unknown }>
+  >`
     SELECT
       COALESCE(SUM(jl.credit - jl.debit), 0) AS retained_earnings
     FROM journal_lines jl

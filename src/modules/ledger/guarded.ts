@@ -8,11 +8,7 @@ import type {
   PostJournalInput,
   PostedEntry,
 } from "./posting";
-import {
-  createAccount,
-  getAccount,
-  listAccounts,
-} from "./accounts";
+import { createAccount, getAccount, listAccounts } from "./accounts";
 import {
   closePeriod,
   createPeriod,
@@ -20,9 +16,7 @@ import {
   unlockPeriod,
   listPeriods,
 } from "./periods";
-import { postJournalEntry, reverseJournalEntry,
-  listEntries,
-} from "./posting";
+import { postJournalEntry, reverseJournalEntry, listEntries } from "./posting";
 
 /**
  * Authorization-gated wrappers around the ledger services.
@@ -115,7 +109,12 @@ export async function guardedReverseJournalEntry(
   reason: string,
 ): Promise<PostedEntry> {
   assertCanDo(scope, "ledger.reverse");
-  return reverseJournalEntry(toLedgerScope(scope), originalId, asOfDate, reason);
+  return reverseJournalEntry(
+    toLedgerScope(scope),
+    originalId,
+    asOfDate,
+    reason,
+  );
 }
 
 export async function guardedListEntries(
@@ -150,10 +149,7 @@ export async function guardedListPeriods(scope: OrgScope): Promise<Period[]> {
  * AND the shapes they take. Nothing outside it needs to know that `posting.ts`
  * exists.
  */
-export type {
-  CreateAccountInput,
-  CreatePeriodInput,
-} from "./scope";
+export type { CreateAccountInput, CreatePeriodInput } from "./scope";
 export type {
   AccountTotals,
   EntrySummary,

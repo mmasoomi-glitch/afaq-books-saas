@@ -39,11 +39,7 @@ function newEmail(): string {
   return `${randomUUID()}@example.test`;
 }
 
-function req(
-  method: HttpMethod,
-  session: string,
-  body?: unknown,
-): HttpRequest {
+function req(method: HttpMethod, session: string, body?: unknown): HttpRequest {
   return {
     method,
     path: "/",
@@ -92,7 +88,10 @@ async function burn(userId: string, n: number): Promise<void> {
 test("W1: a write under the limit is not affected", async () => {
   const o = await owner();
 
-  const res = await withOrgScope(o.slug, createAccountHandler())(
+  const res = await withOrgScope(
+    o.slug,
+    createAccountHandler(),
+  )(
     req("POST", o.token, {
       code: "1000",
       name: "Cash",
@@ -108,7 +107,10 @@ test("W2: the write past the limit is 429 with a retry-after", async () => {
   const o = await owner();
   await burn(o.userId, LIMIT);
 
-  const res = await withOrgScope(o.slug, createAccountHandler())(
+  const res = await withOrgScope(
+    o.slug,
+    createAccountHandler(),
+  )(
     req("POST", o.token, {
       code: "1000",
       name: "Cash",
@@ -128,7 +130,10 @@ test("W3: a refused write does not happen", async () => {
   const o = await owner();
   await burn(o.userId, LIMIT);
 
-  await withOrgScope(o.slug, createAccountHandler())(
+  await withOrgScope(
+    o.slug,
+    createAccountHandler(),
+  )(
     req("POST", o.token, {
       code: "1000",
       name: "Cash",
@@ -160,7 +165,10 @@ test("W5: the budget is per user, not per organization", async () => {
   const b = await owner();
   await burn(a.userId, LIMIT);
 
-  const refused = await withOrgScope(a.slug, createAccountHandler())(
+  const refused = await withOrgScope(
+    a.slug,
+    createAccountHandler(),
+  )(
     req("POST", a.token, {
       code: "1000",
       name: "Cash",
@@ -170,7 +178,10 @@ test("W5: the budget is per user, not per organization", async () => {
   );
   expect(refused.status).toBe(429);
 
-  const allowed = await withOrgScope(b.slug, createAccountHandler())(
+  const allowed = await withOrgScope(
+    b.slug,
+    createAccountHandler(),
+  )(
     req("POST", b.token, {
       code: "1000",
       name: "Cash",
@@ -191,7 +202,10 @@ test("W6: exhausting the budget in one organization stops you in another", async
   await createOrganization(a.userId, { slug: second, name: "Second" });
   await burn(a.userId, LIMIT);
 
-  const res = await withOrgScope(second, createAccountHandler())(
+  const res = await withOrgScope(
+    second,
+    createAccountHandler(),
+  )(
     req("POST", a.token, {
       code: "1000",
       name: "Cash",
@@ -217,7 +231,10 @@ test("W8: an unauthenticated write is still 404, not 429", async () => {
   const o = await owner();
   await burn(o.userId, LIMIT);
 
-  const res = await withOrgScope(o.slug, createAccountHandler())({
+  const res = await withOrgScope(
+    o.slug,
+    createAccountHandler(),
+  )({
     method: "POST",
     path: "/",
     headers: { [CSRF_HEADER]: CSRF },
@@ -239,7 +256,10 @@ test("W9: creating organizations is limited too, on the same budget", async () =
   await burn(userId, LIMIT);
 
   const res = await createOrganizationHandler()(
-    req("POST", rawToken, { slug: `org-${randomUUID().slice(0, 8)}`, name: "X" }),
+    req("POST", rawToken, {
+      slug: `org-${randomUUID().slice(0, 8)}`,
+      name: "X",
+    }),
   );
 
   expect(res.status).toBe(429);
@@ -253,7 +273,10 @@ test("W10: the budget is shared, not doubled", async () => {
   const o = await owner();
   await burn(o.userId, LIMIT);
 
-  const account = await withOrgScope(o.slug, createAccountHandler())(
+  const account = await withOrgScope(
+    o.slug,
+    createAccountHandler(),
+  )(
     req("POST", o.token, {
       code: "1000",
       name: "Cash",
@@ -262,7 +285,10 @@ test("W10: the budget is shared, not doubled", async () => {
     }),
   );
   const organization = await createOrganizationHandler()(
-    req("POST", o.token, { slug: `org-${randomUUID().slice(0, 8)}`, name: "X" }),
+    req("POST", o.token, {
+      slug: `org-${randomUUID().slice(0, 8)}`,
+      name: "X",
+    }),
   );
 
   expect(account.status).toBe(429);

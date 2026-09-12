@@ -2,10 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, expect, test } from "vitest";
 import { resetDb } from "../../setup";
 import { registerUser } from "../../../src/server/auth/session";
-import {
-  CSRF_COOKIE,
-  SESSION_COOKIE,
-} from "../../../src/server/http/cookies";
+import { CSRF_COOKIE, SESSION_COOKIE } from "../../../src/server/http/cookies";
 import type { HttpRequest } from "../../../src/server/http/types";
 import { json, noContent } from "../../../src/server/http/types";
 import {
@@ -180,7 +177,9 @@ test("A6: x-forwarded-for is ignored unless it is explicitly trusted", async () 
   // default gives an attacker a fresh rate-limit counter per request, which is
   // an unlimited budget of password guesses against a limiter that looks like
   // it is working.
-  const req = request("POST", { headers: { "x-forwarded-for": "198.51.100.1" } });
+  const req = request("POST", {
+    headers: { "x-forwarded-for": "198.51.100.1" },
+  });
 
   expect(clientIp(req)).toBeUndefined();
   expect(clientIp(req, {})).toBeUndefined();
@@ -206,7 +205,10 @@ test("A8: a blank or absent forwarded header yields no address", async () => {
     clientIp(request("POST", { headers: { "x-forwarded-for": "  " } }), config),
   ).toBeUndefined();
   expect(
-    clientIp(request("POST", { headers: { "x-forwarded-for": " , 1.2.3.4" } }), config),
+    clientIp(
+      request("POST", { headers: { "x-forwarded-for": " , 1.2.3.4" } }),
+      config,
+    ),
   ).toBeUndefined();
 });
 
@@ -304,7 +306,7 @@ test("A15: an unrecognised exception becomes a generic 500", async () => {
   // must not carry the detail — an exception routinely names a column, a file
   // or a constraint.
   const exploding = async (_req: HttpRequest): Promise<never> => {
-    throw new Error("relation \"secret_table\" does not exist");
+    throw new Error('relation "secret_table" does not exist');
   };
 
   const res = await toRouteHandler(exploding)(request("POST", { body: {} }));
@@ -327,13 +329,19 @@ test("A16: a trusted address reaches the rate limiter as the counter key", async
 
   for (let i = 0; i < 5; i += 1) {
     const res = await route(
-      request("POST", { headers, body: { email: newEmail(), password: PASSWORD } }),
+      request("POST", {
+        headers,
+        body: { email: newEmail(), password: PASSWORD },
+      }),
     );
     expect(res.status).toBe(401);
   }
 
   const blocked = await route(
-    request("POST", { headers, body: { email: newEmail(), password: PASSWORD } }),
+    request("POST", {
+      headers,
+      body: { email: newEmail(), password: PASSWORD },
+    }),
   );
   expect(blocked.status).toBe(429);
   expect(blocked.headers.get("retry-after")).toBe("1");
@@ -418,7 +426,10 @@ test("A17: untrusted, the same flood is not throttled by address", async () => {
 
   for (let i = 0; i < 6; i += 1) {
     const res = await route(
-      request("POST", { headers, body: { email: newEmail(), password: PASSWORD } }),
+      request("POST", {
+        headers,
+        body: { email: newEmail(), password: PASSWORD },
+      }),
     );
     expect(res.status).toBe(401);
   }

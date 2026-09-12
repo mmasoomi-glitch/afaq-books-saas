@@ -16,7 +16,13 @@ interface PageProps {
 }
 
 /** Assets, then liabilities, equity, income, expense — the order a reader expects. */
-const TYPE_ORDER = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"] as const;
+const TYPE_ORDER = [
+  "ASSET",
+  "LIABILITY",
+  "EQUITY",
+  "INCOME",
+  "EXPENSE",
+] as const;
 
 export default async function AccountsPage({ params }: PageProps) {
   const { orgSlug } = await params;
@@ -34,13 +40,12 @@ export default async function AccountsPage({ params }: PageProps) {
     <main>
       <h1>Chart of accounts</h1>
       <p>
-        {scope.organizationSlug} · <a href={`/o/${orgSlug}/reports/trial-balance`}>
-          Trial balance
-        </a>
- {" · "}
- <a href={`/o/${orgSlug}/reports/profit-and-loss`}>Profit and loss</a>
- {" · "}
- <a href={`/o/${orgSlug}/reports/balance-sheet`}>Balance sheet</a>
+        {scope.organizationSlug} ·{" "}
+        <a href={`/o/${orgSlug}/reports/trial-balance`}>Trial balance</a>
+        {" · "}
+        <a href={`/o/${orgSlug}/reports/profit-and-loss`}>Profit and loss</a>
+        {" · "}
+        <a href={`/o/${orgSlug}/reports/balance-sheet`}>Balance sheet</a>
         {" · "}
         <a href={`/o/${orgSlug}/entries`}>Journal</a>
         {" · "}

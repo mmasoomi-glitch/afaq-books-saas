@@ -8,7 +8,12 @@ import {
   expireCookie,
   serializeCookie,
 } from "../cookies";
-import { CsrfError, assertSameOrigin, issueCsrfToken, verifyCsrf } from "../csrf";
+import {
+  CsrfError,
+  assertSameOrigin,
+  issueCsrfToken,
+  verifyCsrf,
+} from "../csrf";
 import { AuthError } from "../../auth/errors";
 import {
   AlreadyAMemberError,
@@ -152,7 +157,10 @@ export function toErrorResponse(err: unknown): HttpResponse {
     return error(401, err.code, err.message);
   }
 
-  if (err instanceof SessionExpiredError || err instanceof SessionNotFoundError) {
+  if (
+    err instanceof SessionExpiredError ||
+    err instanceof SessionNotFoundError
+  ) {
     // Merged deliberately. "Expired" and "no such session" are different facts,
     // and the difference is worth something to an attacker holding a guessed or
     // stolen token: "expired" confirms the token was once real, which means the
@@ -176,7 +184,10 @@ export function toErrorResponse(err: unknown): HttpResponse {
   // scoped routes use it: "that user is not a member of this organization" and
   // "there is no such user" are different facts, and confirming which one
   // applies turns an administration screen into a directory lookup.
-  if (err instanceof UserNotFoundError || err instanceof NotAMemberOfThisOrgError) {
+  if (
+    err instanceof UserNotFoundError ||
+    err instanceof NotAMemberOfThisOrgError
+  ) {
     return error(404, err.code, err.message);
   }
 

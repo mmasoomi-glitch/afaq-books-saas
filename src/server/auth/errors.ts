@@ -10,21 +10,30 @@ export class AuthError extends Error {
 
 export class NotAMemberError extends AuthError {
   constructor() {
-    super("organization not found or you are not a member", "AUTH_NOT_A_MEMBER");
+    super(
+      "organization not found or you are not a member",
+      "AUTH_NOT_A_MEMBER",
+    );
     this.name = "NotAMemberError";
   }
 }
 
 export class ForbiddenError extends AuthError {
   constructor(action: string, role: string) {
-    super(`user with role ${role} is not authorized to perform action ${action}`, "AUTH_FORBIDDEN");
+    super(
+      `user with role ${role} is not authorized to perform action ${action}`,
+      "AUTH_FORBIDDEN",
+    );
     this.name = "ForbiddenError";
   }
 }
 
 export class OrganizationNotFoundError extends AuthError {
   constructor() {
-    super("organization not found or you are not a member", "AUTH_ORG_NOT_FOUND");
+    super(
+      "organization not found or you are not a member",
+      "AUTH_ORG_NOT_FOUND",
+    );
     this.name = "OrganizationNotFoundError";
   }
 }

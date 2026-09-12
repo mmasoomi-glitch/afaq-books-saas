@@ -3,7 +3,11 @@ import { afterAll, beforeEach, expect, test } from "vitest";
 import { Prisma } from "@prisma/client";
 import { ensureOrg, pool, resetDb } from "../../setup";
 import { prisma } from "../../../src/server/db/client";
-import { createAccount, getAccount, listAccounts } from "../../../src/modules/ledger/accounts";
+import {
+  createAccount,
+  getAccount,
+  listAccounts,
+} from "../../../src/modules/ledger/accounts";
 import {
   closePeriod,
   createPeriod,

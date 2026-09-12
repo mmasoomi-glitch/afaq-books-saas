@@ -44,7 +44,9 @@ export function middleware(request: NextRequest): NextResponse {
   // invalidate the one a request already in flight is carrying, so a user with
   // two tabs open would get a spurious 403 on whichever submitted second — and
   // it would look like a random failure rather than a rotation policy.
-  const token = reused ? existing : toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const token = reused
+    ? existing
+    : toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
 
   // How the value reaches a SERVER COMPONENT.
   //

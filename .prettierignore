@@ -1,0 +1,26 @@
+# Build output and coverage — generated, never edited by hand.
+.next/
+out/
+coverage/
+
+# Dependencies and the lockfile. The lockfile is a resolver artefact; a
+# formatter rewriting it would produce a diff that means nothing and would
+# fight pnpm on the next install.
+node_modules/
+pnpm-lock.yaml
+
+# Applied migration history.
+#
+# These files have already run against real databases. Their checksums are
+# recorded in _prisma_migrations, so rewriting one — even only its whitespace —
+# makes Prisma report the migration as modified and refuse to proceed. They are
+# a record of what happened, not source that can be reformatted.
+prisma/migrations/
+
+# Markdown is deliberately not formatted.
+#
+# The governance documents are hand-wrapped prose where the line breaks carry
+# intent, and the tables are aligned by hand. Reformatting them would produce
+# enormous diffs that bury the real edits — which is the opposite of what these
+# documents are for.
+*.md

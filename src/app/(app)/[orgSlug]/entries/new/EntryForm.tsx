@@ -77,6 +77,20 @@ function fromTenThousandths(value: number): string {
   return `${sign}${String(whole)}.${fraction}`;
 }
 
+/** The server's own explanation of a 422, or a safe fallback. */
+function refusalMessage(body: unknown): string {
+  if (typeof body === "object" && body !== null && "error" in body) {
+    const wrapper: unknown = body.error;
+    if (typeof wrapper === "object" && wrapper !== null && "message" in wrapper) {
+      const message: unknown = wrapper.message;
+      if (typeof message === "string" && message !== "") {
+        return `The entry was refused: ${message}.`;
+      }
+    }
+  }
+  return "The entry was refused.";
+}
+
 function blankLine(): Line {
   return {
     key: crypto.randomUUID(),
@@ -188,17 +202,18 @@ export default function EntryForm({
         return;
       }
 
-      // A 500 here is very often the database refusing the entry: unbalanced,
-      // a closed or locked period, an account from another organization. The
-      // message says so rather than "something went wrong", because those are
-      // the causes a person can actually act on — and it does NOT claim to know
-      // which, because the server does not tell us.
-      setNotice({
-        kind: "error",
-        text:
-          "The entry was refused. The most likely reasons are that debits do " +
-          "not equal credits, or that the period is closed or locked.",
-      });
+      if (response.status === 422) {
+        // The server names what the user did — "debits do not equal credits",
+        // "that accounting period is closed or locked" — so this shows its
+        // message rather than guessing. It is safe to surface precisely because
+        // 422 is reserved for refusals that are facts about the submission; a
+        // 500 body is not shown, and never should be.
+        const body: unknown = await response.json();
+        setNotice({ kind: "error", text: refusalMessage(body) });
+        return;
+      }
+
+      setNotice({ kind: "error", text: "Something went wrong." });
     } catch {
       setNotice({ kind: "error", text: "Could not reach the server." });
     } finally {

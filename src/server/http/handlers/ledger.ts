@@ -79,6 +79,87 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+/**
+ * The ledger invariants live in the DATABASE, and the ones a user can trip are
+ * facts about what they submitted — not bugs.
+ *
+ * Found by posting a deliberately unbalanced entry against the running server:
+ * it was correctly refused, and answered **500 "internal error"**. The refusal
+ * was right and the status was wrong. `toErrorResponse` rethrows what it does
+ * not recognise, so a constraint violation fell through to the adapter's
+ * catch-all, and the caller was told nothing they could act on.
+ *
+ * 422 rather than 400: the body was well-formed and every field was the right
+ * type. What failed was a rule about the relationship between the fields, which
+ * is precisely what 422 means.
+ *
+ * The messages name what the USER did, never the constraint. "Debits do not
+ * equal credits" is a fact about their entry; `je_balanced_check` is a fact
+ * about our schema, and the second is not theirs to know.
+ *
+ * Anything NOT in this table still becomes a 500, deliberately. A constraint
+ * nobody anticipated is a bug until somebody decides otherwise, and quietly
+ * turning every database error into a 422 would hide the next real one.
+ */
+const LEDGER_REFUSALS: readonly {
+  readonly constraint: string;
+  readonly code: string;
+  readonly message: string;
+}[] = [
+  {
+    constraint: "je_balanced_check",
+    code: "ENTRY_UNBALANCED",
+    message: "debits do not equal credits",
+  },
+  {
+    constraint: "je_period_open",
+    code: "PERIOD_NOT_OPEN",
+    message: "that accounting period is closed or locked",
+  },
+  {
+    constraint: "jl_org_consistency",
+    code: "ACCOUNT_NOT_IN_ORGANIZATION",
+    message: "one of the accounts does not belong to this organization",
+  },
+  {
+    constraint: "jl_debit_credit_sign",
+    code: "LINE_INVALID",
+    message: "a line must have exactly one of debit or credit, and it must be positive",
+  },
+  {
+    constraint: "jl_nonzero",
+    code: "LINE_INVALID",
+    message: "a line cannot be zero on both sides",
+  },
+  {
+    constraint: "period_no_overlap",
+    code: "PERIOD_OVERLAPS",
+    message: "that period overlaps one that already exists",
+  },
+  {
+    constraint: "je_immutable",
+    code: "ENTRY_IMMUTABLE",
+    message: "a posted entry cannot be changed; post a reversal instead",
+  },
+  {
+    constraint: "jl_immutable",
+    code: "ENTRY_IMMUTABLE",
+    message: "a posted entry cannot be changed; post a reversal instead",
+  },
+];
+
+function ledgerRefusal(err: unknown): HttpResponse | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const text = "message" in err ? String(err.message) : "";
+
+  const match = LEDGER_REFUSALS.find((refusal) =>
+    text.includes(refusal.constraint),
+  );
+  return match === undefined
+    ? undefined
+    : error(422, match.code, match.message);
+}
+
 function guarded(handler: ScopedHandler): ScopedHandler {
   return async (req, scope) => {
     try {
@@ -88,6 +169,10 @@ function guarded(handler: ScopedHandler): ScopedHandler {
       if (isUniqueViolation(err)) {
         return error(409, "ALREADY_EXISTS", "that code is already in use");
       }
+
+      const refusal = ledgerRefusal(err);
+      if (refusal !== undefined) return refusal;
+
       return toErrorResponse(err);
     }
   };

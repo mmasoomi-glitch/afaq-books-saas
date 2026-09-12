@@ -10,6 +10,12 @@ import {
 } from "../cookies";
 import { CsrfError, assertSameOrigin, issueCsrfToken, verifyCsrf } from "../csrf";
 import { AuthError } from "../../auth/errors";
+import {
+  AlreadyAMemberError,
+  NotAMemberOfThisOrgError,
+  SlugTakenError,
+  UserNotFoundError,
+} from "../../auth/membership";
 import { RateLimitedError } from "../../auth/rate-limit";
 import {
   EmailAlreadyRegisteredError,
@@ -159,6 +165,26 @@ export function toErrorResponse(err: unknown): HttpResponse {
     return error(409, err.code, err.message);
   }
 
+  // Conflicts, not refusals. The caller is permitted to do this; the state
+  // simply already exists, and 403 would tell them to go and get permission
+  // they already have.
+  if (err instanceof AlreadyAMemberError || err instanceof SlugTakenError) {
+    return error(409, err.code, err.message);
+  }
+
+  // The TARGET could not be found. 404 rather than 403 for the same reason
+  // scoped routes use it: "that user is not a member of this organization" and
+  // "there is no such user" are different facts, and confirming which one
+  // applies turns an administration screen into a directory lookup.
+  if (err instanceof UserNotFoundError || err instanceof NotAMemberOfThisOrgError) {
+    return error(404, err.code, err.message);
+  }
+
+  // Everything else that is an AuthError is a refusal: ForbiddenError,
+  // RoleEscalationError, OwnershipTransferError, CannotTransferToSelfError.
+  // 403 is correct for all of them — the caller is authenticated, is a member,
+  // and is not allowed to do this particular thing. The message names the rule
+  // rather than the data, so it reveals nothing about the organization.
   if (err instanceof AuthError) {
     return error(403, err.code, err.message);
   }

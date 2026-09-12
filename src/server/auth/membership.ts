@@ -377,3 +377,83 @@ export async function transferOwnership(
     });
   });
 }
+
+export interface MemberSummary {
+  readonly userId: string;
+  readonly email: string;
+  readonly name: string | null;
+  readonly role: MembershipRole;
+  readonly since: Date;
+}
+
+/**
+ * The members of one organization.
+ *
+ * Scoped, permissioned and ordered — never a bare `findMany` over memberships.
+ * The `organizationId` comes from the resolved scope rather than from anything
+ * the caller supplied, which is what makes "list the members" incapable of
+ * listing somebody else's.
+ */
+export async function listMembers(scope: OrgScope): Promise<MemberSummary[]> {
+  assertCanDo(scope, "member.read");
+
+  const rows = await prisma.membership.findMany({
+    where: { organizationId: scope.organizationId },
+    select: {
+      userId: true,
+      role: true,
+      createdAt: true,
+      user: { select: { email: true, name: true } },
+    },
+    // Owners first, then by longevity. A member list sorted by role is the one
+    // a person reading it actually wants: the question is almost always "who
+    // can approve this".
+    orderBy: [{ role: "asc" }, { createdAt: "asc" }],
+  });
+
+  return rows
+    .map((row) => ({
+      userId: row.userId,
+      email: row.user.email,
+      name: row.user.name,
+      role: row.role,
+      since: row.createdAt,
+    }))
+    .sort((a, b) => ROLE_RANK[b.role] - ROLE_RANK[a.role]);
+}
+
+export interface OrganizationSummary {
+  readonly organizationId: string;
+  readonly slug: string;
+  readonly name: string;
+  readonly role: MembershipRole;
+}
+
+/**
+ * Every organization this user belongs to.
+ *
+ * Takes a bare `userId` rather than a scope, because it is what runs BEFORE any
+ * organization has been chosen — it is the list you pick from. There is no
+ * organization to authorize against yet, and the authorization it does perform
+ * is structural: the query is driven from the user's own memberships, so it
+ * cannot return an organization they are not in.
+ */
+export async function listOrganizations(
+  userId: string,
+): Promise<OrganizationSummary[]> {
+  const rows = await prisma.membership.findMany({
+    where: { userId },
+    select: {
+      role: true,
+      organization: { select: { id: true, slug: true, name: true } },
+    },
+    orderBy: { organization: { name: "asc" } },
+  });
+
+  return rows.map((row) => ({
+    organizationId: row.organization.id,
+    slug: row.organization.slug,
+    name: row.organization.name,
+    role: row.role,
+  }));
+}

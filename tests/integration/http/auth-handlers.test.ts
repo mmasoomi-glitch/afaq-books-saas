@@ -565,3 +565,29 @@ test("H28: the csrf failure body never says which half was wrong", async () => {
 
   expect(new Set(bodies).size).toBe(1);
 });
+
+test("H29: signing in ROTATES the csrf token", async () => {
+  // Found by running the whole flow with curl: a client holding the token from
+  // the sign-in PAGE and reusing it after sign-in gets a 403, because the
+  // sign-in response issued a new one.
+  //
+  // The rotation is correct and worth keeping — reissuing on a privilege change
+  // is what stops a token planted before authentication from remaining valid
+  // after it. But it means any client caching the value at render time breaks
+  // the first request it makes afterwards, which is precisely why
+  // `MemberAdmin` and `NewOrganization` read the cookie at CALL time.
+  //
+  // Pinned so that removing the rotation is a deliberate decision rather than a
+  // tidy-up, and so the call-time reads have a stated reason to exist.
+  const email = newEmail();
+  await registerUser(email, PASSWORD);
+
+  const res = await signInHandler()(
+    req("POST", { body: { email, password: PASSWORD } }),
+  );
+
+  expect(res.status).toBe(200);
+  const issued = cookieValue(res, CSRF_COOKIE);
+  expect(issued).not.toBe(CSRF);
+  expect(issued).toMatch(/^[A-Za-z0-9_-]{43}$/);
+});

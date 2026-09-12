@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
 import {
   MAX_AUDIT_PAGE,
   auditActions,
@@ -44,7 +44,7 @@ function describe(value: unknown): string {
 
 export default async function AuditPage({ params, searchParams }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
 
   if (!can(scope.role, "audit.read")) {
     // Refused before anything is read. `listAuditLog` refuses too — this is

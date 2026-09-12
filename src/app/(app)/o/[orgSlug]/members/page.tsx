@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
 import {
   ROLE_RANK,
   listMembers,
@@ -21,7 +21,7 @@ interface PageProps {
 
 export default async function MembersPage({ params }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
   const members = await listMembers(scope);
 
   // What the VIEWER is shown and what the OWNER is shown differ, and the

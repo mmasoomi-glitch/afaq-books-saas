@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
 import { guardedListAccounts } from "../../../../../modules/ledger/guarded";
 import { can } from "../../../../../server/auth/permissions";
 import NewAccount from "./NewAccount";
@@ -20,7 +20,7 @@ const TYPE_ORDER = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"] as cons
 
 export default async function AccountsPage({ params }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
   const accounts = await guardedListAccounts(scope);
 
   const ordered = [...accounts].sort((a, b) => {

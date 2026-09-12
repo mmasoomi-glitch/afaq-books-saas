@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
 import { guardedListEntries } from "../../../../../modules/ledger/guarded";
 import { can } from "../../../../../server/auth/permissions";
 import ReverseButton from "./ReverseButton";
@@ -17,7 +17,7 @@ interface PageProps {
 
 export default async function EntriesPage({ params }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
   const entries = await guardedListEntries(scope);
 
   const canReverse = can(scope.role, "ledger.reverse");

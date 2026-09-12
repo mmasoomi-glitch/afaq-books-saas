@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requirePageScope } from "../../../../../../server/next/page-scope";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
 import {
   guardedListAccounts,
   guardedListPeriods,
@@ -20,7 +20,7 @@ interface PageProps {
 
 export default async function NewEntryPage({ params }: PageProps) {
   const { orgSlug } = await params;
-  const scope = await requirePageScope(orgSlug);
+  const scope = await cachedPageScope(orgSlug);
 
   if (!can(scope.role, "ledger.post")) {
     // Refused before anything is loaded. The endpoint refuses too — this is

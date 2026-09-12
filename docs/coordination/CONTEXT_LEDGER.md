@@ -162,7 +162,92 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-13 (audit trail readable, records corrected)
+## State — last hydrated 2026-09-13 (request ids, and a cache bug I wrote)
+
+**Base branch @ `5320639`. No open PRs. 371 tests, lint clean, typecheck clean,
+no drift.** PR #40 merged.
+
+`request_id` is now on every audit row. I9 required it since the table existed
+and it was null on every row.
+
+### The pattern that decided the design, for the third time
+
+Eleven places write an audit row. Adding the field to eleven `data` literals
+would work today and be missing from the twelfth.
+
+> A value that must be added in N places by attention alone is a value that
+> will eventually be missing from the N+1th.
+
+Same reasoning that killed the reserved-slug list and that put the `/o` prefix
+in. So: injected by a **Prisma client extension** at the one point an audit row
+is created, carried by `AsyncLocalStorage` rather than threaded through twelve
+signatures. Nothing has to remember it.
+
+The cost is real and is stated at the call site: the value is invisible where
+it lands. `request-context.ts` is the one place that explains why.
+
+### A bug I introduced, and how it was actually found
+
+**Do not cache the EXTENDED Prisma client on `globalThis`.**
+
+The extension closes over `currentRequestId`, which belongs to whichever
+instance of `request-context.ts` was loaded when that client was built. The
+`globalThis` cache **outlives Vitest's per-file module isolation**; a
+module-level closure does not. So a second module instance — a hot reload, or
+another test file — reuses a client whose extension reads an
+`AsyncLocalStorage` nobody writes to, and every id silently becomes null.
+
+Cache the **base** client (the connection pool is the thing worth keeping) and
+rebuild the extension per module instance.
+
+**How it was found matters more than the fix.** Three tests passed alone and
+failed in the suite. Rather than theorise, two throwaway probe scripts on the
+pod established that (a) the extension *does* apply inside a transaction and
+(b) `AsyncLocalStorage` *does* survive one — which left cross-file state as the
+only remaining explanation, and bisecting the suite named the file.
+
+> **When a test passes alone and fails in the suite, the bug is shared state.
+> Prove the mechanism works in isolation first; it converts a guess into an
+> elimination.**
+
+### `createOrganization` was unaudited
+
+Found because `R1` asked to read a row that should have existed. Creating an
+organization makes the creator its OWNER — the most consequential role grant in
+the system, since every other grant is made by someone who got theirs that way.
+Now `organization.create`, in the same transaction as the organization and its
+membership.
+
+Third gap this session surfaced by a test failing for a reason other than the
+one it was written to check.
+
+### Tooling: `forge_review_files` exists now, and found nothing
+
+New tool — sends files to Forge **without their contents entering this
+session's context**, which is what operating rule 5 asks for. Worth having for
+that alone.
+
+On its first real use, over the security-critical surface: **no actionable
+findings.** Its highest-severity claim was that `InvalidCredentialsError` might
+carry a message differing by cause. It does not — fixed string, no constructor
+arguments, and `H4` already asserts byte-identical responses.
+
+Its output argued with itself throughout ("Let's check", "Re-evaluating",
+"This is correct"), the same self-dialogue seen when it authored a component.
+**Use it for token-free file review; do not treat its output as a verdict.**
+
+`forge_health` is REACHABLE AND AUTHORIZED. `forge_repo_status` still returns
+`exit 255` — the SSH hop is still down, the inference endpoint is not.
+
+### Where Sophia's answer is not implementable as stated
+
+Asked how `prisma migrate diff --exit-code` should treat objects Prisma cannot
+model, it said "keep the gate but exclude specific drift types". **`migrate
+diff` has no exclusion flags.** The advice is right in spirit and there is no
+switch that implements it, so `B-20260912-03` stays open and the decision is
+still real.
+
+## Superseded — hydrated 2026-09-13 (audit trail readable, records corrected)
 
 **Base branch @ `7ca1e91`. No open PRs. 362 tests, lint clean, build green,
 typecheck clean, no drift.** PRs #37 and #38 merged since the last hydration.
@@ -979,7 +1064,6 @@ ask for on day one.
    asymmetry worth deciding deliberately.
 7. **No app shell.** The home page is static so it cannot know whether a
    visitor is signed in.
-8. **`audit_logs.request_id` is null everywhere.**
 9. **Rate limiting covers only sign-in and sign-up.**
 10. **No component tests.** No jsdom setup; every screen is covered on the
     server side and not in the rendering.

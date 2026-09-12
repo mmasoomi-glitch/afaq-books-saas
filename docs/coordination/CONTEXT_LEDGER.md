@@ -162,7 +162,125 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-13 (request ids, and a cache bug I wrote)
+## State — last hydrated 2026-09-12 (a maintenance reaper and an app shell)
+
+**Base branch @ `e4489d4`. No open PRs. 401 tests across 24 files, lint clean,
+typecheck clean, build green.** PR #44 and PR #45 merged. PR #43 closed.
+
+> **A note on the dates below.** Sections older than this one are labelled
+> `2026-09-13`, which is *later* than today. Those labels are wrong — the
+> entries were written on or before 2026-09-12. Read the order of the sections,
+> not the dates, until each is rewritten.
+
+### gitleaks caught a test secret, and the fix commit did not clear it
+
+PR #43 committed `const SECRET = "<40 high-entropy chars>"` in a test.
+`gitleaks` failed it as `generic-api-key`, entropy 4.18. **The gate was right** —
+that is the shape of a leaked credential, and a scanner that tried to reason
+about whether a file looked like a test would be a worse scanner.
+
+Generated it with `randomUUID()` instead of adding an allowlist entry. An
+allowlist would have worked and teaches the next person that a flagged finding
+is something you silence, which is how the one real leak gets waved through.
+
+**The part worth remembering: the fix commit did not make the check pass.**
+gitleaks scans the PR's commits, not its tip — `2 commits scanned`, finding
+still at `6b57550`.
+
+> A secret "fixed" in a follow-up commit is still leaked. That is the same
+> reason a real credential must be **rotated**, not deleted: the value is in the
+> history either way, and anyone who fetched the branch has it.
+
+Force-push is forbidden, so the recovery was the one `git-collaboration.md`
+prescribes: new branch from `develop`, work as one commit, new PR, old one
+closed and its branch deleted. Rehearsed correctly on a harmless value.
+
+### Forge found one real thing, and retracted two others mid-answer
+
+Reviewing the maintenance handler, Forge reported three findings. It then traced
+through two of them **inside the same response** and concluded "this seems
+correct" for both — a `reapExpired` claim and a config-probing claim.
+
+The third survived its own scrutiny and was real: the empty-string guard did not
+cover `MAINTENANCE_SECRET="   "`. Whitespace is neither `undefined` nor `""`, so
+a caller sending the same whitespace would have been authorised.
+
+Fixed with a **length floor after trimming** (32, matching `AUTH_SECRET`) rather
+than a second special case — same lesson as the reserved-slug list: a list of
+specific bad values is always missing the next one. Nothing rate-limits that
+route, so a short secret can be guessed at whatever speed the network allows.
+
+> **Forge's verdicts are unreliable; its raw output is still useful.** Read it
+> for the pointer, verify the claim yourself, and discard the confidence.
+
+### The obvious sign-out button would never have worked
+
+`<form action="/api/auth/signout" method="post">` is the natural thing to write.
+That endpoint enforces double-submit CSRF by comparing an `x-csrf-token`
+**header** against the `__Host-csrf` cookie, and **an HTML form cannot set a
+request header.** It would have rendered a button that looked entirely
+functional and answered 403 every time — a `no-mocks-no-stubs` violation written
+without noticing.
+
+Caught by reading the route before wiring the form, not by testing afterwards.
+
+### The nav derives from the same action keys the pages assert
+
+The app shell filters links by `can(role, action)`, where `action` is the
+**identical** key the destination checks — not a parallel list. Two sources of
+truth agree until they don't, and a missing link looks like a missing link.
+
+Filtering happens in the server layout; `AppNav` is a client component that
+receives an already-filtered list and imports neither `can` nor `Action` nor
+`MembershipRole`. Permission logic in a client component reasons about whatever
+the props say.
+
+The table lives in `nav.ts` rather than `layout.tsx` **so it can be tested** —
+there is no jsdom environment, so anything reachable only by rendering a
+component is in practice untested. `N1` asserts every segment resolves to a
+`page.tsx` that exists, which is the failure nothing else would catch.
+
+### Verified against the running server, and one result needed explaining
+
+OWNER saw nine links, VIEWER seven — no "Audit trail", no "New entry". Then the
+VIEWER requested `/o/{slug}/audit` directly and got **200**, which is exactly the
+shape of a finding.
+
+It is not one. The page checks `can(scope.role, "audit.read")` first and renders
+a refusal; the response carries no `<table>`, no rows, no action names, and
+`listAuditLog` asserts independently. 403 is reserved for the API — this is a
+signed-in member of the org on a page their role cannot use, and a sentence
+saying so is the useful answer.
+
+> Worth recording because the honest reflex on seeing `audit:200` was "the
+> enforcement is missing". Checking what the body actually contained took one
+> grep and changed the conclusion.
+
+### Scope was resolving twice per page
+
+The layout and the page beneath it both need it, and each call reads the session
+row and the membership row. `cachedPageScope` wraps it in React `cache()`, which
+memoises for **one render pass only** — not across requests or users. That limit
+is the point: `page-scope.ts` re-resolves every time so a revoked membership
+takes effect on the next page load, and a longer-lived cache would quietly undo
+the property it exists to provide.
+
+### Backlog, after the judge's sequencing
+
+Sophia was asked to pick one item and picked the app shell, naming the failure
+mode to design against ("hardcoded navigation that doesn't account for
+role-based visibility"). That was the right call and the right warning. Still
+open, roughly in its stated order:
+
+- Report drill-down (a trial-balance line → the journal lines behind it).
+- Journal pagination and filtering — **currently returns every entry, unbounded.**
+- CSV export for the three statements.
+- `B-20260912-03` email uniqueness / the `migrate diff` gate decision.
+- `B-20260911-04` RLS (judge-deprioritised, owner decision).
+- `B-20260913-02` audit-log retention — archive, never delete.
+- Prettier; component tests (still no jsdom); an organization switcher.
+
+## Superseded — hydrated 2026-09-12 (request ids, and a cache bug I wrote)
 
 **Base branch @ `5320639`. No open PRs. 371 tests, lint clean, typecheck clean,
 no drift.** PR #40 merged.

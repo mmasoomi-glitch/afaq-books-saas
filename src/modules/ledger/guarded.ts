@@ -2,7 +2,13 @@ import type { Account, Period } from "@prisma/client";
 import type { OrgScope } from "../../server/auth/scope";
 import { assertCanDo, toLedgerScope } from "../../server/auth/scope";
 import type { CreateAccountInput, CreatePeriodInput } from "./scope";
-import type { EntrySummary, PostJournalInput, PostedEntry } from "./posting";
+import type {
+  EntrySummary,
+  JournalPage,
+  JournalPageOptions,
+  PostJournalInput,
+  PostedEntry,
+} from "./posting";
 import {
   createAccount,
   getAccount,
@@ -115,13 +121,13 @@ export async function guardedReverseJournalEntry(
 
 export async function guardedListEntries(
   scope: OrgScope,
-  limit?: number,
-): Promise<EntrySummary[]> {
+  options?: JournalPageOptions,
+): Promise<JournalPage> {
   // `report.read`, not a new key. The journal IS a report — it is the most
   // direct view of the posted ledger there is — and anyone who may read the
   // trial balance can already derive every number in it.
   assertCanDo(scope, "report.read");
-  return listEntries(toLedgerScope(scope), limit);
+  return listEntries(toLedgerScope(scope), options ?? {});
 }
 
 export async function guardedListPeriods(scope: OrgScope): Promise<Period[]> {
@@ -152,6 +158,8 @@ export type {
 export type {
   EntrySummary,
   EntrySummaryLine,
+  JournalPage,
+  JournalPageOptions,
   PostJournalInput,
   PostLineInput,
   PostedEntry,

@@ -13,12 +13,29 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
   readonly params: Promise<{ orgSlug: string }>;
+  readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function EntriesPage({ params }: PageProps) {
+function single(raw: string | string[] | undefined): string | undefined {
+  return typeof raw === "string" && raw !== "" ? raw : undefined;
+}
+
+export default async function EntriesPage({ params, searchParams }: PageProps) {
   const { orgSlug } = await params;
   const scope = await cachedPageScope(orgSlug);
-  const entries = await guardedListEntries(scope);
+
+  // The cursor is user-controlled and is handed straight back to the service,
+  // which resolves it INSIDE this organization. An id belonging to another
+  // tenant, an id that no longer exists and a mangled string are all answered
+  // the same way — page one — so the parameter cannot be used to ask whether
+  // somebody else's entry exists.
+  const cursor = single((await searchParams)["cursor"]);
+  const page = await guardedListEntries(
+    scope,
+    cursor === undefined ? {} : { cursor },
+  );
+  const entries = page.entries;
+  const paging = cursor !== undefined || page.nextCursor !== null;
 
   const canReverse = can(scope.role, "ledger.reverse");
 
@@ -41,14 +58,27 @@ export default async function EntriesPage({ params }: PageProps) {
       </p>
 
       {entries.length === 0 ? (
-        <p>
-          Nothing posted yet. <a href={`/o/${orgSlug}/entries/new`}>Post an entry</a>
-          .
-        </p>
+        cursor === undefined ? (
+          <p>
+            Nothing posted yet.{" "}
+            <a href={`/o/${orgSlug}/entries/new`}>Post an entry</a>.
+          </p>
+        ) : (
+          // Reachable: a cursor that has stopped being valid — the entry it
+          // named was the last one, or the link is old. Saying "nothing posted
+          // yet" here would be false, and this organization plainly has
+          // entries or there would have been no cursor to follow.
+          <p>
+            No further entries.{" "}
+            <a href={`/o/${orgSlug}/entries`}>Back to the most recent</a>.
+          </p>
+        )
       ) : (
         <>
           <p>
-            The {entries.length} most recent posted entries, newest first.
+            {paging
+              ? `${String(entries.length)} entries, newest first.`
+              : `All ${String(entries.length)} posted entries, newest first.`}{" "}
             Posted entries cannot be edited or deleted — a correction is a
             reversal, and both stay in the record.
           </p>
@@ -107,6 +137,37 @@ export default async function EntriesPage({ params }: PageProps) {
               ) : null}
             </section>
           ))}
+
+          {/*
+            Forward paging only, and the limitation is stated rather than
+            hidden. A cursor identifies where the NEXT page starts; walking
+            backwards needs the ordering reversed, which is a different query.
+            "Most recent" returns to the start, which is the only backwards
+            move available and is the one people actually want.
+          */}
+          <nav aria-label="Journal pages">
+            <p>
+              {cursor === undefined ? null : (
+                <>
+                  <a href={`/o/${orgSlug}/entries`}>Most recent entries</a>
+                  {page.nextCursor === null ? null : " · "}
+                </>
+              )}
+              {page.nextCursor === null ? (
+                cursor === undefined ? null : (
+                  <> · This is the end of the journal.</>
+                )
+              ) : (
+                <a
+                  href={`/o/${orgSlug}/entries?cursor=${encodeURIComponent(
+                    page.nextCursor,
+                  )}`}
+                >
+                  Older entries
+                </a>
+              )}
+            </p>
+          </nav>
         </>
       )}
     </main>

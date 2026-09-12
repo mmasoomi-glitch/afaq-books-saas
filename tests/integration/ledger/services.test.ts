@@ -331,7 +331,12 @@ test("S12: reversing a draft is refused", async () => {
   });
 
   await expect(
-    reverseJournalEntry(scope, draft.id, new Date("2024-01-20")),
+    reverseJournalEntry(
+      scope,
+      draft.id,
+      new Date("2024-01-20"),
+      "test reversal",
+    ),
   ).rejects.toBeInstanceOf(NotPostedError);
 });
 

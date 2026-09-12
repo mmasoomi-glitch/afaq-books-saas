@@ -61,6 +61,8 @@ export default async function OrganizationsPage() {
             <li key={org.organizationId}>
               <strong>{org.name}</strong> — {org.role}
               <br />
+              <a href={`/${org.slug}/accounts`}>Chart of accounts</a>
+              {" · "}
               <a href={`/${org.slug}/reports/trial-balance`}>Trial balance</a>
               {" · "}
               <a href={`/${org.slug}/members`}>Members</a>

@@ -924,6 +924,49 @@ people will ask for is to relax the escalation rule.
 
 ---
 
+### B-20260913-01 — Organization slugs and application routes share one namespace
+
+- **Filed by:** AUTH-TENANCY
+- **Date:** 2026-09-13
+- **Status:** open
+- **Type:** design debt with a closing window
+
+**The problem**
+
+Organization slugs occupy the first URL segment: `/{slug}/reports/...` and
+`/api/{slug}/members`. Every route added under either prefix therefore claims a
+name out of the organization address space, and **the claim is silent**.
+
+Next resolves a static segment before a dynamic one, so a collision does not
+break the route. It makes the ORGANIZATION unreachable. Someone registers
+`members` as their address and every link into their own books answers with
+somebody else's endpoint, with nothing erroring anywhere.
+
+**Why the current mitigation will not hold**
+
+Two migrations now exist purely to reserve names —
+`20260913000000_reserve_route_slugs` and `20260913010000_reserve_ledger_slugs` —
+and the second was needed within hours of the first. The list grows every time a
+route is added, and the failure mode of forgetting is not a test failure; it is
+a customer whose organization stops working when an unrelated feature ships.
+
+**What would close it**
+
+Move organizations under a prefix: `/o/{slug}/...` and `/api/o/{slug}/...`. The
+two namespaces then cannot touch, the reserved list becomes unnecessary, and
+adding a route stops being a decision about anyone's address.
+
+**Why it is urgent in a narrow sense**
+
+This is cheap now and expensive later. Once there are organizations whose slugs
+are in circulation — in links, in bookmarks, in emailed invoices — the migration
+needs redirects and a deprecation window. Today it is a change to route
+directories and one line in the tests.
+
+**Owner:** ARCHITECT to decide the prefix, PLATFORM-GUARDIAN to move the routes.
+
+---
+
 **RESOLVED 2026-09-12**, on `agent/03-ownership-audit-sprint-002`.
 
 `transferOwnership(scope, targetUserId)` — OWNER-only via the new

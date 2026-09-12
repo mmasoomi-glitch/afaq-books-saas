@@ -65,6 +65,13 @@ export default async function TrialBalancePage({
         {scope.organizationSlug} · as at{" "}
         <time dateTime={report.asOf}>{report.asOf}</time>
       </p>
+      <p>
+        <a href={`/${orgSlug}/accounts`}>Chart of accounts</a>
+        {" · "}
+        <a href={`/${orgSlug}/members`}>Members</a>
+        {" · "}
+        <a href="/organizations">All organizations</a>
+      </p>
 
       {report.rows.length === 0 ? (
         // A truthful empty state. `.claude/rules/no-mocks-no-stubs.md` forbids

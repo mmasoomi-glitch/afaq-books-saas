@@ -74,6 +74,8 @@ Sprint 000 closed 2026-09-11 (`INTEGRATION_LOG.md`).
 | 002-14 | LEDGER-CORE + FRONTEND-UX | Journal filtering by account and date range, with the cursor bound to the filter | done | PR #49 merged, 429 tests. **Sophia verdict: PASS.** Runtime verified: filtered account totals 600.0000 match the trial-balance row for the same account, and a cursor from one filter falls back to page one under another |
 | 002-15 | AUTH-TENANCY | Database-level case-insensitive email uniqueness | done | PR #48 merged, 416 tests. Closed `B-20260912-03`, whose deferral rested on a premise that turned out to be false — see the blocker |
 | 002-16 | PLATFORM-GUARDIAN | Maintenance reaper for expired `rate_limits` rows | done | PR #44 merged. PR #43 closed first: gitleaks caught a test-secret literal and the fix commit did not clear it, because the scanner reads a PR's commits rather than its tip |
+| 002-17 | REPORTING-ANALYTICS | Report drill-down from any statement line to the entries behind it | done | PR #51 merged, 440 tests. **Sophia verdict: PASS.** Runtime verified via the rendered href: 700.0000 both sides. Found and fixed a pre-existing bug showing users `2024-01-31T00:00:00.000Z` as visible text on a financial statement |
+| 002-18 | PLATFORM-GUARDIAN | Prettier and a formatting gate | done | PR #52 merged. **Sophia verdict: PASS**, including explicit approval of declining its own "staged files only" advice as not implementable in CI. 66 files reformatted, no logic changed. Step confirmed running in the CI log rather than inferred from a green job |
 
 **A gap in this board, recorded rather than backfilled.** Rows 002-9 onward were
 added retrospectively. The UI work that landed between 002-8 and 002-9 — the

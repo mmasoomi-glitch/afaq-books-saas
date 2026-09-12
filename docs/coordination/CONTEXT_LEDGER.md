@@ -162,6 +162,64 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
+## State — last hydrated 2026-09-13 (audit trail readable, records corrected)
+
+**Base branch @ `7ca1e91`. No open PRs. 362 tests, lint clean, build green,
+typecheck clean, no drift.** PRs #37 and #38 merged since the last hydration.
+
+The audit trail is readable through the product for the first time — rows were
+being written for posting, reversal, period transitions, membership grants and
+ownership transfers, and nobody had ever confirmed they could be retrieved.
+
+`audit.read` is an ACCOUNTANT action, not ADMIN: `security-tenancy.md` names
+the accountant as the person whose job this is. Not a VIEWER action either —
+the trail carries membership grants and role changes.
+
+### I corrected a claim I had made twice
+
+I recorded here, and repeated in a PR body, that `reverseJournalEntry` writes
+no `audit_logs` row. **It always did** — `action: "ledger.reverse"`, with
+actor, entity and before/after, inside the same transaction.
+
+The claim came from re-reading **my own earlier note** instead of the source.
+That is the second time this session: the first was a footnote claiming drafts
+appear in the P&L, when both queries filter on `posted_at IS NOT NULL`.
+
+> **A note in this file is a record of what was true when it was written, not a
+> substitute for the source.** Both errors were of the same kind — trusting my
+> own prose over the code — and both were caught by going to look.
+
+`L40` now pins the behaviour so the claim cannot be made again without a
+failing test.
+
+### The part of that note that was right
+
+A reversal could not be given a **reason**. "Who" and "when" were recorded;
+"why" was not, and it is the one that decides whether a reversal was a
+correction or a cover-up. Now required, and written to both the audit row and
+the reversal's description.
+
+Adding it as a REQUIRED parameter broke eight call sites, every one named by
+`tsc` at compile time. Two mechanical replacement passes missed the last one;
+the typechecker found it both times. **That is the argument for required over
+optional on anything that must not be forgotten.**
+
+### Sequencing is now the judge's call, and it earned it
+
+Asked to order RLS against the audit viewer against CSV export, it picked the
+viewer — RLS being "high-risk refactoring with diminishing returns given robust
+app-level guards". That matches the evidence: a branded scope type, guarded
+wrappers CI greps for, ~25 tenancy tests.
+
+Asked whether there was a fourth thing I had not listed, it named **audit-log
+retention**, unprompted and correctly. Filed as `B-20260913-02`.
+
+Its record across seven rounds: **first answers consistently sound, follow-up
+elaborations contradicted the first answer twice.** Take the verdict,
+interrogate the elaboration.
+
+---
+
 ## State — last hydrated 2026-09-13 (namespace fixed, debt is the backlog)
 
 **Base branch @ `6f53490`. No open PRs. 349 tests, lint clean, build green,
@@ -915,13 +973,10 @@ ask for on day one.
    number looks wrong.
 5. **The journal has no pagination or filtering** — 100 most recent. Wrong at
    the first real month-end.
-6. **CORRECTED — reversal was always audited.** I recorded here that
-   `reverseJournalEntry` writes no `audit_logs` row, and repeated it in a PR
-   body. It always did: `action: "ledger.reverse"`, with actor, entity and
-   before/after. The claim came from re-reading my own note instead of the
-   source — the second time this session that a plausible recollection went
-   into prose unverified, after the P&L drafts footnote.
-   The reason field it *was* missing is now required and tested (`L38`–`L40`).
+6. **No reason on a posting**, only on reversals and period transitions. A
+   journal entry's `description` is free text and nothing forces it to explain
+   anything. Defensible — a posting is not a correction — but it is an
+   asymmetry worth deciding deliberately.
 7. **No app shell.** The home page is static so it cannot know whether a
    visitor is signed in.
 8. **`audit_logs.request_id` is null everywhere.**

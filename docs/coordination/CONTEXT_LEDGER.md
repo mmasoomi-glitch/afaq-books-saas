@@ -162,7 +162,71 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-12 (tenancy administration is real)
+## State — last hydrated 2026-09-13 (a person can use it)
+
+**Base branch @ `967900e`. No open PRs. 312 tests, lint clean, build green,
+typecheck clean, no drift.** PRs #24 and #25 merged since the last hydration.
+
+### The whole flow works, verified with curl against the running server
+
+```text
+register                             201
+signin                               200
+create organization                  201
+invite a second person as BOOKKEEPER 201
+invite them as OWNER                 403  AUTH_OWNERSHIP_NOT_GRANTABLE
+members page                         200  (form, invitee, transfer section)
+trial balance                        200  ("No posted journal entries…")
+an organization you are not in       404
+the same page, signed out            307 → /signin
+```
+
+**Nobody has to touch the database any more.** That last pair is the
+page/API asymmetry working: a PAGE sends a person to the sign-in form, an API
+answers 404 so it confirms nothing about the slug.
+
+### Two things the curl run found that reading would not have
+
+1. **Sign-in ROTATES `__Host-csrf`.** The first attempt failed at "create
+   organization" with a 403, because the token read from the sign-in page was
+   already stale. The rotation is correct and stays — reissuing on a privilege
+   change stops a token planted before authentication remaining valid after it
+   — but it means any client caching the value at render time breaks on its
+   first request afterwards. That is why `MemberAdmin` and `NewOrganization`
+   read the cookie at CALL time, and `H29` now pins it so removing the rotation
+   is a decision rather than a tidy-up.
+2. The earlier 500 on a valid sign-in was **my own wrong `DATABASE_URL`**, not
+   a defect — and it usefully confirmed the generic-500 path leaks nothing: the
+   credentials error stayed in the server log, the body said "internal error".
+
+**Running it beats reading it. Every round this session, the thing that found
+the defect was execution.**
+
+### Where the UI draws the line
+
+The members page computes which controls to show from **the same permission
+table the server enforces with**, not a second hand-written list that would
+drift. That decides what is RENDERED and nothing else — every action behind
+those controls is re-checked server-side, and `O9`, `O16` and `O19` cover the
+forged-request case from the other side.
+
+Members you cannot act on are **absent** rather than disabled. A disabled
+control for an action you could never take is noise, and the table above lists
+everyone anyway.
+
+### Route slugs are a namespace, and collisions do not error
+
+Organization slugs occupy the first URL segment. Next resolves a static segment
+before a dynamic one, so a slug colliding with a real route does not break the
+route — it makes the ORGANIZATION permanently and **silently** unreachable.
+Someone picks `members` as their address and every link into their own books
+answers with somebody else's endpoint, with nothing erroring anywhere.
+
+`20260913000000_reserve_route_slugs` reserves the names in use plus a handful
+in advance, because adding a route later cannot retroactively rename an
+organization that already holds the name.
+
+## Superseded — hydrated 2026-09-12 (tenancy administration is real)
 
 **Base branch @ `b56ef09`. No open PRs. 291 tests, lint clean, build green,
 typecheck clean, no drift.** PRs #21 and #22 merged since the last hydration.
@@ -609,21 +673,25 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **HTTP endpoints and screens for organizations and memberships.** The
-   services exist and are tested; nothing reaches them over a socket, so
-   creating an organization is still a direct service call. This is now the
-   only thing between what is built and a usable product — and every route
-   added here is an authorization surface, so the handlers must go through
-   `requirePageScope` / the guarded pattern rather than inventing their own.
-2. **Nothing links to anything.** No navigation, no organization switcher, so
-   every URL must be typed. Cheap, and it makes everything already built
-   visible for the first time.
-3. **A redirect after sign-in**, once there is a destination.
-4. **`audit_logs.request_id` is null everywhere.** Nothing threads a request id
-   from the adapter down to the services, and I9 lists it among the fields an
-   audit row stores. The adapter is the only place it can originate.
-5. **Prettier**, or a decision not to have one. A judgement call about whether
-   a formatter's diffs are worth the churn, not an oversight.
+1. **Posting a journal entry has no screen.** The ledger is the product and it
+   is the last major surface with no UI at all: `postJournalEntry` and
+   `reverseJournalEntry` are reachable only as function calls. Everything they
+   need — org scope, permission checks, the guarded wrappers — already exists,
+   so this is a form and a route rather than new machinery.
+2. **No chart of accounts screen**, which posting needs first: an entry names
+   accounts, and there is no way to create one through the product.
+3. **No app shell.** Nothing links to `/organizations` from the home page for
+   an already-signed-in visitor, because the home page is static and cannot
+   know. A header with the current organization and a sign-out control would
+   tie together everything already built.
+4. **`audit_logs.request_id` is null everywhere.** The adapter is the only
+   place a request id can originate and it does not generate one. I9 lists it
+   among the fields an audit row stores.
+5. **Rate limiting covers only sign-in and sign-up.** An authenticated ADMIN
+   scripting membership changes is not slowed by anything.
+6. **No component tests.** No jsdom setup. Every server path the forms call is
+   covered; the rendering and the message selection are not.
+7. **Prettier**, or a decision not to have one.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init

@@ -262,3 +262,45 @@ test("R8: an inbound x-request-id is ignored", async () => {
   });
   expect(row.requestId).not.toBe(planted);
 });
+
+test("R9: the id survives another test file having loaded the client first", async () => {
+  // The regression this file caught, pinned.
+  //
+  // `client.ts` caches the BASE client on globalThis so a hot reload does not
+  // open a new connection pool. It must NOT cache the EXTENDED one: the
+  // extension closes over `currentRequestId`, which belongs to whichever
+  // instance of `request-context.ts` was loaded when that client was built.
+  //
+  // A second module instance — a hot reload, or Vitest's per-file module
+  // registry — would then reuse a client whose extension reads an
+  // AsyncLocalStorage nobody is writing to, and every request id would silently
+  // become null. R2, R4 and R6 passed alone and failed once another file had
+  // loaded the client first.
+  //
+  // This asserts the property directly rather than relying on file ordering to
+  // reproduce it: the extension in scope here must read the ALS in scope here.
+  const { scope } = await ownerScope();
+  const id = newRequestId();
+
+  const seen = await runWithRequestId(id, async () => {
+    await prisma.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId: scope.userId,
+        action: "test.same.instance",
+        entityType: "Test",
+        entityId: randomUUID(),
+      },
+    });
+    return currentRequestId();
+  });
+
+  expect(seen).toBe(id);
+
+  const row = await prisma.auditLog.findFirstOrThrow({
+    where: { action: "test.same.instance" },
+  });
+  // If these differ, the client and the context are from different module
+  // instances — which is the whole failure mode.
+  expect(row.requestId).toBe(seen);
+});

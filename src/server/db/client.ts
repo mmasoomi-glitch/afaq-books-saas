@@ -42,16 +42,36 @@ function extend(base: PrismaClient) {
 
 type ExtendedClient = ReturnType<typeof extend>;
 
+/**
+ * The BASE client is cached, not the extended one — and that distinction is a
+ * bug I introduced and a test caught.
+ *
+ * What is worth caching is the connection pool: without it, every hot reload
+ * opens a new one until Postgres refuses connections. The extension is cheap
+ * and is rebuilt per module instance.
+ *
+ * Caching the EXTENDED client is wrong because the extension closes over
+ * `currentRequestId`, which belongs to whichever instance of
+ * `request-context.ts` was loaded when that client was built. A second module
+ * instance — a hot reload, or Vitest's per-file module registry — then reuses a
+ * client whose extension reads an `AsyncLocalStorage` that nobody is writing
+ * to. Every request id silently becomes null.
+ *
+ * That is exactly how it failed: three tests passed when their file ran alone
+ * and failed when another file had loaded the client first. The `globalThis`
+ * cache outlives module isolation; the module-level closure does not.
+ */
 const globalForPrisma = globalThis as unknown as {
-  afaqPrisma?: ExtendedClient;
+  afaqPrismaBase?: PrismaClient;
 };
 
-export const prisma: ExtendedClient =
-  globalForPrisma.afaqPrisma ?? extend(new PrismaClient());
+const base = globalForPrisma.afaqPrismaBase ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.afaqPrisma = prisma;
+  globalForPrisma.afaqPrismaBase = base;
 }
+
+export const prisma: ExtendedClient = extend(base);
 
 export type { PrismaClient } from "@prisma/client";
 

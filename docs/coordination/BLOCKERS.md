@@ -967,6 +967,46 @@ directories and one line in the tests.
 
 ---
 
+**RESOLVED 2026-09-13**, on `agent/02-slug-namespace-sprint-002`.
+
+Organizations moved to `/o/{slug}/…` and `/api/o/{slug}/…`. The two namespaces
+cannot touch, and `20260913020000_drop_reserved_slugs` removes the list
+entirely.
+
+**Verified by doing the thing the list existed to prevent:**
+
+```text
+create org with slug "members"     201
+GET  /o/members/accounts           200   renders, not shadowed
+POST /api/o/members/accounts       201   works
+create org with slug "api"         201
+GET  /o/api/accounts               200   renders
+GET  /members/accounts             404   old URL, gone
+create org with slug "UPPER CASE"  400   format still enforced
+```
+
+An organization can now be called `api`. That is the test that matters.
+
+`organizations_slug_format` stays: it is not about routing. Uppercase would
+mean two organizations at what every user reads as one address.
+
+**A gate that would have reintroduced it is now in place.** Moving under `/o`
+only helps while `/o` contains nothing but the dynamic segment — adding
+`src/app/(app)/o/settings/` would put the whole problem back inside the new
+namespace, silently, for exactly the same reason. CI now asserts that `/o`
+contains only `[orgSlug]`, and the check was verified to FAIL on a planted
+violation before it was committed.
+
+**And a sixth vacuous check was found here.** The CI gate asserting each
+database invariant still exists matches a constraint NAME anywhere in the
+migration history — including inside a `DROP CONSTRAINT`. It would have
+reported `organizations_slug_not_reserved` present while the only migration
+mentioning it was the one removing it. The needle was updated and the caveat
+written into the gate: **if a constraint is ever dropped deliberately, remove
+its needle in the same commit.**
+
+---
+
 **RESOLVED 2026-09-12**, on `agent/03-ownership-audit-sprint-002`.
 
 `transferOwnership(scope, targetUserId)` — OWNER-only via the new
@@ -993,6 +1033,8 @@ perform it, and that it refuses both self-transfer and a non-member target.
 
 ## Resolved
 
+- **`B-20260913-01`** — the organization/route slug namespace. Closed 2026-09-13
+  by an `/o/` prefix; the reserved-word list is gone rather than longer.
 - **`B-20260912-05`** — ownership transfer. Closed 2026-09-12; the gap the
   escalation rule opened deliberately, closed by its own action key.
 - **`B-20260912-04`** — membership audit rows. Closed 2026-09-12. The entry

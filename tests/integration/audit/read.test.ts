@@ -100,24 +100,32 @@ test("A2: the actor is resolved to an address", async () => {
 });
 
 test("A3: a deleted actor leaves the row behind rather than hiding it", async () => {
-  // Memberships cascade on user delete; audit rows do not. Showing nothing
-  // would make the trail look incomplete when it is intact.
-  const { scope, organizationId } = await orgWithHistory();
+  // Memberships cascade when a user is deleted; audit rows do not, because
+  // `audit_logs.actor_id` is a plain uuid with no foreign key. That is
+  // deliberate — an audit row that disappeared with the person who caused it
+  // would be an audit trail anyone could erase by deleting an account.
+  //
+  // Showing "(deleted user)" is therefore more honest than showing nothing:
+  // the trail is intact and only the name is gone.
+  //
+  // An earlier version of this test tried to construct the state with
+  // `auditLog.updateMany`. The append-only trigger refused it, correctly — the
+  // only way to reach this state is to delete the actor for real.
+  const { scope, organizationId, slug } = await orgWithHistory();
 
-  // Read as somebody else, because deleting the actor would delete the scope.
-  const reader = await actorIn(organizationId, scope.organizationSlug, "OWNER");
-  await prisma.auditLog.updateMany({
-    where: { organizationId },
-    data: { actorId: reader.userId },
-  });
-  const orphanId = randomUUID();
-  await prisma.$executeRaw`
-    UPDATE audit_logs SET actor_id = ${orphanId}::uuid
-    WHERE organization_id = ${organizationId}::uuid`;
+  const admin = await actorIn(organizationId, slug, "ADMIN");
+  const guest = newEmail();
+  await registerUser(guest, PASSWORD);
+  await grantMembership(admin, guest, "VIEWER");
 
-  const entries = await listAuditLog(reader);
-  expect(entries.length).toBeGreaterThan(0);
-  expect(entries[0]?.actorEmail).toBeNull();
+  await prisma.user.delete({ where: { id: admin.userId } });
+
+  const entries = await listAuditLog(scope);
+  const orphaned = entries.filter((entry) => entry.actorEmail === null);
+
+  expect(orphaned.length).toBeGreaterThan(0);
+  // And the rest still resolve, so the fallback is not hiding a broken lookup.
+  expect(entries.some((entry) => entry.actorEmail !== null)).toBe(true);
 });
 
 test("A4: an accountant may read it and a bookkeeper may not", async () => {

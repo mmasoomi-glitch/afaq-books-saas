@@ -446,11 +446,44 @@ export interface EntrySummary {
   readonly lines: readonly EntrySummaryLine[];
 }
 
+/** The most entries one request may ask for. */
+export const MAX_JOURNAL_PAGE = 100;
+
+/** What a page of the journal costs to ask for, and what it hands back. */
+export interface JournalPageOptions {
+  /** Clamped to 1…`MAX_JOURNAL_PAGE`. A non-finite value falls back to the max. */
+  readonly pageSize?: number;
+  /** The `nextCursor` from the previous page. Anything else serves page one. */
+  readonly cursor?: string;
+}
+
+export interface JournalPage {
+  readonly entries: readonly EntrySummary[];
+  /** Pass back as `cursor` for the next page. `null` means this is the last. */
+  readonly nextCursor: string | null;
+  /** The page size actually used, after clamping. */
+  readonly pageSize: number;
+}
+
 /**
- * Posted entries, newest first, with their lines.
+ * One page of posted entries, newest first, with their lines.
  *
  * Org-scoped like everything else: the `organizationId` comes from the resolved
  * scope, so there is no "all entries" query to write by accident.
+ *
+ * **Keyset, not offset, and that is a correctness choice rather than a
+ * performance one.** With `skip`/`take`, an entry posted while somebody is
+ * paging shifts every later row down by one — and the row that was at the
+ * boundary moves onto the previous page, which the reader has already passed.
+ * They never see it, and nothing tells them. For a journal, a record that
+ * silently fails to appear in a complete read is the one failure that must not
+ * happen. A cursor is anchored to a row, so a new entry appearing above it
+ * changes nothing below.
+ *
+ * The ordering ends in `id` so it is total. Two entries can share a date and a
+ * journal number is only unique within its period, so without the tiebreaker
+ * the "next" page is undefined at any tie — which is how keyset pagination
+ * quietly repeats or drops rows.
  *
  * Amounts are returned as STRINGS via `toFixed(4)`. Serialising a
  * `Prisma.Decimal` to JSON produces an object, and letting one reach a React
@@ -459,12 +492,39 @@ export interface EntrySummary {
  */
 export async function listEntries(
   scope: LedgerScope,
-  limit = 100,
-): Promise<EntrySummary[]> {
+  options: JournalPageOptions = {},
+): Promise<JournalPage> {
+  const pageSize = clampPageSize(options.pageSize);
+
+  // A cursor names a row, and a row belongs to an organization. Resolving it
+  // inside this scope means a cursor from ANOTHER tenant cannot be used to page
+  // through their journal, and — just as important — cannot be used to ask
+  // whether their entry exists: an unknown id, a foreign id and a malformed
+  // string all produce the same answer, page one.
+  const cursor =
+    !isUuid(options.cursor)
+      ? undefined
+      : ((await prisma.journalEntry.findFirst({
+          where: {
+            id: options.cursor,
+            organizationId: scope.organizationId,
+            postedAt: { not: null },
+          },
+          select: { id: true },
+        })) ?? undefined);
+
   const entries = await prisma.journalEntry.findMany({
     where: { organizationId: scope.organizationId, postedAt: { not: null } },
-    orderBy: [{ entryDate: "desc" }, { journalNumber: "desc" }],
-    take: limit,
+    orderBy: [
+      { entryDate: "desc" },
+      { journalNumber: "desc" },
+      { id: "desc" },
+    ],
+    // One more than asked for, so "is there a next page" is answered by the
+    // same query. A separate `count()` would be a second round trip and could
+    // disagree with this one under concurrent posting.
+    take: pageSize + 1,
+    ...(cursor === undefined ? {} : { cursor: { id: cursor.id }, skip: 1 }),
     include: {
       journalLines: {
         orderBy: { lineNumber: "asc" },
@@ -473,6 +533,75 @@ export async function listEntries(
     },
   });
 
+  const hasMore = entries.length > pageSize;
+  const page = hasMore ? entries.slice(0, pageSize) : entries;
+  const last = page[page.length - 1];
+
+  return {
+    pageSize,
+    nextCursor: hasMore && last !== undefined ? last.id : null,
+    entries: toSummaries(page),
+  };
+}
+
+/**
+ * Is this string shaped like the `@db.Uuid` primary key?
+ *
+ * Checked BEFORE the lookup rather than catching the failure after it.
+ * Postgres rejects a malformed uuid at the type level — Prisma surfaces
+ * "Inconsistent column data: Error creating UUID" — so a mangled `?cursor=`
+ * in a link would have thrown out of the page as a 500 rather than serving
+ * page one. A caught link is not an attack and should not look like a crash.
+ *
+ * A blanket `try`/`catch` around the lookup would also work and would swallow
+ * a genuine database failure with it, reporting "page one" when the truth is
+ * that the database is unreachable.
+ */
+function isUuid(value: string | undefined): value is string {
+  return (
+    value !== undefined &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
+}
+
+/**
+ * A page size that is always a usable number.
+ *
+ * The value arrives from a query string, so it can be absent, empty, `"abc"`,
+ * `-1`, `1e9` or `NaN`. Every one of those becomes something sane rather than
+ * an error page: a mangled link is not an attack and should not look like one.
+ *
+ * `0` and negatives clamp UP to 1 rather than down. A negative `take` in Prisma
+ * means "take from the other end", which would silently return the OLDEST
+ * entries under a heading that says newest — a wrong answer that looks right.
+ */
+function clampPageSize(requested: number | undefined): number {
+  if (requested === undefined || !Number.isFinite(requested)) {
+    return MAX_JOURNAL_PAGE;
+  }
+  return Math.min(MAX_JOURNAL_PAGE, Math.max(1, Math.floor(requested)));
+}
+
+function toSummaries(
+  entries: readonly {
+    readonly id: string;
+    readonly journalNumber: number | null;
+    readonly entryDate: Date;
+    readonly description: string;
+    readonly currency: string;
+    readonly postedAt: Date | null;
+    readonly reversalOfId: string | null;
+    readonly reversedById: string | null;
+    readonly journalLines: readonly {
+      readonly account: { readonly code: string; readonly name: string };
+      readonly debit: Prisma.Decimal;
+      readonly credit: Prisma.Decimal;
+      readonly memo: string | null;
+    }[];
+  }[],
+): EntrySummary[] {
   return entries.map((entry) => ({
     id: entry.id,
     journalNumber: entry.journalNumber,

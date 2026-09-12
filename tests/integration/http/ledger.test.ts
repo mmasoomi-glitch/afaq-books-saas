@@ -623,7 +623,7 @@ test("L21: the reversal inverts every line and the pair balances to zero", async
     req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }),
   );
 
-  const entries = await guardedListEntries(
+  const { entries } = await guardedListEntries(
     await scopeFor(env.organizationId, env.slug),
   );
   expect(entries).toHaveLength(2);
@@ -715,7 +715,7 @@ test("L27: the journal lists posted entries, with amounts as strings", async () 
   const env = await ledgerReady();
   await postOne(env);
 
-  const entries = await guardedListEntries(
+  const { entries } = await guardedListEntries(
     await scopeFor(env.organizationId, env.slug),
   );
 
@@ -733,7 +733,7 @@ test("L28: the journal never shows another tenant entries", async () => {
   await postOne(mine);
   const theirs = await ledgerReady();
 
-  const entries = await guardedListEntries(
+  const { entries } = await guardedListEntries(
     await scopeFor(theirs.organizationId, theirs.slug),
   );
   expect(entries).toHaveLength(0);

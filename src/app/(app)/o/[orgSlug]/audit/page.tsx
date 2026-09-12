@@ -8,7 +8,7 @@ import {
 import { can } from "../../../../../server/auth/permissions";
 
 export const metadata: Metadata = {
-  title: "Audit trail · Afaq Books",
+  title: "Audit trail · Nagdengi",
   robots: { index: false, follow: false },
 };
 

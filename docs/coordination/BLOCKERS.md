@@ -306,7 +306,7 @@ $ git rev-parse --short origin/main origin/develop
 438bb59
 $ git log --oneline origin/main..origin/develop | wc -l
 11
-$ gh api repos/mmasoomi-glitch/afaq-books-saas --jq .default_branch
+$ gh api repos/mmasoomi-glitch/nagdengi --jq .default_branch
 main
 ```
 
@@ -829,7 +829,7 @@ model. **That assumption was never tested, and it is false.** Run against the
 migration on a throwaway shadow database:
 
 ```text
-$ npx prisma migrate diff --from-migrations prisma/migrations     --to-schema-datamodel prisma/schema.prisma     --shadow-database-url .../afaq_shadow_probe --exit-code
+$ npx prisma migrate diff --from-migrations prisma/migrations     --to-schema-datamodel prisma/schema.prisma     --shadow-database-url .../nagdengi_shadow_probe --exit-code
 No difference detected.
 EXIT=0
 ```

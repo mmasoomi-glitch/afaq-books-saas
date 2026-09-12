@@ -9,7 +9,7 @@ import { can } from "../../../../../server/auth/permissions";
 import ReverseButton from "./ReverseButton";
 
 export const metadata: Metadata = {
-  title: "Journal · Afaq Books",
+  title: "Journal · Nagdengi",
   robots: { index: false, follow: false },
 };
 

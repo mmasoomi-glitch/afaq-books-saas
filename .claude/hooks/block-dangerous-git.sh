@@ -53,7 +53,7 @@ deny() {
 Command that was blocked:
   $command_str
 
-This guard exists because Afaq Books SaaS treats Git workflow safety as
+This guard exists because Nagdengi treats Git workflow safety as
 load-bearing. See:
 
   CLAUDE.md

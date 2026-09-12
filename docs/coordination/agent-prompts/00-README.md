@@ -12,18 +12,18 @@ For each agent (example: LEDGER-CORE, sprint 001):
 ### Bash (Linux / macOS / Git Bash on Windows)
 
 ```bash
-cd /path/to/afaq-books-saas
+cd /path/to/nagdengi
 git fetch origin --prune
 
 # 1. Create the worktree on a fresh branch from origin/develop
 git worktree add -b agent/04-ledger-core-sprint-001 \
-  ../afaq-books-saas--04-ledger-core origin/develop
+  ../nagdengi--04-ledger-core origin/develop
 
 # 2. Enter it
-cd ../afaq-books-saas--04-ledger-core
+cd ../nagdengi--04-ledger-core
 
 # 3. Identify the agent for the ownership hook
-export AFAQ_AGENT=ledger-core
+export NAGDENGI_AGENT=ledger-core
 
 # 4. Launch a Claude session in this worktree
 claude
@@ -34,18 +34,18 @@ Then paste the contents of `04-ledger-core.md` as the first message.
 ### PowerShell (Windows)
 
 ```powershell
-cd C:\Users\Magic\Desktop\afaq-books-saas
+cd C:\Users\Magic\Desktop\nagdengi
 git fetch origin --prune
 
 # 1. Create the worktree on a fresh branch from origin/develop
 git worktree add -b agent/04-ledger-core-sprint-001 `
-  ..\afaq-books-saas--04-ledger-core origin/develop
+  ..\nagdengi--04-ledger-core origin/develop
 
 # 2. Enter it
-cd ..\afaq-books-saas--04-ledger-core
+cd ..\nagdengi--04-ledger-core
 
 # 3. Identify the agent for the ownership hook
-$env:AFAQ_AGENT = "ledger-core"
+$env:NAGDENGI_AGENT = "ledger-core"
 
 # 4. Launch a Claude session in this worktree
 claude
@@ -53,20 +53,20 @@ claude
 
 ## Worker → branch mapping
 
-| # | Agent | Slug (AFAQ_AGENT) | Worktree dir (sibling of repo) | Branch (sprint 001 example) |
+| # | Agent | Slug (NAGDENGI_AGENT) | Worktree dir (sibling of repo) | Branch (sprint 001 example) |
 |---|-------|--------------------|---------------------------------|------------------------------|
-| 1 | ARCHITECT | `architect` | `afaq-books-saas--01-architect` | `agent/01-architect-sprint-001` |
-| 2 | PLATFORM-GUARDIAN | `platform-guardian` | `afaq-books-saas--02-platform-guardian` | `agent/02-platform-guardian-sprint-001` |
-| 3 | AUTH-TENANCY | `auth-tenancy` | `afaq-books-saas--03-auth-tenancy` | `agent/03-auth-tenancy-sprint-001` |
-| 4 | LEDGER-CORE | `ledger-core` | `afaq-books-saas--04-ledger-core` | `agent/04-ledger-core-sprint-001` |
-| 5 | SALES-AR | `sales-ar` | `afaq-books-saas--05-sales-ar` | `agent/05-sales-ar-sprint-001` |
-| 6 | PROCUREMENT-AP | `procurement-ap` | `afaq-books-saas--06-procurement-ap` | `agent/06-procurement-ap-sprint-001` |
-| 7 | BANKING-RECON | `banking-recon` | `afaq-books-saas--07-banking-recon` | `agent/07-banking-recon-sprint-001` |
-| 8 | DOCUMENTS-AI-SAFETY | `documents-ai-safety` | `afaq-books-saas--08-documents-ai-safety` | `agent/08-documents-ai-safety-sprint-001` |
-| 9 | REPORTING-ANALYTICS | `reporting-analytics` | `afaq-books-saas--09-reporting-analytics` | `agent/09-reporting-analytics-sprint-001` |
-| 10 | FRONTEND-UX | `frontend-ux` | `afaq-books-saas--10-frontend-ux` | `agent/10-frontend-ux-sprint-001` |
-| 11 | QA-AUDITOR | `qa-auditor` | `afaq-books-saas--11-qa-auditor` | `agent/11-qa-auditor-sprint-001` |
-| 12 | GITKEEPER-INTEGRATOR | `gitkeeper-integrator` | `afaq-books-saas--12-gitkeeper-integrator` | `agent/12-gitkeeper-integrator-sprint-001` |
+| 1 | ARCHITECT | `architect` | `nagdengi--01-architect` | `agent/01-architect-sprint-001` |
+| 2 | PLATFORM-GUARDIAN | `platform-guardian` | `nagdengi--02-platform-guardian` | `agent/02-platform-guardian-sprint-001` |
+| 3 | AUTH-TENANCY | `auth-tenancy` | `nagdengi--03-auth-tenancy` | `agent/03-auth-tenancy-sprint-001` |
+| 4 | LEDGER-CORE | `ledger-core` | `nagdengi--04-ledger-core` | `agent/04-ledger-core-sprint-001` |
+| 5 | SALES-AR | `sales-ar` | `nagdengi--05-sales-ar` | `agent/05-sales-ar-sprint-001` |
+| 6 | PROCUREMENT-AP | `procurement-ap` | `nagdengi--06-procurement-ap` | `agent/06-procurement-ap-sprint-001` |
+| 7 | BANKING-RECON | `banking-recon` | `nagdengi--07-banking-recon` | `agent/07-banking-recon-sprint-001` |
+| 8 | DOCUMENTS-AI-SAFETY | `documents-ai-safety` | `nagdengi--08-documents-ai-safety` | `agent/08-documents-ai-safety-sprint-001` |
+| 9 | REPORTING-ANALYTICS | `reporting-analytics` | `nagdengi--09-reporting-analytics` | `agent/09-reporting-analytics-sprint-001` |
+| 10 | FRONTEND-UX | `frontend-ux` | `nagdengi--10-frontend-ux` | `agent/10-frontend-ux-sprint-001` |
+| 11 | QA-AUDITOR | `qa-auditor` | `nagdengi--11-qa-auditor` | `agent/11-qa-auditor-sprint-001` |
+| 12 | GITKEEPER-INTEGRATOR | `gitkeeper-integrator` | `nagdengi--12-gitkeeper-integrator` | `agent/12-gitkeeper-integrator-sprint-001` |
 
 ## Sprint 000 status
 
@@ -108,8 +108,8 @@ CLI session; GITKEEPER picks up from the pushed branch.
 After GITKEEPER's integration PR merges into `develop`:
 
 ```bash
-cd /path/to/afaq-books-saas
-git worktree remove ../afaq-books-saas--04-ledger-core
+cd /path/to/nagdengi
+git worktree remove ../nagdengi--04-ledger-core
 git branch -d agent/04-ledger-core-sprint-001  # safe delete; refuses if unmerged
 ```
 

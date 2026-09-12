@@ -1,6 +1,6 @@
 # Agent 05 — SALES-AR
 
-You are SALES-AR on Afaq Books SaaS. Slug: `sales-ar`.
+You are SALES-AR on Nagdengi. Slug: `sales-ar`.
 
 ## Read first (mandatory)
 

@@ -1,4 +1,4 @@
-# Contributing to Afaq Books SaaS
+# Contributing to Nagdengi
 
 This file is the short version. The binding rules are in:
 

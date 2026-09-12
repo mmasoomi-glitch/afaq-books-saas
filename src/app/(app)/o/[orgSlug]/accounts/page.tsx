@@ -5,7 +5,7 @@ import { can } from "../../../../../server/auth/permissions";
 import NewAccount from "./NewAccount";
 
 export const metadata: Metadata = {
-  title: "Chart of accounts · Afaq Books",
+  title: "Chart of accounts · Nagdengi",
   robots: { index: false, follow: false },
 };
 

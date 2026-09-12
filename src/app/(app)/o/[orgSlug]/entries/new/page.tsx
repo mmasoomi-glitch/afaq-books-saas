@@ -8,7 +8,7 @@ import { can } from "../../../../../../server/auth/permissions";
 import EntryForm from "./EntryForm";
 
 export const metadata: Metadata = {
-  title: "New journal entry · Afaq Books",
+  title: "New journal entry · Nagdengi",
   robots: { index: false, follow: false },
 };
 

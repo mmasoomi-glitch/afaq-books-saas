@@ -30,7 +30,7 @@ Full command output is recorded in `INTEGRATION_LOG.md` under
 **Not configured.** Verified on 2026-05-27 by the lead session:
 
 ```text
-$ gh api repos/mmasoomi-glitch/afaq-books-saas/rulesets
+$ gh api repos/mmasoomi-glitch/nagdengi/rulesets
 []
 
 $ gh api repos/.../branches/main/protection
@@ -140,7 +140,7 @@ Ruleset name: `protect-develop`.
 ```bash
 gh api --method POST \
   -H "Accept: application/vnd.github+json" \
-  repos/mmasoomi-glitch/afaq-books-saas/rulesets \
+  repos/mmasoomi-glitch/nagdengi/rulesets \
   --input - <<'JSON'
 {
   "name": "protect-develop",
@@ -193,7 +193,7 @@ JSON
 ```bash
 gh api --method PUT \
   -H "Accept: application/vnd.github+json" \
-  repos/mmasoomi-glitch/afaq-books-saas/branches/develop/protection \
+  repos/mmasoomi-glitch/nagdengi/branches/develop/protection \
   -F required_status_checks.strict=true \
   -F required_status_checks.contexts[]="Hook scripts parse cleanly" \
   -F required_status_checks.contexts[]="Hook scripts block what they should" \
@@ -226,12 +226,12 @@ Update the ruleset:
 
 ```bash
 # Find the ruleset id
-RID=$(gh api repos/mmasoomi-glitch/afaq-books-saas/rulesets --jq '.[] | select(.name=="protect-develop") | .id')
+RID=$(gh api repos/mmasoomi-glitch/nagdengi/rulesets --jq '.[] | select(.name=="protect-develop") | .id')
 
 # Patch only the pull_request rule
 gh api --method PUT \
   -H "Accept: application/vnd.github+json" \
-  repos/mmasoomi-glitch/afaq-books-saas/rulesets/$RID \
+  repos/mmasoomi-glitch/nagdengi/rulesets/$RID \
   -F 'rules[]=...with required_approving_review_count=1 and dismiss_stale_reviews_on_push=true'
 ```
 
@@ -263,7 +263,7 @@ Same as `develop` except:
 ```bash
 gh api --method POST \
   -H "Accept: application/vnd.github+json" \
-  repos/mmasoomi-glitch/afaq-books-saas/rulesets \
+  repos/mmasoomi-glitch/nagdengi/rulesets \
   --input - <<'JSON'
 {
   "name": "protect-main",
@@ -368,14 +368,14 @@ ruleset by default.
 
 ```bash
 # Rulesets
-gh api repos/mmasoomi-glitch/afaq-books-saas/rulesets --jq \
+gh api repos/mmasoomi-glitch/nagdengi/rulesets --jq \
   '.[] | {name, enforcement, target, conditions: .conditions.ref_name.include}'
 
 # Resolved effective rules for develop
-gh api repos/mmasoomi-glitch/afaq-books-saas/rules/branches/develop --jq '.'
+gh api repos/mmasoomi-glitch/nagdengi/rules/branches/develop --jq '.'
 
 # Resolved effective rules for main
-gh api repos/mmasoomi-glitch/afaq-books-saas/rules/branches/main --jq '.'
+gh api repos/mmasoomi-glitch/nagdengi/rules/branches/main --jq '.'
 ```
 
 The lead session **only** updates `INTEGRATION_LOG.md` with

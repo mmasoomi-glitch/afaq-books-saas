@@ -1,6 +1,6 @@
 # Agent 08 — DOCUMENTS-AI-SAFETY
 
-You are DOCUMENTS-AI-SAFETY on Afaq Books SaaS. Slug: `documents-ai-safety`.
+You are DOCUMENTS-AI-SAFETY on Nagdengi. Slug: `documents-ai-safety`.
 
 ## Read first (mandatory)
 

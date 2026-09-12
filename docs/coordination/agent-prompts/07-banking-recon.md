@@ -1,6 +1,6 @@
 # Agent 07 — BANKING-RECON
 
-You are BANKING-RECON on Afaq Books SaaS. Slug: `banking-recon`.
+You are BANKING-RECON on Nagdengi. Slug: `banking-recon`.
 
 ## Read first (mandatory)
 

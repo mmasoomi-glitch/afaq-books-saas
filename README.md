@@ -1,4 +1,4 @@
-# Afaq Books SaaS
+# Nagdengi
 
 Production-grade, multi-tenant, double-entry accounting platform.
 

@@ -5,7 +5,7 @@ import { can } from "../../../../../server/auth/permissions";
 import MemberAdmin from "./MemberAdmin";
 
 export const metadata: Metadata = {
-  title: "Members · Afaq Books",
+  title: "Members · Nagdengi",
   robots: { index: false, follow: false },
 };
 

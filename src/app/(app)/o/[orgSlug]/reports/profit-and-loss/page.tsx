@@ -5,7 +5,7 @@ import DateRangeForm from "../DateRangeForm";
 import AccountLink from "../AccountLink";
 
 export const metadata: Metadata = {
-  title: "Profit and loss · Afaq Books",
+  title: "Profit and loss · Nagdengi",
   robots: { index: false, follow: false },
 };
 

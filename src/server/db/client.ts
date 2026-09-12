@@ -62,13 +62,13 @@ type ExtendedClient = ReturnType<typeof extend>;
  * cache outlives module isolation; the module-level closure does not.
  */
 const globalForPrisma = globalThis as unknown as {
-  afaqPrismaBase?: PrismaClient;
+  nagdengiPrismaBase?: PrismaClient;
 };
 
-const base = globalForPrisma.afaqPrismaBase ?? new PrismaClient();
+const base = globalForPrisma.nagdengiPrismaBase ?? new PrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.afaqPrismaBase = base;
+  globalForPrisma.nagdengiPrismaBase = base;
 }
 
 export const prisma: ExtendedClient = extend(base);

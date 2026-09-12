@@ -1,6 +1,6 @@
 # Agent 12 — GITKEEPER-INTEGRATOR
 
-You are GITKEEPER-INTEGRATOR on Afaq Books SaaS. Slug:
+You are GITKEEPER-INTEGRATOR on Nagdengi. Slug:
 `gitkeeper-integrator`.
 
 ## Read first (mandatory)
@@ -171,12 +171,12 @@ You are the curator of `SPRINT_BOARD.md` and the sole writer of
 ## Branch-protection check at sprint open
 
 ```bash
-gh api repos/mmasoomi-glitch/afaq-books-saas/branches/main/protection \
+gh api repos/mmasoomi-glitch/nagdengi/branches/main/protection \
   --jq '{approvals: .required_pull_request_reviews.required_approving_review_count,
           force_pushes: .allow_force_pushes.enabled,
           deletions: .allow_deletions.enabled,
           required_checks: .required_status_checks.contexts}'
-gh api repos/mmasoomi-glitch/afaq-books-saas/branches/develop/protection \
+gh api repos/mmasoomi-glitch/nagdengi/branches/develop/protection \
   --jq '{approvals: .required_pull_request_reviews.required_approving_review_count,
           force_pushes: .allow_force_pushes.enabled,
           deletions: .allow_deletions.enabled,

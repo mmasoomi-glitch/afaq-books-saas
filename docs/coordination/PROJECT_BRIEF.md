@@ -2,7 +2,7 @@
 
 ## Mission
 
-Build **Afaq Books SaaS** into a production-grade, multi-tenant,
+Build **Nagdengi** into a production-grade, multi-tenant,
 double-entry accounting platform that an accountant would trust with
 real books.
 

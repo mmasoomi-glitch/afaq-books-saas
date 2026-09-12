@@ -2,7 +2,7 @@
 # .claude/hooks/check-agent-ownership.sh
 #
 # PreToolUse hook for Claude Code. When an agent identifies itself via
-# the AFAQ_AGENT environment variable (set by the agent-prompt files in
+# the NAGDENGI_AGENT environment variable (set by the agent-prompt files in
 # docs/coordination/agent-prompts/), this hook warns / blocks writes
 # outside the agent's assigned paths.
 #
@@ -14,7 +14,7 @@
 #   - Reads tool-call JSON from stdin.
 #   - Extracts write targets using shell-operator / command-name analysis.
 #   - Resolves ownership via OWNERSHIP.md (longest-prefix-wins).
-#   - AFAQ_AGENT unset -> exit 0 (lead session).
+#   - NAGDENGI_AGENT unset -> exit 0 (lead session).
 #   - Blocked agent     -> exit 2 + stderr message with handoff procedure.
 #
 # Dependencies: bash 4+, jq (optional — falls back to grep/sed).
@@ -40,9 +40,9 @@ else
   command_str="$(printf '%s' "$payload" | grep -oE '"command"[[:space:]]*:[[:space:]]*"([^"\\]|\\.)*"' | head -n1 | sed -E 's/^"command"[[:space:]]*:[[:space:]]*"(.*)"$/\1/')"
 fi
 
-# ── AFAQ_AGENT unset -> lead session -> allow ────────────────────
+# ── NAGDENGI_AGENT unset -> lead session -> allow ────────────────────
 
-agent="${AFAQ_AGENT:-}"
+agent="${NAGDENGI_AGENT:-}"
 if [[ -z "$agent" ]]; then
   exit 0
 fi

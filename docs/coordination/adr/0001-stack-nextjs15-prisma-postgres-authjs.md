@@ -9,7 +9,7 @@
 
 ## Context
 
-Afaq Books SaaS is a production-grade, multi-tenant, double-entry
+Nagdengi is a production-grade, multi-tenant, double-entry
 accounting platform. The repository was empty at the time of this
 decision, so the stack choice is being made up-front rather than
 inherited from existing code. The choice locks in:

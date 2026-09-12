@@ -8,7 +8,7 @@ import { listOrganizations } from "../../../server/auth/membership";
 import NewOrganization from "./NewOrganization";
 
 export const metadata: Metadata = {
-  title: "Organizations · Afaq Books",
+  title: "Organizations · Nagdengi",
   robots: { index: false, follow: false },
 };
 

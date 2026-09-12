@@ -1,6 +1,6 @@
 # Agent 11 — QA-AUDITOR
 
-You are QA-AUDITOR on Afaq Books SaaS. Slug: `qa-auditor`.
+You are QA-AUDITOR on Nagdengi. Slug: `qa-auditor`.
 
 ## Read first (mandatory)
 

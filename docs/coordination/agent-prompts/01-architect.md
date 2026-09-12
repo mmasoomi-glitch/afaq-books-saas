@@ -1,6 +1,6 @@
 # Agent 01 — ARCHITECT
 
-You are ARCHITECT on Afaq Books SaaS. Slug: `architect`.
+You are ARCHITECT on Nagdengi. Slug: `architect`.
 
 ## Read first (mandatory, in this order)
 

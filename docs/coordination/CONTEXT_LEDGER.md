@@ -48,7 +48,7 @@ The same trap bites inside a single job, through the test runner:
 Rules now in force:
 
 1. **One Sophia job at a time per database.** Fan out only after giving each job
-   its own database (`afaq_test`, `afaq_test2`, …) and its own
+   its own database (`nagdengi_test`, `nagdengi_test2`, …) and its own
    `TEST_DATABASE_URL`.
 2. **Prove the runner is serialised** — do not trust the config key name. Run
    per-file and whole-suite. If whole-suite fails and per-file passes, the
@@ -79,7 +79,7 @@ Two adjacent traps found the same day:
   `postJournalEntry` that never set `posted_at`. Every Sophia diff touching
   financial state must be read line by line before it lands, and the spec must
   name the exact DB effect each function must have.
-- **The pod's canonical repo at `/workspace/repos/afaq-books-saas` disappears.**
+- **The pod's canonical repo at `/workspace/repos/nagdengi` disappears.**
   Re-clone before starting a job. Worktrees under `/root/wt-*` survive.
 - **Transfer pod → local by checksum, not by eye.** A hand-copied base64 blob
   was corrupted once (md5 mismatch). Compare per-file `md5sum` between pod and
@@ -128,7 +128,7 @@ work is not complete.
   answers or routes to `OWNER`. Treat its substance as the verdict; use
   `sophia_review` for diff-level judgment.
 - **Cross-project boundary:** other projects on the Sophia pod are OUT OF
-  BOUNDS, including read-only listings. Only `afaq-*` paths and databases.
+  BOUNDS, including read-only listings. Only `nagdengi-*` paths and databases.
 
 ### Verdict history
 
@@ -1298,7 +1298,7 @@ people learn to route around.
 
 ### GOTCHA — a judge that answers about the wrong repository
 
-`sophia_review` was called with `project: "/root/afaq-A"` and an explicit
+`sophia_review` was called with `project: "/root/nagdengi-A"` and an explicit
 `paths` list. It returned:
 
 ```

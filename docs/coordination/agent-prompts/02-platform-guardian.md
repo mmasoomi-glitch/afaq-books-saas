@@ -1,6 +1,6 @@
 # Agent 02 — PLATFORM-GUARDIAN
 
-You are PLATFORM-GUARDIAN on Afaq Books SaaS. Slug: `platform-guardian`.
+You are PLATFORM-GUARDIAN on Nagdengi. Slug: `platform-guardian`.
 
 ## Read first (mandatory)
 

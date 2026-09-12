@@ -779,7 +779,7 @@ session for free. Worth doing before any third party embeds our UI.
 - **Filed by:** AUTH-TENANCY
 - **Date:** 2026-09-12
 - **Branch:** `agent/03-http-layer-sprint-002`
-- **Status:** open
+- **Status:** **RESOLVED 2026-09-12** — `agent/08-email-lower-unique-sprint-002`
 - **Type:** hardening (the immediate defect is fixed; the enforcement layer is wrong)
 
 **What happened**
@@ -817,6 +817,43 @@ the exception, document it".
 
 **Owner:** AUTH-TENANCY, with LEDGER-CORE on the migration-drift question.
 
+**Resolution — and the premise was wrong**
+
+`20260913030000_users_email_lower_unique` creates
+`CREATE UNIQUE INDEX users_email_lower_key ON users (lower(email))`.
+
+This blocker stayed open on the assumption quoted above: that a functional index
+"would then report permanent drift" under `prisma migrate diff --exit-code`, so
+closing it required first deciding how the gate treats objects Prisma cannot
+model. **That assumption was never tested, and it is false.** Run against the
+migration on a throwaway shadow database:
+
+```text
+$ npx prisma migrate diff --from-migrations prisma/migrations     --to-schema-datamodel prisma/schema.prisma     --shadow-database-url .../afaq_shadow_probe --exit-code
+No difference detected.
+EXIT=0
+```
+
+Prisma ignores the functional index exactly as it already ignores every trigger
+and `EXCLUDE` constraint in `20260911065811_init_ledger`. The answer the
+blocker guessed at — *"indexes are the exception, document it"* — turns out not
+to be needed: the gate is already consistent, and there is nothing to exclude.
+
+A related piece of advice from the judge, *"keep `--exit-code` but exclude
+specific drift types"*, was **not implementable** — `migrate diff` has no
+exclusion flags — and is now also unnecessary.
+
+Five tests in `tests/integration/auth/email-uniqueness.test.ts`. The ones that
+matter insert with raw SQL, bypassing the service entirely, because a
+service-level test would pass just as happily with no index at all. `E5` reads
+`pg_indexes` directly, since `resetDb` truncates rather than rebuilding and a
+migration that failed to apply would leave the rest passing for the wrong
+reason.
+
+**A cost, stated:** the index makes a future deploy fail loudly if two
+addresses differing only in case already exist. That is correct — silently
+merging or deleting one of two real accounts is not a migration's decision.
+
 ---
 
 ### B-20260912-04 — Membership changes write no audit-log row
@@ -824,7 +861,7 @@ the exception, document it".
 - **Filed by:** AUTH-TENANCY
 - **Date:** 2026-09-12
 - **Branch:** `agent/03-org-membership-sprint-002`
-- **Status:** open
+- **Status:** **RESOLVED** — closed by later work, verified 2026-09-12
 - **Type:** **rule violation**, not merely a gap
 
 **What the rules say**
@@ -848,6 +885,30 @@ around ledger entities and expects an entity type and id from the journal
 domain. Membership actions need either a widened entity vocabulary or their own
 writer. Choosing between those is a schema decision, and bundling it into a PR
 about authorization would have buried it.
+
+**Resolution — this had already been fixed and nobody closed the blocker**
+
+Found while looking for the next task, by reading `membership.ts` rather than
+trusting this entry. All four actions write an audit row inside the same
+transaction as the change:
+
+| Function | Action | `membership.ts` |
+|---|---|---|
+| `createOrganization` | `organization.create` | 143 |
+| `grantMembership` | `member.invite` | 201 |
+| `changeRole` | `role.grant` | 263 |
+| `removeMember` | `member.remove` | 306 |
+| `transferOwnership` | `ownership.transfer` | 385 |
+
+`R2` in `tests/integration/audit/request-id.test.ts` reads the `member.invite`
+row and asserts its `request_id`, so the behaviour is pinned rather than
+incidental. The "widened entity vocabulary" question resolved itself: the
+existing writer took the action key and entity type as arguments already.
+
+**The process lesson is the point.** A blocker that describes a fixed problem is
+worse than no blocker: it costs the next reader the time to rediscover that it
+is stale, and it makes the open list untrustworthy. Closing one is part of
+fixing it.
 
 **What would close it**
 

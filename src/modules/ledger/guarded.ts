@@ -155,8 +155,10 @@ export type {
   CreatePeriodInput,
 } from "./scope";
 export type {
+  AccountTotals,
   EntrySummary,
   EntrySummaryLine,
+  JournalFilter,
   JournalPage,
   JournalPageOptions,
   PostJournalInput,

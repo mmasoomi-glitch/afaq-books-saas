@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../server/db/client";
 import type { TxClient } from "../../server/db/client";
@@ -450,11 +451,38 @@ export interface EntrySummary {
 export const MAX_JOURNAL_PAGE = 100;
 
 /** What a page of the journal costs to ask for, and what it hands back. */
+/**
+ * Which entries to show. Every field is optional; all of them are AND-ed.
+ *
+ * `accountId` selects entries with **at least one line** on that account — the
+ * whole entry is returned, not the single line, because a debit shown without
+ * its matching credit is half of a double entry and reads as if money appeared
+ * from nowhere. `accountTotals` exists so the reader can still reconcile what
+ * they are looking at against the figure that sent them here.
+ */
+export interface JournalFilter {
+  readonly accountId?: string;
+  /** Inclusive. Compared against `entryDate`, not `postedAt`. */
+  readonly from?: Date;
+  /** Inclusive. */
+  readonly to?: Date;
+}
+
 export interface JournalPageOptions {
   /** Clamped to 1…`MAX_JOURNAL_PAGE`. A non-finite value falls back to the max. */
   readonly pageSize?: number;
   /** The `nextCursor` from the previous page. Anything else serves page one. */
   readonly cursor?: string;
+  readonly filter?: JournalFilter;
+}
+
+/** Debits and credits on the filtered account, across the WHOLE filtered set. */
+export interface AccountTotals {
+  readonly accountId: string;
+  readonly accountCode: string;
+  readonly accountName: string;
+  readonly debit: string;
+  readonly credit: string;
 }
 
 export interface JournalPage {
@@ -463,6 +491,16 @@ export interface JournalPage {
   readonly nextCursor: string | null;
   /** The page size actually used, after clamping. */
   readonly pageSize: number;
+  /**
+   * Set when `filter.accountId` names an account in this organization.
+   *
+   * `undefined` when no account was asked for; `null` when one was asked for
+   * and does not exist here. Those are different facts and the page says
+   * different things about them — "no filter" versus "no such account" — and
+   * collapsing them would show an unfiltered journal to someone who believes
+   * they are looking at one account.
+   */
+  readonly accountTotals: AccountTotals | null | undefined;
 }
 
 /**
@@ -495,26 +533,73 @@ export async function listEntries(
   options: JournalPageOptions = {},
 ): Promise<JournalPage> {
   const pageSize = clampPageSize(options.pageSize);
+  const filter = options.filter ?? {};
+
+  // The account is resolved INSIDE the scope, like the cursor. A foreign id and
+  // an id that does not exist produce the same answer, so the parameter cannot
+  // be used to ask whether another tenant has a given account.
+  const account =
+    filter.accountId === undefined
+      ? undefined
+      : ((await prisma.account.findFirst({
+          where: {
+            id: isUuid(filter.accountId) ? filter.accountId : NO_SUCH_UUID,
+            organizationId: scope.organizationId,
+          },
+          select: { id: true, code: true, name: true },
+        })) ?? null);
+
+  // An account was named and is not ours. Returning an UNFILTERED journal here
+  // would be the dangerous answer: the reader believes they are looking at one
+  // account and is looking at everything.
+  if (account === null) {
+    return { entries: [], nextCursor: null, pageSize, accountTotals: null };
+  }
+
+  const where: Prisma.JournalEntryWhereInput = {
+    organizationId: scope.organizationId,
+    postedAt: { not: null },
+    ...(account === undefined
+      ? {}
+      : { journalLines: { some: { accountId: account.id } } }),
+    ...(filter.from === undefined && filter.to === undefined
+      ? {}
+      : {
+          entryDate: {
+            ...(filter.from === undefined ? {} : { gte: filter.from }),
+            ...(filter.to === undefined ? {} : { lte: filter.to }),
+          },
+        }),
+  };
 
   // A cursor names a row, and a row belongs to an organization. Resolving it
   // inside this scope means a cursor from ANOTHER tenant cannot be used to page
   // through their journal, and — just as important — cannot be used to ask
   // whether their entry exists: an unknown id, a foreign id and a malformed
   // string all produce the same answer, page one.
+  // A cursor is only meaningful for the query that produced it.
+  //
+  // Change the filter and keep the cursor — which is what happens when someone
+  // edits a URL, or when a filter form forgets to clear it — and the cursor
+  // names a row that may not be in the new result set at all. What comes back
+  // is then a slice of the new query starting at an arbitrary point: rows
+  // before it are silently missing, and nothing says so.
+  //
+  // So the filter is fingerprinted into the cursor and checked on the way back
+  // in. A cursor from a different filter is not an error; it is simply not a
+  // cursor for THIS query, and serves page one.
+  const fingerprint = filterFingerprint(where);
+  const cursorId = splitCursor(options.cursor, fingerprint);
   const cursor =
-    !isUuid(options.cursor)
+    cursorId === undefined
       ? undefined
       : ((await prisma.journalEntry.findFirst({
-          where: {
-            id: options.cursor,
-            organizationId: scope.organizationId,
-            postedAt: { not: null },
-          },
+          where: { ...where, id: cursorId },
           select: { id: true },
         })) ?? undefined);
 
   const entries = await prisma.journalEntry.findMany({
-    where: { organizationId: scope.organizationId, postedAt: { not: null } },
+    where,
     orderBy: [
       { entryDate: "desc" },
       { journalNumber: "desc" },
@@ -539,9 +624,91 @@ export async function listEntries(
 
   return {
     pageSize,
-    nextCursor: hasMore && last !== undefined ? last.id : null,
+    nextCursor:
+      hasMore && last !== undefined ? `${fingerprint}.${last.id}` : null,
     entries: toSummaries(page),
+    accountTotals:
+      account === undefined
+        ? undefined
+        : await accountTotalsFor(scope, account, where),
   };
+}
+
+/**
+ * Debits and credits on the filtered account across the ENTIRE filtered set —
+ * not just the page on screen.
+ *
+ * Summed in SQL from posted lines, because `accounting-integrity.md` I4 forbids
+ * a report derived from what the UI happens to be rendering. A per-page total
+ * would also be useless for the thing this exists for: checking that a
+ * drill-down reconciles to the trial-balance figure that led to it.
+ */
+async function accountTotalsFor(
+  scope: LedgerScope,
+  account: { readonly id: string; readonly code: string; readonly name: string },
+  where: Prisma.JournalEntryWhereInput,
+): Promise<AccountTotals> {
+  const totals = await prisma.journalLine.aggregate({
+    where: {
+      organizationId: scope.organizationId,
+      accountId: account.id,
+      journalEntry: where,
+    },
+    _sum: { debit: true, credit: true },
+  });
+
+  return {
+    accountId: account.id,
+    accountCode: account.code,
+    accountName: account.name,
+    // `_sum` is null when nothing matched, which is zero rather than unknown.
+    debit: (totals._sum.debit ?? new Prisma.Decimal(0)).toFixed(4),
+    credit: (totals._sum.credit ?? new Prisma.Decimal(0)).toFixed(4),
+  };
+}
+
+/** A uuid that cannot exist, for a lookup that must find nothing. */
+const NO_SUCH_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * A short, stable fingerprint of the query a cursor belongs to.
+ *
+ * Not a security control — it is not secret and does not need to be. Its only
+ * job is to make a cursor from one filter recognisably not a cursor for
+ * another, so the mismatch becomes "page one" instead of a silently truncated
+ * result. Twelve hex characters is ample: a collision would serve a valid
+ * cursor for a different filter, which is exactly the behaviour there would be
+ * with no fingerprint at all.
+ */
+function filterFingerprint(where: Prisma.JournalEntryWhereInput): string {
+  return createHash("sha256")
+    .update(JSON.stringify(where, replaceDates))
+    .digest("hex")
+    .slice(0, 12);
+}
+
+/** `JSON.stringify` only turns a Date into a stable string via a replacer. */
+function replaceDates(_key: string, value: unknown): unknown {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * The entry id inside a cursor, if the cursor belongs to this query.
+ *
+ * Returns `undefined` — meaning "serve page one" — for absent, malformed,
+ * wrong-fingerprint and non-uuid cursors alike. From the caller's side they are
+ * all the same fact: this is not a cursor for what you are asking.
+ */
+function splitCursor(
+  raw: string | undefined,
+  fingerprint: string,
+): string | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const separator = raw.indexOf(".");
+  if (separator === -1) return undefined;
+  if (raw.slice(0, separator) !== fingerprint) return undefined;
+  const id = raw.slice(separator + 1);
+  return isUuid(id) ? id : undefined;
 }
 
 /**

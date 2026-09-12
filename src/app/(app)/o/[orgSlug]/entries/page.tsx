@@ -88,7 +88,7 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
    * one anyway, so this is the second of two independent defences rather than
    * the only one.
    */
-  const params = (): URLSearchParams => {
+  const filterParams = (): URLSearchParams => {
     const out = new URLSearchParams();
     if (accountId !== undefined) out.set("account", accountId);
     if (from !== undefined) out.set("from", isoDay(from));
@@ -100,7 +100,7 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
   };
 
   const linkTo = (cursorValue?: string): string => {
-    const out = params();
+    const out = filterParams();
     if (cursorValue !== undefined) out.set("cursor", cursorValue);
     const query = out.toString();
     return `/o/${orgSlug}/entries${query === "" ? "" : `?${query}`}`;

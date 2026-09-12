@@ -9,7 +9,12 @@ import { toErrorResponse } from "./auth";
 import {
   guardedCreateAccount,
   guardedCreatePeriod,
+  guardedPostJournalEntry,
 } from "../../../modules/ledger/guarded";
+// Through `guarded`, not `posting` — that module is private to the ledger and
+// the CI gate treats a type-only import of it exactly like a value import.
+import type { PostLineInput } from "../../../modules/ledger/guarded";
+import { LedgerError } from "../../../modules/ledger/errors";
 
 /**
  * Ledger endpoints.
@@ -77,6 +82,58 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+/**
+ * A `LedgerError` is a fact about what the caller submitted, not a bug.
+ *
+ * Found by posting a deliberately unbalanced entry against the running server:
+ * it was correctly refused and answered **500 "internal error"**. The refusal
+ * was right and the status was wrong — `toErrorResponse` rethrows what it does
+ * not recognise, so the error fell through to the adapter's catch-all and the
+ * caller was told nothing they could act on.
+ *
+ * My first attempt at this matched Postgres constraint NAMES in the exception
+ * text. That was the wrong layer: `postJournalEntry` already catches the
+ * database error and rethrows a typed `LedgerError` with a stable `code`, so
+ * the names never appear. Keying on the code is both correct and stable — a
+ * constraint can be renamed, the domain error cannot be without the tests
+ * noticing.
+ *
+ * 422 rather than 400: the body was well-formed and every field had the right
+ * type. What failed is a rule about the relationship BETWEEN the fields, which
+ * is exactly what 422 means.
+ *
+ * `LEDGER_NOT_FOUND` is the exception, at 404 — and it deliberately does not
+ * distinguish "no such period" from "that period belongs to another
+ * organization", because `NotFoundError` already refuses to.
+ *
+ * The MESSAGE comes from the domain error, which names what the user did
+ * ("debits 500 do not equal credits 499"). That is safe to surface precisely
+ * because these errors are authored for callers. A raw database message is not,
+ * and still becomes a generic 500.
+ */
+const LEDGER_STATUS: Readonly<Record<string, number>> = Object.freeze({
+  LEDGER_UNBALANCED: 422,
+  LEDGER_PERIOD_NOT_OPEN: 422,
+  LEDGER_INVALID_LINE: 422,
+  LEDGER_ALREADY_REVERSED: 422,
+  LEDGER_NOT_POSTED: 422,
+  LEDGER_NOT_FOUND: 404,
+});
+
+function ledgerRefusal(err: unknown): HttpResponse | undefined {
+  if (!(err instanceof LedgerError)) return undefined;
+
+  const status = LEDGER_STATUS[err.code];
+  if (status === undefined) {
+    // A new LedgerError nobody mapped. It becomes a 500, deliberately: an
+    // unmapped domain error is a gap in this table, and defaulting it to 422
+    // would hide the gap behind a plausible answer.
+    return undefined;
+  }
+
+  return error(status, err.code, err.message);
+}
+
 function guarded(handler: ScopedHandler): ScopedHandler {
   return async (req, scope) => {
     try {
@@ -86,6 +143,10 @@ function guarded(handler: ScopedHandler): ScopedHandler {
       if (isUniqueViolation(err)) {
         return error(409, "ALREADY_EXISTS", "that code is already in use");
       }
+
+      const refusal = ledgerRefusal(err);
+      if (refusal !== undefined) return refusal;
+
       return toErrorResponse(err);
     }
   };
@@ -159,6 +220,133 @@ export function createPeriodHandler(): ScopedHandler {
       id: period.id,
       name: period.name,
       status: period.status,
+    });
+  });
+}
+
+/**
+ * An amount from a form field, as a STRING.
+ *
+ * Never `Number(raw)`. `accounting-integrity.md` I8 forbids a JavaScript float
+ * anywhere near a stored amount, and the round trip through one is lossy in
+ * exactly the range money lives in: `0.1 + 0.2` is the canonical example, and a
+ * ledger that is out by a ten-thousandth does not balance.
+ *
+ * So the string is validated for SHAPE and passed through untouched.
+ * `Prisma.Decimal` parses it on the other side. The regex allows up to four
+ * decimal places because that is the column's scale — more would be silently
+ * rounded by Postgres, and a silently rounded amount in a journal line is the
+ * difference between a balanced entry and an unbalanced one.
+ */
+function readAmount(
+  value: unknown,
+): { ok: true; value: string | undefined } | { ok: false } {
+  if (value === undefined || value === null || value === "") {
+    return { ok: true, value: undefined };
+  }
+  if (typeof value !== "string") return { ok: false };
+
+  const trimmed = value.trim();
+  if (!/^\d{1,15}(\.\d{1,4})?$/.test(trimmed)) return { ok: false };
+  return { ok: true, value: trimmed };
+}
+
+/**
+ * One journal line, narrowed field by field.
+ *
+ * Returns `undefined` for anything malformed rather than throwing, so the
+ * caller can answer 400 once for the whole request instead of leaking which
+ * line was wrong in an exception message.
+ */
+function readLine(raw: unknown): PostLineInput | undefined {
+  const accountId = readString(raw, "accountId");
+  if (accountId === undefined) return undefined;
+
+  const debitRaw = Object.getOwnPropertyDescriptor(raw, "debit")?.value;
+  const creditRaw = Object.getOwnPropertyDescriptor(raw, "credit")?.value;
+
+  const debit = readAmount(debitRaw);
+  const credit = readAmount(creditRaw);
+  if (!debit.ok || !credit.ok) return undefined;
+
+  // Exactly one side. Both populated, or neither, is rejected here as well as
+  // by `jl_debit_credit_sign` and `jl_nonzero` in the database — this copy
+  // exists to make the message useful, not to be the enforcement.
+  const hasDebit = debit.value !== undefined;
+  const hasCredit = credit.value !== undefined;
+  if (hasDebit === hasCredit) return undefined;
+
+  const memo = readString(raw, "memo");
+  return {
+    accountId,
+    ...(debit.value === undefined ? {} : { debit: debit.value }),
+    ...(credit.value === undefined ? {} : { credit: credit.value }),
+    ...(memo === undefined ? {} : { memo }),
+  };
+}
+
+/** `POST /api/[orgSlug]/entries` — post a balanced journal entry. */
+export function postEntryHandler(): ScopedHandler {
+  return guarded(async (req, scope) => {
+    const periodId = readString(req.body, "periodId");
+    const description = readString(req.body, "description");
+    const currency = readCurrency(req.body);
+    const dateRaw = readString(req.body, "entryDate");
+
+    if (
+      periodId === undefined ||
+      description === undefined ||
+      currency === undefined ||
+      dateRaw === undefined
+    ) {
+      return badBody(
+        "periodId, entryDate, description and a three-letter currency are required",
+      );
+    }
+
+    const entryDate = new Date(dateRaw);
+    if (Number.isNaN(entryDate.getTime())) {
+      return badBody("entryDate must be a date (YYYY-MM-DD)");
+    }
+
+    const rawLines = Object.getOwnPropertyDescriptor(req.body, "lines")?.value;
+    if (!Array.isArray(rawLines)) return badBody("lines must be an array");
+
+    // Two lines is the minimum that can balance. One line cannot, and an entry
+    // with none is not an entry — both would be refused by the deferred balance
+    // trigger at COMMIT, but the message there names a constraint rather than
+    // the thing the user did.
+    if (rawLines.length < 2) return badBody("an entry needs at least two lines");
+
+    const lines: PostLineInput[] = [];
+    for (const raw of rawLines) {
+      const line = readLine(raw);
+      if (line === undefined) {
+        return badBody(
+          "each line needs an accountId and exactly one of debit or credit, " +
+            "as a number with at most four decimal places",
+        );
+      }
+      lines.push(line);
+    }
+
+    // NOT checked here: that the entry balances. `je_balanced_check` is a
+    // DEFERRABLE constraint trigger evaluated at COMMIT, and that is the only
+    // place the question has a trustworthy answer — a sum computed in this
+    // process is a claim about what we intend to write, not about what was
+    // written. Re-implementing it would mean two answers that can disagree, and
+    // the one users would see is the wrong one.
+    const posted = await guardedPostJournalEntry(scope, {
+      periodId,
+      entryDate,
+      description,
+      currency,
+      lines,
+    });
+
+    return json(201, {
+      entryId: posted.entryId,
+      journalNumber: posted.journalNumber,
     });
   });
 }

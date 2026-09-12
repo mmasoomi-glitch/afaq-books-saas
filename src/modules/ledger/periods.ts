@@ -165,3 +165,16 @@ export async function unlockPeriod(
     return period;
   });
 }
+
+/**
+ * Every period in this organization, newest first.
+ *
+ * Org-scoped like everything else here: the `organizationId` comes from the
+ * resolved scope, so there is no "all periods" query to accidentally write.
+ */
+export async function listPeriods(scope: LedgerScope): Promise<Period[]> {
+  return prisma.period.findMany({
+    where: { organizationId: scope.organizationId },
+    orderBy: { startDate: "desc" },
+  });
+}

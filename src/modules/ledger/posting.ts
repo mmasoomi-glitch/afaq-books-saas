@@ -502,7 +502,7 @@ export async function listEntries(
   // whether their entry exists: an unknown id, a foreign id and a malformed
   // string all produce the same answer, page one.
   const cursor =
-    options.cursor === undefined || options.cursor === ""
+    !isUuid(options.cursor)
       ? undefined
       : ((await prisma.journalEntry.findFirst({
           where: {
@@ -542,6 +542,28 @@ export async function listEntries(
     nextCursor: hasMore && last !== undefined ? last.id : null,
     entries: toSummaries(page),
   };
+}
+
+/**
+ * Is this string shaped like the `@db.Uuid` primary key?
+ *
+ * Checked BEFORE the lookup rather than catching the failure after it.
+ * Postgres rejects a malformed uuid at the type level — Prisma surfaces
+ * "Inconsistent column data: Error creating UUID" — so a mangled `?cursor=`
+ * in a link would have thrown out of the page as a 500 rather than serving
+ * page one. A caught link is not an attack and should not look like a crash.
+ *
+ * A blanket `try`/`catch` around the lookup would also work and would swallow
+ * a genuine database failure with it, reporting "page one" when the truth is
+ * that the database is unreachable.
+ */
+function isUuid(value: string | undefined): value is string {
+  return (
+    value !== undefined &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
 }
 
 /**

@@ -195,9 +195,18 @@ test("J5: a cursor from ANOTHER organization serves page one and leaks nothing",
     pageSize: 2,
     cursor: theirEntryId ?? "",
   });
+  // Three shapes of bad cursor, not one. The first version of this test used
+  // only "not-an-id" and found a real bug: the id column is `@db.Uuid`, so
+  // Postgres rejects a malformed value at the type level and the page threw a
+  // 500 instead of serving page one. A well-formed uuid that names nothing is
+  // a different path through the code and needs its own case.
   const withNonsense = await listEntries(mine.scope, {
     pageSize: 2,
     cursor: "not-an-id",
+  });
+  const withUnknownUuid = await listEntries(mine.scope, {
+    pageSize: 2,
+    cursor: "00000000-0000-4000-8000-000000000000",
   });
   const pageOne = await listEntries(mine.scope, { pageSize: 2 });
 
@@ -206,6 +215,9 @@ test("J5: a cursor from ANOTHER organization serves page one and leaks nothing",
   );
   expect(withForeign.entries.map((e) => e.id)).toEqual(
     withNonsense.entries.map((e) => e.id),
+  );
+  expect(withForeign.entries.map((e) => e.id)).toEqual(
+    withUnknownUuid.entries.map((e) => e.id),
   );
 
   const theirIds = new Set(theirPage.entries.map((e) => e.id));

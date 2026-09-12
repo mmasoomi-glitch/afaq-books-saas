@@ -29,11 +29,26 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
   // tenant, an id that no longer exists and a mangled string are all answered
   // the same way — page one — so the parameter cannot be used to ask whether
   // somebody else's entry exists.
-  const cursor = single((await searchParams)["cursor"]);
-  const page = await guardedListEntries(
-    scope,
-    cursor === undefined ? {} : { cursor },
-  );
+  const query = await searchParams;
+  const cursor = single(query["cursor"]);
+
+  // `size` is clamped to 1…MAX_JOURNAL_PAGE by the service, which is where the
+  // rule belongs — the query string is not the only caller. Parsing it here
+  // rather than passing the raw string keeps `NaN` out of the service, where it
+  // would be indistinguishable from "not specified".
+  const rawSize = single(query["size"]);
+  const size = rawSize === undefined ? undefined : Number.parseInt(rawSize, 10);
+
+  /** Carry an explicit page size across the paging links, or nothing. */
+  const sizeQuery = (prefix: "?" | "&"): string =>
+    size === undefined || Number.isNaN(size)
+      ? ""
+      : `${prefix}size=${String(size)}`;
+
+  const page = await guardedListEntries(scope, {
+    ...(cursor === undefined ? {} : { cursor }),
+    ...(size === undefined || Number.isNaN(size) ? {} : { pageSize: size }),
+  });
   const entries = page.entries;
   const paging = cursor !== undefined || page.nextCursor !== null;
 
@@ -149,7 +164,9 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
             <p>
               {cursor === undefined ? null : (
                 <>
-                  <a href={`/o/${orgSlug}/entries`}>Most recent entries</a>
+                  <a href={`/o/${orgSlug}/entries${sizeQuery("?")}`}>
+                    Most recent entries
+                  </a>
                   {page.nextCursor === null ? null : " · "}
                 </>
               )}
@@ -161,7 +178,7 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
                 <a
                   href={`/o/${orgSlug}/entries?cursor=${encodeURIComponent(
                     page.nextCursor,
-                  )}`}
+                  )}${sizeQuery("&")}`}
                 >
                   Older entries
                 </a>

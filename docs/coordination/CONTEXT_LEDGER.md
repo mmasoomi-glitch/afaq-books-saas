@@ -162,7 +162,62 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-13 (a person can use it)
+## State — last hydrated 2026-09-13 (the ledger has a screen)
+
+**Base branch @ `79f7da0`. No open PRs. 331 tests, lint clean, build green,
+typecheck clean, no drift.** PRs #27 and #28 merged since the last hydration.
+
+A person can now sign up, create an organization, invite colleagues, build a
+chart of accounts, **post a balanced journal entry**, and watch it appear in the
+trial balance — all through the product.
+
+### Three things found by running it, not by reading it
+
+**1. A refused entry answered 500 "internal error".** The refusal was right and
+the status was wrong: `toErrorResponse` rethrows what it does not recognise, so
+a `LedgerError` fell through to the adapter's catch-all. Now 422 with the
+domain error's own message — "debits 500 do not equal credits 499".
+
+**2. My first fix was at the wrong layer.** I matched Postgres constraint names
+in the exception text, and it did not work: `postJournalEntry` already catches
+the database error and rethrows a typed `LedgerError` with a stable `code`, so
+the names never appear. **Key on the domain error, not on the constraint** — a
+constraint can be renamed and a text match silently stops matching.
+
+**3. I nearly concluded `instanceof` fails across Next's bundle chunks.** After
+the fix, the live server still returned 500 while the tests returned 422. That
+explanation was plausible and would have sent me rewriting every error check in
+the HTTP layer. It was a **stale `.next`** — I had not rebuilt after the commit.
+
+> **Verify the build is current before concluding anything from a running
+> server.** A live check is only evidence about the code actually running.
+
+### A gate caught its author for the second time
+
+The "nobody imports the unguarded ledger services" grep rejected a **type-only**
+import of `posting.ts` in the HTTP handler. No runtime bypass — but the gate
+cannot distinguish `import type` from `import`, and should not try: a type-only
+import today is one character away from a value import tomorrow.
+
+Both times a gate has caught me this session, the right answer was to **move the
+code, not relax the check**. `guarded.ts` is now the complete public surface of
+the ledger module — the functions and the shapes they take.
+
+### Where the line between UI and ledger is drawn
+
+The posting form shows a running debit/credit total and **does not gate
+submission on it**, and says so on screen. `je_balanced_check` is a `DEFERRABLE`
+trigger evaluated at COMMIT, and that is the only point the question has a
+trustworthy answer. A browser sum is a claim about what we intend to write.
+
+The submit button stays enabled when the total is out, deliberately: a UI that
+refuses to submit is a UI that can be wrong in a direction nobody can override.
+
+Money is a **string** end to end — regex-validated in the handler, passed
+untouched to `Prisma.Decimal`, totalled in the form as integer ten-thousandths.
+`L17` posts `0.1 + 0.2 = 0.3` and reads the stored Decimals back.
+
+## Superseded — hydrated 2026-09-13 (a person can use it)
 
 **Base branch @ `967900e`. No open PRs. 312 tests, lint clean, build green,
 typecheck clean, no drift.** PRs #24 and #25 merged since the last hydration.
@@ -673,25 +728,27 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **Posting a journal entry has no screen.** The ledger is the product and it
-   is the last major surface with no UI at all: `postJournalEntry` and
-   `reverseJournalEntry` are reachable only as function calls. Everything they
-   need — org scope, permission checks, the guarded wrappers — already exists,
-   so this is a form and a route rather than new machinery.
-2. **No chart of accounts screen**, which posting needs first: an entry names
-   accounts, and there is no way to create one through the product.
-3. **No app shell.** Nothing links to `/organizations` from the home page for
-   an already-signed-in visitor, because the home page is static and cannot
-   know. A header with the current organization and a sign-out control would
-   tie together everything already built.
-4. **`audit_logs.request_id` is null everywhere.** The adapter is the only
-   place a request id can originate and it does not generate one. I9 lists it
-   among the fields an audit row stores.
-5. **Rate limiting covers only sign-in and sign-up.** An authenticated ADMIN
-   scripting membership changes is not slowed by anything.
-6. **No component tests.** No jsdom setup. Every server path the forms call is
-   covered; the rendering and the message selection are not.
-7. **Prettier**, or a decision not to have one.
+1. **Reversal has no screen, and the posting form now tells users it is the
+   only way to correct an entry.** That is a promise the product does not keep
+   — the gap is visible to users for the first time, which is worse than when
+   nothing was visible. `reverseJournalEntry` and `guardedReverseJournalEntry`
+   both exist; this is a route, a button and a confirmation.
+2. **No entry list.** You can post an entry and see its effect in the trial
+   balance, and no way to look at what you posted. Reversal needs this anyway —
+   you cannot reverse what you cannot find.
+3. **No period screen.** The posting page's blocked state names the endpoint,
+   which is honest and is not a substitute.
+4. **`B-20260913-01` — the slug namespace.** Two reservation migrations in one
+   session. The `/o/{slug}/…` prefix is cheap now and expensive once slugs are
+   in circulation.
+5. **No app shell.** The home page is static so it cannot know whether a
+   visitor is signed in. A header with the current organization and a sign-out
+   control would tie together everything already built.
+6. **`audit_logs.request_id` is null everywhere.** The adapter is the only
+   place a request id can originate.
+7. **Rate limiting covers only sign-in and sign-up.**
+8. **No component tests.** No jsdom setup.
+9. **Prettier**, or a decision not to have one.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init

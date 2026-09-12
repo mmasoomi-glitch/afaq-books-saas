@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
-import { guardedListEntries } from "../../../../../modules/ledger/guarded";
+import {
+  guardedListAccounts,
+  guardedListEntries,
+} from "../../../../../modules/ledger/guarded";
+import JournalFilterForm from "./JournalFilterForm";
 import { can } from "../../../../../server/auth/permissions";
 import ReverseButton from "./ReverseButton";
 
@@ -18,6 +22,25 @@ interface PageProps {
 
 function single(raw: string | string[] | undefined): string | undefined {
   return typeof raw === "string" && raw !== "" ? raw : undefined;
+}
+
+/**
+ * A date from the query string, or nothing.
+ *
+ * An unparseable value is dropped rather than thrown, for the same reason the
+ * reports do it: the value arrives from a link someone may have edited, and a
+ * mangled link is not an error page. What it must not become is `Invalid Date`,
+ * which SQL compares against nothing and silently returns an empty journal —
+ * which reads as "you have posted nothing".
+ */
+function parseDate(raw: string | undefined): Date | undefined {
+  if (raw === undefined) return undefined;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function isoDay(value: Date): string {
+  return value.toISOString().slice(0, 10);
 }
 
 export default async function EntriesPage({ params, searchParams }: PageProps) {
@@ -39,15 +62,54 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
   const rawSize = single(query["size"]);
   const size = rawSize === undefined ? undefined : Number.parseInt(rawSize, 10);
 
-  /** Carry an explicit page size across the paging links, or nothing. */
-  const sizeQuery = (prefix: "?" | "&"): string =>
-    size === undefined || Number.isNaN(size)
-      ? ""
-      : `${prefix}size=${String(size)}`;
+  const accountId = single(query["account"]);
+  const from = parseDate(single(query["from"]));
+  const to = parseDate(single(query["to"]));
+  const filter = {
+    ...(accountId === undefined ? {} : { accountId }),
+    ...(from === undefined ? {} : { from }),
+    ...(to === undefined ? {} : { to }),
+  };
+  const filtered = Object.keys(filter).length > 0;
+
+  // Only fetched when there is a filter form to populate, which there always
+  // is — but reading the chart of accounts needs the same permission the
+  // journal does, so this cannot widen who sees what.
+  const accounts = await guardedListAccounts(scope);
+
+  /**
+   * The current filter as query parameters, for the paging links.
+   *
+   * The cursor is deliberately NOT included: these build links, and the cursor
+   * is added by the caller that wants one. The filter FORM leaves it out too,
+   * which is the important half — submitting a new filter with the old cursor
+   * still attached would ask for "page two of a query that no longer exists".
+   * The service fingerprints the filter into the cursor and would serve page
+   * one anyway, so this is the second of two independent defences rather than
+   * the only one.
+   */
+  const params = (): URLSearchParams => {
+    const out = new URLSearchParams();
+    if (accountId !== undefined) out.set("account", accountId);
+    if (from !== undefined) out.set("from", isoDay(from));
+    if (to !== undefined) out.set("to", isoDay(to));
+    if (size !== undefined && !Number.isNaN(size)) {
+      out.set("size", String(size));
+    }
+    return out;
+  };
+
+  const linkTo = (cursorValue?: string): string => {
+    const out = params();
+    if (cursorValue !== undefined) out.set("cursor", cursorValue);
+    const query = out.toString();
+    return `/o/${orgSlug}/entries${query === "" ? "" : `?${query}`}`;
+  };
 
   const page = await guardedListEntries(scope, {
     ...(cursor === undefined ? {} : { cursor }),
     ...(size === undefined || Number.isNaN(size) ? {} : { pageSize: size }),
+    ...(filtered ? { filter } : {}),
   });
   const entries = page.entries;
   const paging = cursor !== undefined || page.nextCursor !== null;
@@ -72,8 +134,48 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
         <a href={`/o/${orgSlug}/reports/balance-sheet`}>Balance sheet</a>
       </p>
 
+      <JournalFilterForm
+        orgSlug={orgSlug}
+        accounts={accounts.map((account) => ({
+          id: account.id,
+          code: account.code,
+          name: account.name,
+        }))}
+        accountId={accountId ?? ""}
+        from={from === undefined ? "" : isoDay(from)}
+        to={to === undefined ? "" : isoDay(to)}
+        size={size === undefined || Number.isNaN(size) ? "" : String(size)}
+      />
+
+      {page.accountTotals === null ? (
+        // An account was named and is not in this organization. Saying "no
+        // entries" would be true and misleading: it reads as "this account has
+        // no postings" rather than "there is no such account here".
+        <p role="alert">
+          No such account in this organization.{" "}
+          <a href={`/o/${orgSlug}/entries`}>Show the whole journal</a>.
+        </p>
+      ) : null}
+
+      {page.accountTotals === null || page.accountTotals === undefined ? null : (
+        <p>
+          <strong>
+            {page.accountTotals.accountCode} — {page.accountTotals.accountName}
+          </strong>
+          : debits {page.accountTotals.debit}, credits{" "}
+          {page.accountTotals.credit} across every entry matching this filter —
+          not only the ones on this page. These are the figures a trial balance
+          for the same range is built from.
+        </p>
+      )}
+
       {entries.length === 0 ? (
-        cursor === undefined ? (
+        page.accountTotals === null ? null : filtered ? (
+          <p>
+            No posted entries match this filter.{" "}
+            <a href={`/o/${orgSlug}/entries`}>Clear it</a>.
+          </p>
+        ) : cursor === undefined ? (
           <p>
             Nothing posted yet.{" "}
             <a href={`/o/${orgSlug}/entries/new`}>Post an entry</a>.
@@ -91,7 +193,7 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
       ) : (
         <>
           <p>
-            {paging
+            {paging || filtered
               ? `${String(entries.length)} entries, newest first.`
               : `All ${String(entries.length)} posted entries, newest first.`}{" "}
             Posted entries cannot be edited or deleted — a correction is a
@@ -164,9 +266,7 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
             <p>
               {cursor === undefined ? null : (
                 <>
-                  <a href={`/o/${orgSlug}/entries${sizeQuery("?")}`}>
-                    Most recent entries
-                  </a>
+                  <a href={linkTo()}>Most recent entries</a>
                   {page.nextCursor === null ? null : " · "}
                 </>
               )}
@@ -175,13 +275,7 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
                   <> · This is the end of the journal.</>
                 )
               ) : (
-                <a
-                  href={`/o/${orgSlug}/entries?cursor=${encodeURIComponent(
-                    page.nextCursor,
-                  )}${sizeQuery("&")}`}
-                >
-                  Older entries
-                </a>
+                <a href={linkTo(page.nextCursor)}>Older entries</a>
               )}
             </p>
           </nav>

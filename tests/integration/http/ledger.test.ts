@@ -16,6 +16,7 @@ import { withOrgScope } from "../../../src/server/http/handlers/scoped";
 import {
   createAccountHandler,
   createPeriodHandler,
+  postEntryHandler,
 } from "../../../src/server/http/handlers/ledger";
 
 /**
@@ -288,7 +289,7 @@ test("L12: an unparseable date is 400, not a constraint violation", async () => 
   expect(await prisma.period.count({ where: { organizationId } })).toBe(0);
 });
 
-test("L13: overlapping periods are refused by the database, surfaced not swallowed", async () => {
+test("L13: overlapping periods are refused, surfaced not swallowed", async () => {
   // `period_no_overlap` is an EXCLUSION constraint. The handler does not
   // re-implement it — it lets the database answer and does not turn the failure
   // into a success.
@@ -316,4 +317,221 @@ test("L13: overlapping periods are refused by the database, surfaced not swallow
   ).rejects.toThrow();
 
   expect(await prisma.period.count({ where: { organizationId } })).toBe(1);
+});
+
+/** Two accounts and an open period: the minimum from which an entry can exist. */
+async function ledgerReady(role: MembershipRole = "BOOKKEEPER"): Promise<{
+  token: string;
+  slug: string;
+  organizationId: string;
+  cashId: string;
+  revenueId: string;
+  periodId: string;
+}> {
+  const base = await actor(role);
+  const create = withOrgScope(base.slug, createAccountHandler());
+
+  const cash = await create(
+    req("POST", { session: base.token, body: VALID_ACCOUNT }),
+  );
+  const revenue = await create(
+    req("POST", {
+      session: base.token,
+      body: { code: "4000", name: "Revenue", type: "INCOME", currency: "USD" },
+    }),
+  );
+  const period = await withOrgScope(base.slug, createPeriodHandler())(
+    req("POST", {
+      session: base.token,
+      body: { name: "2024", startDate: "2024-01-01", endDate: "2024-12-31" },
+    }),
+  );
+
+  return {
+    ...base,
+    cashId: String(bodyOf(cash)["id"]),
+    revenueId: String(bodyOf(revenue)["id"]),
+    periodId: String(bodyOf(period)["id"]),
+  };
+}
+
+test("L14: a balanced entry posts and gets a journal number", async () => {
+  const env = await ledgerReady();
+
+  const res = await withOrgScope(env.slug, postEntryHandler())(
+    req("POST", {
+      session: env.token,
+      body: {
+        periodId: env.periodId,
+        entryDate: "2024-03-01",
+        description: "Sale",
+        currency: "USD",
+        lines: [
+          { accountId: env.cashId, debit: "500.0000" },
+          { accountId: env.revenueId, credit: "500.0000" },
+        ],
+      },
+    }),
+  );
+
+  expect(res.status).toBe(201);
+  expect(bodyOf(res)["journalNumber"]).toBe(1);
+  expect(
+    await prisma.journalEntry.count({
+      where: { organizationId: env.organizationId, postedAt: { not: null } },
+    }),
+  ).toBe(1);
+});
+
+test("L15: an unbalanced entry is 422 with a reason, not 500", async () => {
+  // Found by posting one against the running server: it was correctly refused
+  // and answered 500 "internal error". The refusal was right and the status was
+  // wrong — the caller was told nothing they could act on.
+  //
+  // 422 because the body was well-formed and every field had the right type;
+  // what failed is a rule about the relationship BETWEEN the fields.
+  const env = await ledgerReady();
+
+  const res = await withOrgScope(env.slug, postEntryHandler())(
+    req("POST", {
+      session: env.token,
+      body: {
+        periodId: env.periodId,
+        entryDate: "2024-03-01",
+        description: "Bad",
+        currency: "USD",
+        lines: [
+          { accountId: env.cashId, debit: "500" },
+          { accountId: env.revenueId, credit: "499" },
+        ],
+      },
+    }),
+  );
+
+  expect(res.status).toBe(422);
+  expect(errorCode(res)).toBe("LEDGER_UNBALANCED");
+  expect(await prisma.journalEntry.count()).toBe(0);
+});
+
+test("L16: a line with both or neither side is 400 before any write", async () => {
+  const env = await ledgerReady();
+  const post = withOrgScope(env.slug, postEntryHandler());
+
+  const bad = [
+    [
+      { accountId: env.cashId, debit: "1", credit: "1" },
+      { accountId: env.revenueId, credit: "1" },
+    ],
+    [
+      { accountId: env.cashId },
+      { accountId: env.revenueId, credit: "1" },
+    ],
+    [
+      { accountId: env.cashId, debit: "1.23456" },
+      { accountId: env.revenueId, credit: "1" },
+    ],
+    [{ accountId: env.cashId, debit: "1" }],
+  ];
+
+  for (const lines of bad) {
+    const res = await post(
+      req("POST", {
+        session: env.token,
+        body: {
+          periodId: env.periodId,
+          entryDate: "2024-03-01",
+          description: "X",
+          currency: "USD",
+          lines,
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+  }
+
+  expect(await prisma.journalEntry.count()).toBe(0);
+});
+
+test("L17: amounts are never round-tripped through a float", async () => {
+  // I8. `0.1 + 0.2` is the canonical example and it is exactly the arithmetic a
+  // ledger cannot survive. The handler validates the string and passes it
+  // through untouched for Prisma.Decimal to parse.
+  const env = await ledgerReady();
+
+  const res = await withOrgScope(env.slug, postEntryHandler())(
+    req("POST", {
+      session: env.token,
+      body: {
+        periodId: env.periodId,
+        entryDate: "2024-03-01",
+        description: "Thirds",
+        currency: "USD",
+        lines: [
+          { accountId: env.cashId, debit: "0.1000" },
+          { accountId: env.cashId, debit: "0.2000" },
+          { accountId: env.revenueId, credit: "0.3000" },
+        ],
+      },
+    }),
+  );
+
+  expect(res.status).toBe(201);
+
+  const lines = await prisma.journalLine.findMany({
+    where: { organizationId: env.organizationId },
+    orderBy: { lineNumber: "asc" },
+  });
+  expect(lines.map((line) => line.debit.toFixed(4))).toEqual([
+    "0.1000",
+    "0.2000",
+    "0.0000",
+  ]);
+  expect(lines[2]?.credit.toFixed(4)).toBe("0.3000");
+});
+
+test("L18: a viewer cannot post, and nothing is written", async () => {
+  const env = await ledgerReady("VIEWER");
+
+  const res = await withOrgScope(env.slug, postEntryHandler())(
+    req("POST", {
+      session: env.token,
+      body: {
+        periodId: env.periodId,
+        entryDate: "2024-03-01",
+        description: "Nope",
+        currency: "USD",
+        lines: [
+          { accountId: env.cashId, debit: "1" },
+          { accountId: env.revenueId, credit: "1" },
+        ],
+      },
+    }),
+  );
+
+  expect(res.status).toBe(403);
+  expect(await prisma.journalEntry.count()).toBe(0);
+});
+
+test("L19: posting into another tenant's organization is 404", async () => {
+  const mine = await ledgerReady();
+  const theirs = await actor("OWNER");
+
+  const res = await withOrgScope(mine.slug, postEntryHandler())(
+    req("POST", {
+      session: theirs.token,
+      body: {
+        periodId: mine.periodId,
+        entryDate: "2024-03-01",
+        description: "Theft",
+        currency: "USD",
+        lines: [
+          { accountId: mine.cashId, debit: "1" },
+          { accountId: mine.revenueId, credit: "1" },
+        ],
+      },
+    }),
+  );
+
+  expect(res.status).toBe(404);
+  expect(await prisma.journalEntry.count()).toBe(0);
 });

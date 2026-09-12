@@ -12,6 +12,7 @@ import {
   guardedPostJournalEntry,
 } from "../../../modules/ledger/guarded";
 import type { PostLineInput } from "../../../modules/ledger/posting";
+import { LedgerError } from "../../../modules/ledger/errors";
 
 /**
  * Ledger endpoints.
@@ -80,84 +81,55 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /**
- * The ledger invariants live in the DATABASE, and the ones a user can trip are
- * facts about what they submitted — not bugs.
+ * A `LedgerError` is a fact about what the caller submitted, not a bug.
  *
  * Found by posting a deliberately unbalanced entry against the running server:
- * it was correctly refused, and answered **500 "internal error"**. The refusal
- * was right and the status was wrong. `toErrorResponse` rethrows what it does
- * not recognise, so a constraint violation fell through to the adapter's
- * catch-all, and the caller was told nothing they could act on.
+ * it was correctly refused and answered **500 "internal error"**. The refusal
+ * was right and the status was wrong — `toErrorResponse` rethrows what it does
+ * not recognise, so the error fell through to the adapter's catch-all and the
+ * caller was told nothing they could act on.
  *
- * 422 rather than 400: the body was well-formed and every field was the right
- * type. What failed was a rule about the relationship between the fields, which
- * is precisely what 422 means.
+ * My first attempt at this matched Postgres constraint NAMES in the exception
+ * text. That was the wrong layer: `postJournalEntry` already catches the
+ * database error and rethrows a typed `LedgerError` with a stable `code`, so
+ * the names never appear. Keying on the code is both correct and stable — a
+ * constraint can be renamed, the domain error cannot be without the tests
+ * noticing.
  *
- * The messages name what the USER did, never the constraint. "Debits do not
- * equal credits" is a fact about their entry; `je_balanced_check` is a fact
- * about our schema, and the second is not theirs to know.
+ * 422 rather than 400: the body was well-formed and every field had the right
+ * type. What failed is a rule about the relationship BETWEEN the fields, which
+ * is exactly what 422 means.
  *
- * Anything NOT in this table still becomes a 500, deliberately. A constraint
- * nobody anticipated is a bug until somebody decides otherwise, and quietly
- * turning every database error into a 422 would hide the next real one.
+ * `LEDGER_NOT_FOUND` is the exception, at 404 — and it deliberately does not
+ * distinguish "no such period" from "that period belongs to another
+ * organization", because `NotFoundError` already refuses to.
+ *
+ * The MESSAGE comes from the domain error, which names what the user did
+ * ("debits 500 do not equal credits 499"). That is safe to surface precisely
+ * because these errors are authored for callers. A raw database message is not,
+ * and still becomes a generic 500.
  */
-const LEDGER_REFUSALS: readonly {
-  readonly constraint: string;
-  readonly code: string;
-  readonly message: string;
-}[] = [
-  {
-    constraint: "je_balanced_check",
-    code: "ENTRY_UNBALANCED",
-    message: "debits do not equal credits",
-  },
-  {
-    constraint: "je_period_open",
-    code: "PERIOD_NOT_OPEN",
-    message: "that accounting period is closed or locked",
-  },
-  {
-    constraint: "jl_org_consistency",
-    code: "ACCOUNT_NOT_IN_ORGANIZATION",
-    message: "one of the accounts does not belong to this organization",
-  },
-  {
-    constraint: "jl_debit_credit_sign",
-    code: "LINE_INVALID",
-    message: "a line must have exactly one of debit or credit, and it must be positive",
-  },
-  {
-    constraint: "jl_nonzero",
-    code: "LINE_INVALID",
-    message: "a line cannot be zero on both sides",
-  },
-  {
-    constraint: "period_no_overlap",
-    code: "PERIOD_OVERLAPS",
-    message: "that period overlaps one that already exists",
-  },
-  {
-    constraint: "je_immutable",
-    code: "ENTRY_IMMUTABLE",
-    message: "a posted entry cannot be changed; post a reversal instead",
-  },
-  {
-    constraint: "jl_immutable",
-    code: "ENTRY_IMMUTABLE",
-    message: "a posted entry cannot be changed; post a reversal instead",
-  },
-];
+const LEDGER_STATUS: Readonly<Record<string, number>> = Object.freeze({
+  LEDGER_UNBALANCED: 422,
+  LEDGER_PERIOD_NOT_OPEN: 422,
+  LEDGER_INVALID_LINE: 422,
+  LEDGER_ALREADY_REVERSED: 422,
+  LEDGER_NOT_POSTED: 422,
+  LEDGER_NOT_FOUND: 404,
+});
 
 function ledgerRefusal(err: unknown): HttpResponse | undefined {
-  if (typeof err !== "object" || err === null) return undefined;
-  const text = "message" in err ? String(err.message) : "";
+  if (!(err instanceof LedgerError)) return undefined;
 
-  const match = LEDGER_REFUSALS.find((refusal) =>
-    text.includes(refusal.constraint),
-  );
-  return match === undefined
-    ? undefined
-    : error(422, match.code, match.message);
+  const status = LEDGER_STATUS[err.code];
+  if (status === undefined) {
+    // A new LedgerError nobody mapped. It becomes a 500, deliberately: an
+    // unmapped domain error is a gap in this table, and defaulting it to 422
+    // would hide the gap behind a plausible answer.
+    return undefined;
+  }
+
+  return error(status, err.code, err.message);
 }
 
 function guarded(handler: ScopedHandler): ScopedHandler {

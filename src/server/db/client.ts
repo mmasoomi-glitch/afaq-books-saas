@@ -83,6 +83,4 @@ export type { PrismaClient } from "@prisma/client";
  * Deriving it from `prisma` itself means it tracks any future extension
  * automatically rather than needing to be remembered.
  */
-export type TxClient = Parameters<
-  Parameters<typeof prisma.$transaction>[0]
->[0];
+export type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];

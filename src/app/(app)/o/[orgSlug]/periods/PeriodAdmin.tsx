@@ -38,7 +38,11 @@ function csrfToken(): string {
 function refusalMessage(body: unknown): string {
   if (typeof body === "object" && body !== null && "error" in body) {
     const wrapper: unknown = body.error;
-    if (typeof wrapper === "object" && wrapper !== null && "message" in wrapper) {
+    if (
+      typeof wrapper === "object" &&
+      wrapper !== null &&
+      "message" in wrapper
+    ) {
       const message: unknown = wrapper.message;
       if (typeof message === "string" && message !== "") return message;
     }
@@ -109,7 +113,10 @@ export default function PeriodAdmin({
 
       if (response.status === 422) {
         const parsed: unknown = await response.json();
-        setNotice({ kind: "error", text: `Refused: ${refusalMessage(parsed)}.` });
+        setNotice({
+          kind: "error",
+          text: `Refused: ${refusalMessage(parsed)}.`,
+        });
         return;
       }
 
@@ -142,7 +149,9 @@ export default function PeriodAdmin({
     }
   }
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleCreate(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     await send(`/api/o/${orgSlug}/periods`, { name, startDate, endDate });
   }
@@ -200,8 +209,8 @@ export default function PeriodAdmin({
           </button>
         </form>
         <p>
-          Periods cannot overlap — the database refuses it — so each one covers a
-          distinct stretch of time.
+          Periods cannot overlap — the database refuses it — so each one covers
+          a distinct stretch of time.
         </p>
       </section>
 

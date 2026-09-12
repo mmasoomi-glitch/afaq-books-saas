@@ -74,13 +74,14 @@ export async function trialBalance(
     ORDER BY a.code ASC
   `;
 
-  const rows: TrialBalanceRow[] = rowsRaw.map(
-    (r: RawRow) => ({
+  const rows: TrialBalanceRow[] = rowsRaw.map((r: RawRow) => ({
     accountId: exactText(r.account_id, "account_id"),
     accountCode: exactText(r.account_code, "account_code"),
     accountName: exactText(r.account_name, "account_name"),
     debit: new Prisma.Decimal(exactText(r.sum_debit, "sum_debit")).toFixed(4),
-    credit: new Prisma.Decimal(exactText(r.sum_credit, "sum_credit")).toFixed(4),
+    credit: new Prisma.Decimal(exactText(r.sum_credit, "sum_credit")).toFixed(
+      4,
+    ),
   }));
 
   const totalDebit = rows.reduce(

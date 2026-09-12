@@ -36,8 +36,7 @@ export default async function PeriodsPage({ params }: PageProps) {
     <main>
       <h1>Accounting periods</h1>
       <p>
-        {scope.organizationSlug} ·{" "}
-        <a href={`/o/${orgSlug}/entries`}>Journal</a>
+        {scope.organizationSlug} · <a href={`/o/${orgSlug}/entries`}>Journal</a>
         {" · "}
         <a href={`/o/${orgSlug}/accounts`}>Chart of accounts</a>
         {" · "}

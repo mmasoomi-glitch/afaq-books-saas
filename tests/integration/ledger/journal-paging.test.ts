@@ -233,7 +233,9 @@ test("J6: a NEGATIVE page size does not quietly return the oldest entries", asyn
   const f = await fixture();
   await postMany(f, 5);
 
-  const newestFirst = await listEntries(f.scope, { pageSize: MAX_JOURNAL_PAGE });
+  const newestFirst = await listEntries(f.scope, {
+    pageSize: MAX_JOURNAL_PAGE,
+  });
   const negative = await listEntries(f.scope, { pageSize: -5 });
 
   expect(negative.pageSize).toBe(1);

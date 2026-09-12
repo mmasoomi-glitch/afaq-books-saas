@@ -20,6 +20,5 @@ import { requirePageScope } from "./page-scope";
  * rejection and rethrown to the second, which is the same outcome the second
  * call would have reached on its own.
  */
-export const cachedPageScope: (
-  organizationSlug: string,
-) => Promise<OrgScope> = cache(requirePageScope);
+export const cachedPageScope: (organizationSlug: string) => Promise<OrgScope> =
+  cache(requirePageScope);

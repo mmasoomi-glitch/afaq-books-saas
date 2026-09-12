@@ -113,6 +113,17 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # `--check` over the whole tree, honouring `.prettierignore`.
+      #
+      # The reviewer suggested checking "staged files only". That is a
+      # pre-commit concept and has no meaning here: CI checks out a merge
+      # commit and has no index, so there is nothing staged to look at. The
+      # equivalent that IS implementable is the whole tree minus the ignore
+      # file, which is also stricter -- a file nobody touched cannot drift
+      # unnoticed.
+      - name: Formatting
+        run: pnpm format:check
+
       - name: Accounting-invariant tests
         run: pnpm test
 
@@ -127,7 +138,6 @@ jobs:
       # CI ever had an opinion.
       - name: Production build
         run: pnpm build
-
 
       - name: Assert nothing bypasses the authorization gate
         run: |

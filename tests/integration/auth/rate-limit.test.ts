@@ -101,7 +101,9 @@ test("L7: the two dimensions are independent counters", async () => {
   const value = randomUUID();
   await consume("ip", value, SIGNIN.limit + 1);
 
-  expect((await checkAndConsume("signin", "account", value)).allowed).toBe(true);
+  expect((await checkAndConsume("signin", "account", value)).allowed).toBe(
+    true,
+  );
 });
 
 test("L8: enforce with nothing to key on is a no-op", async () => {
@@ -223,7 +225,9 @@ test("L16: the sixth bad password is rate limited, not merely refused", async ()
   await registerUser(email, PASSWORD);
 
   for (let i = 0; i < SIGNIN.limit; i += 1) {
-    const e = await signIn(email, "wrong password").catch((err: unknown) => err);
+    const e = await signIn(email, "wrong password").catch(
+      (err: unknown) => err,
+    );
     expect(e).toBeInstanceOf(InvalidCredentialsError);
   }
 

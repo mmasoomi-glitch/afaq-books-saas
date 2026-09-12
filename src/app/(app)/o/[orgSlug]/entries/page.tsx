@@ -157,7 +157,8 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
         </p>
       ) : null}
 
-      {page.accountTotals === null || page.accountTotals === undefined ? null : (
+      {page.accountTotals === null ||
+      page.accountTotals === undefined ? null : (
         <p>
           <strong>
             {page.accountTotals.accountCode} — {page.accountTotals.accountName}
@@ -217,9 +218,7 @@ export default async function EntriesPage({ params, searchParams }: PageProps) {
                   // reason.
                   <> · reverses an earlier entry</>
                 ) : null}
-                {entry.reversedById !== null ? (
-                  <> · has been reversed</>
-                ) : null}
+                {entry.reversedById !== null ? <> · has been reversed</> : null}
               </p>
 
               <table>

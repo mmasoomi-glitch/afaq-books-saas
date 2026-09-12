@@ -157,9 +157,7 @@ export default async function AuditPage({ params, searchParams }: PageProps) {
                     a user quotes when reporting a problem — the response
                     carries it in `x-request-id`.
                   */}
-                  {entry.requestId === null
-                    ? "—"
-                    : entry.requestId.slice(0, 8)}
+                  {entry.requestId === null ? "—" : entry.requestId.slice(0, 8)}
                 </td>
               </tr>
             ))}

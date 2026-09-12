@@ -15,11 +15,7 @@ import { prisma } from "../db/client";
  * failing open.
  */
 
-export type RateLimitAction =
-  | "signin"
-  | "signup"
-  | "password-reset"
-  | "write";
+export type RateLimitAction = "signin" | "signup" | "password-reset" | "write";
 
 export interface RateLimitPolicy {
   limit: number;
@@ -154,7 +150,10 @@ export async function checkAndConsume(
     // The trade-off, stated plainly: an attacker who can induce database errors
     // also disables this limiter. That is why it is one layer and not the only
     // one, and why the failure is logged loudly rather than swallowed.
-    console.warn(`[rate-limit] store unavailable for ${key}; failing open`, error);
+    console.warn(
+      `[rate-limit] store unavailable for ${key}; failing open`,
+      error,
+    );
     return { allowed: true, delayMs: 0, remaining: 0 };
   }
 }

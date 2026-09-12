@@ -79,7 +79,11 @@ test("S2: an expiry that has drifted past the threshold is slid forward", async 
   const { rawToken } = await freshSession();
   // Two hours of use have passed: the stored expiry is two hours short of what
   // a fresh idle window would give, which is past the one-hour threshold.
-  await backdate(rawToken, 2 * 60 * 60_000, SESSION_IDLE_TTL_MS - 2 * 60 * 60_000);
+  await backdate(
+    rawToken,
+    2 * 60 * 60_000,
+    SESSION_IDLE_TTL_MS - 2 * 60 * 60_000,
+  );
   const before = await storedExpiry(rawToken);
 
   const returned = await touchSession(rawToken);

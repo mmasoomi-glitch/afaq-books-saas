@@ -156,7 +156,9 @@ test("G5: a BOOKKEEPER cannot lock a period", async () => {
     guardedLockPeriod(scope, period.id, "attempted escalation"),
   ).rejects.toBeInstanceOf(ForbiddenError);
 
-  const row = await prisma.period.findUniqueOrThrow({ where: { id: period.id } });
+  const row = await prisma.period.findUniqueOrThrow({
+    where: { id: period.id },
+  });
   expect(row.status).toBe("OPEN");
 });
 
@@ -166,12 +168,14 @@ test("G6: an ADMIN can lock and unlock a period", async () => {
 
   await guardedLockPeriod(scope, period.id, "audit");
   expect(
-    (await prisma.period.findUniqueOrThrow({ where: { id: period.id } })).status,
+    (await prisma.period.findUniqueOrThrow({ where: { id: period.id } }))
+      .status,
   ).toBe("LOCKED");
 
   await guardedUnlockPeriod(scope, period.id, "audit complete");
   expect(
-    (await prisma.period.findUniqueOrThrow({ where: { id: period.id } })).status,
+    (await prisma.period.findUniqueOrThrow({ where: { id: period.id } }))
+      .status,
   ).toBe("OPEN");
 });
 
@@ -184,7 +188,11 @@ test("G7: closing a period needs an ACCOUNTANT, not a BOOKKEEPER", async () => {
 
   const accountant = await actor("ACCOUNTANT");
   const acctFixture = await ledgerFixture(accountant.scope);
-  await guardedClosePeriod(accountant.scope, acctFixture.period.id, "month end");
+  await guardedClosePeriod(
+    accountant.scope,
+    acctFixture.period.id,
+    "month end",
+  );
   expect(
     (
       await prisma.period.findUniqueOrThrow({

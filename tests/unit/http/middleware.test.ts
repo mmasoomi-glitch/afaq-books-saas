@@ -64,7 +64,9 @@ test("M6: the matcher never covers an API route", () => {
   // them, the check would be comparing a value against a cookie the same
   // request had just been handed — it would pass for everyone, including an
   // attacker, and look exactly like a working control.
-  const matcher = /export const config = \{ matcher: \[([^\]]*)\] \}/.exec(SOURCE);
+  const matcher = /export const config = \{ matcher: \[([^\]]*)\] \}/.exec(
+    SOURCE,
+  );
   expect(matcher).not.toBeNull();
 
   const routes = matcher?.[1] ?? "";

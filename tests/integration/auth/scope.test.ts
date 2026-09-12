@@ -12,7 +12,11 @@ import {
   toLedgerScope,
 } from "../../../src/server/auth/scope";
 import type { MembershipRole } from "@prisma/client";
-import { NotAMemberError, ForbiddenError, OrganizationNotFoundError } from "../../../src/server/auth/errors";
+import {
+  NotAMemberError,
+  ForbiddenError,
+  OrganizationNotFoundError,
+} from "../../../src/server/auth/errors";
 
 beforeEach(async () => {
   await resetDb();
@@ -35,7 +39,11 @@ async function createOrg(slug: string): Promise<{ id: string }> {
   return { id: org.id };
 }
 
-async function addMembership(userId: string, organizationId: string, role: string) {
+async function addMembership(
+  userId: string,
+  organizationId: string,
+  role: string,
+) {
   await prisma.membership.create({
     data: { userId, organizationId, role: role as MembershipRole },
   });
@@ -78,9 +86,9 @@ test("A2: a user with no membership gets NotAMemberError", async () => {
 test("A3: an unknown slug gets OrganizationNotFoundError", async () => {
   const user = await createUser();
 
-  await expect(resolveOrgScope(user.id, "nonexistent-slug")).rejects.toBeInstanceOf(
-    OrganizationNotFoundError,
-  );
+  await expect(
+    resolveOrgScope(user.id, "nonexistent-slug"),
+  ).rejects.toBeInstanceOf(OrganizationNotFoundError);
 });
 
 // ── A4: cross-tenant — member of org A, rejected for org B ─────────
@@ -189,9 +197,9 @@ test("A10: membership revoked mid-session yields NotAMemberError", async () => {
   });
 
   // Second resolution should fail
-  await expect(
-    resolveOrgScope(user.id, "a10-org"),
-  ).rejects.toBeInstanceOf(NotAMemberError);
+  await expect(resolveOrgScope(user.id, "a10-org")).rejects.toBeInstanceOf(
+    NotAMemberError,
+  );
 });
 
 // ── A11: toLedgerScope + end-to-end posting ─────────────────────────

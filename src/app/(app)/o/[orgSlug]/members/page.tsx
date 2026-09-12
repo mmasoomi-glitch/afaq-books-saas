@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
-import {
-  ROLE_RANK,
-  listMembers,
-} from "../../../../../server/auth/membership";
+import { ROLE_RANK, listMembers } from "../../../../../server/auth/membership";
 import { can } from "../../../../../server/auth/permissions";
 import MemberAdmin from "./MemberAdmin";
 

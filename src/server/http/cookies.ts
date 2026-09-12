@@ -78,10 +78,7 @@ export function serializeCookie(
   assertNameSafe(name);
   assertCookieSafe("value", value);
 
-  if (
-    !Number.isInteger(options.maxAgeSeconds) ||
-    options.maxAgeSeconds < 0
-  ) {
+  if (!Number.isInteger(options.maxAgeSeconds) || options.maxAgeSeconds < 0) {
     throw new RangeError("maxAgeSeconds must be a non-negative integer");
   }
 

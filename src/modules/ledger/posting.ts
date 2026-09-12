@@ -600,11 +600,7 @@ export async function listEntries(
 
   const entries = await prisma.journalEntry.findMany({
     where,
-    orderBy: [
-      { entryDate: "desc" },
-      { journalNumber: "desc" },
-      { id: "desc" },
-    ],
+    orderBy: [{ entryDate: "desc" }, { journalNumber: "desc" }, { id: "desc" }],
     // One more than asked for, so "is there a next page" is answered by the
     // same query. A separate `count()` would be a second round trip and could
     // disagree with this one under concurrent posting.
@@ -645,7 +641,11 @@ export async function listEntries(
  */
 async function accountTotalsFor(
   scope: LedgerScope,
-  account: { readonly id: string; readonly code: string; readonly name: string },
+  account: {
+    readonly id: string;
+    readonly code: string;
+    readonly name: string;
+  },
   where: Prisma.JournalEntryWhereInput,
 ): Promise<AccountTotals> {
   const totals = await prisma.journalLine.aggregate({

@@ -67,7 +67,10 @@ const nextConfig: NextConfig = {
         // `default-src 'none'`. The looser policy silently won on exactly the
         // responses that needed the stricter one.
         source: "/((?!api/).*)",
-        headers: [...COMMON_HEADERS, { key: "content-security-policy", value: PAGE_CSP }],
+        headers: [
+          ...COMMON_HEADERS,
+          { key: "content-security-policy", value: PAGE_CSP },
+        ],
       },
       {
         // API routes. The handlers set all of this per response as well, which

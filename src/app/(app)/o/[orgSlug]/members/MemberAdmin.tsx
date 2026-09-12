@@ -128,7 +128,9 @@ export default function MemberAdmin({
     }
   }
 
-  async function handleInvite(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleInvite(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     await send(`/api/o/${orgSlug}/members`, "POST", {
       email: inviteEmail,

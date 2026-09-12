@@ -107,7 +107,10 @@ export function timingSafeStringEqual(a: string, b: string): boolean {
  * and both look correct in review, which is why the rule is written down here
  * rather than left to judgement.
  */
-export function assertSameOrigin(req: HttpRequest, expectedOrigin: string): void {
+export function assertSameOrigin(
+  req: HttpRequest,
+  expectedOrigin: string,
+): void {
   const origin = req.headers["origin"];
   if (origin === undefined) return;
   if (origin !== expectedOrigin) {

@@ -166,10 +166,9 @@ export default async function ProfitAndLossPage({
 
       <p>
         Posted entries only, in the organization&rsquo;s reporting currency, to
-        four decimal places. A
-        reversal appears as its own opposite amounts rather than removing the
-        original, so a reversed transaction nets to zero here rather than
-        vanishing.
+        four decimal places. A reversal appears as its own opposite amounts
+        rather than removing the original, so a reversed transaction nets to
+        zero here rather than vanishing.
       </p>
     </main>
   );

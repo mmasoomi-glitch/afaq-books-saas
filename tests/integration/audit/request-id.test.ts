@@ -170,9 +170,7 @@ test("R6: a real request through the adapter stamps its own id", async () => {
   const guest = newEmail();
   await registerUser(guest, PASSWORD);
 
-  const route = toRouteHandler(
-    withOrgScope(owner.slug, grantMemberHandler()),
-  );
+  const route = toRouteHandler(withOrgScope(owner.slug, grantMemberHandler()));
 
   const response = await route(
     new Request(`https://books.example.com/api/o/${owner.slug}/members`, {

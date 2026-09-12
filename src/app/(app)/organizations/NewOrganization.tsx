@@ -29,7 +29,9 @@ export default function NewOrganization() {
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setNotice(undefined);
     setPending(true);
@@ -72,7 +74,10 @@ export default function NewOrganization() {
       }
 
       if (response.status === 401) {
-        setNotice({ kind: "error", text: "Your session has ended. Sign in again." });
+        setNotice({
+          kind: "error",
+          text: "Your session has ended. Sign in again.",
+        });
         return;
       }
 
@@ -131,9 +136,9 @@ export default function NewOrganization() {
             }}
           />
           <p>
-            This appears in every link to your books: <code>/your-address/…</code>.
-            Lowercase letters, digits and single hyphens, 3 to 40 characters. It
-            cannot be changed here afterwards.
+            This appears in every link to your books:{" "}
+            <code>/your-address/…</code>. Lowercase letters, digits and single
+            hyphens, 3 to 40 characters. It cannot be changed here afterwards.
           </p>
         </div>
 

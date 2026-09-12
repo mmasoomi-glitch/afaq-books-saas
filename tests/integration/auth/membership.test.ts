@@ -120,7 +120,14 @@ test("M3: the database refuses a malformed or reserved slug", async () => {
   // through it.
   const founder = await newUser();
 
-  for (const bad of ["has space", "-leading", "trailing-", "ab", "a".repeat(41), "under_score"]) {
+  for (const bad of [
+    "has space",
+    "-leading",
+    "trailing-",
+    "ab",
+    "a".repeat(41),
+    "under_score",
+  ]) {
     await expect(
       createOrganization(founder.id, { slug: bad, name: "X" }),
     ).rejects.toThrow();
@@ -205,7 +212,9 @@ test("M7: an ADMIN cannot mint another ADMIN", async () => {
     grantMembership(admin, target.email, "ADMIN"),
   ).rejects.toBeInstanceOf(RoleEscalationError);
 
-  expect(await prisma.membership.count({ where: { userId: target.id } })).toBe(0);
+  expect(await prisma.membership.count({ where: { userId: target.id } })).toBe(
+    0,
+  );
 });
 
 test("M8: two ADMINs cannot escalate each other", async () => {
@@ -336,7 +345,9 @@ test("M16: granting to an unknown address does not create anything", async () =>
     grantMembership(org.owner, newEmail(), "VIEWER"),
   ).rejects.toBeInstanceOf(UserNotFoundError);
 
-  expect(await prisma.membership.count({ where: { organizationId: org.id } })).toBe(1);
+  expect(
+    await prisma.membership.count({ where: { organizationId: org.id } }),
+  ).toBe(1);
 });
 
 test("M17: granting twice is refused rather than duplicated", async () => {
@@ -348,7 +359,9 @@ test("M17: granting twice is refused rather than duplicated", async () => {
     grantMembership(org.owner, target.email, "BOOKKEEPER"),
   ).rejects.toBeInstanceOf(AlreadyAMemberError);
 
-  expect(await prisma.membership.count({ where: { userId: target.id } })).toBe(1);
+  expect(await prisma.membership.count({ where: { userId: target.id } })).toBe(
+    1,
+  );
 });
 
 test("M18: an address is matched case-insensitively when granting", async () => {
@@ -372,9 +385,9 @@ test("M19: administration never reaches another organization's members", async (
     changeRole(a.owner, b.owner.userId, "VIEWER"),
   ).rejects.toBeInstanceOf(NotAMemberOfThisOrgError);
 
-  await expect(
-    removeMember(a.owner, b.owner.userId),
-  ).rejects.toBeInstanceOf(NotAMemberOfThisOrgError);
+  await expect(removeMember(a.owner, b.owner.userId)).rejects.toBeInstanceOf(
+    NotAMemberOfThisOrgError,
+  );
 
   const untouched = await prisma.membership.findFirstOrThrow({
     where: { userId: b.owner.userId, organizationId: b.id },

@@ -116,9 +116,10 @@ const VALID_ACCOUNT = {
 test("L1: a bookkeeper can add an account", async () => {
   const { token, slug, organizationId } = await actor("BOOKKEEPER");
 
-  const res = await withOrgScope(slug, createAccountHandler())(
-    req("POST", { session: token, body: VALID_ACCOUNT }),
-  );
+  const res = await withOrgScope(
+    slug,
+    createAccountHandler(),
+  )(req("POST", { session: token, body: VALID_ACCOUNT }));
 
   expect(res.status).toBe(201);
   expect(bodyOf(res)["code"]).toBe("1000");
@@ -128,9 +129,10 @@ test("L1: a bookkeeper can add an account", async () => {
 test("L2: a viewer cannot, and nothing is written", async () => {
   const { token, slug, organizationId } = await actor("VIEWER");
 
-  const res = await withOrgScope(slug, createAccountHandler())(
-    req("POST", { session: token, body: VALID_ACCOUNT }),
-  );
+  const res = await withOrgScope(
+    slug,
+    createAccountHandler(),
+  )(req("POST", { session: token, body: VALID_ACCOUNT }));
 
   expect(res.status).toBe(403);
   expect(await prisma.account.count({ where: { organizationId } })).toBe(0);
@@ -162,9 +164,10 @@ test("L4: an invented account type is 400 before any query runs", async () => {
   const { token, slug, organizationId } = await actor("BOOKKEEPER");
 
   for (const type of ["NONSENSE", "asset", "", "ASSETS"]) {
-    const res = await withOrgScope(slug, createAccountHandler())(
-      req("POST", { session: token, body: { ...VALID_ACCOUNT, type } }),
-    );
+    const res = await withOrgScope(
+      slug,
+      createAccountHandler(),
+    )(req("POST", { session: token, body: { ...VALID_ACCOUNT, type } }));
     expect(res.status).toBe(400);
   }
 
@@ -178,9 +181,10 @@ test("L5: a malformed currency is 400", async () => {
   const { token, slug } = await actor("BOOKKEEPER");
 
   for (const currency of ["DOLLARS", "US", "", "U$D", "12"]) {
-    const res = await withOrgScope(slug, createAccountHandler())(
-      req("POST", { session: token, body: { ...VALID_ACCOUNT, currency } }),
-    );
+    const res = await withOrgScope(
+      slug,
+      createAccountHandler(),
+    )(req("POST", { session: token, body: { ...VALID_ACCOUNT, currency } }));
     expect(res.status).toBe(400);
   }
 });
@@ -190,8 +194,14 @@ test("L6: a lowercase currency is accepted and stored upper-case", async () => {
   // "USD", and rejecting it would be pedantry a user cannot learn from.
   const { token, slug, organizationId } = await actor("BOOKKEEPER");
 
-  const res = await withOrgScope(slug, createAccountHandler())(
-    req("POST", { session: token, body: { ...VALID_ACCOUNT, currency: "usd" } }),
+  const res = await withOrgScope(
+    slug,
+    createAccountHandler(),
+  )(
+    req("POST", {
+      session: token,
+      body: { ...VALID_ACCOUNT, currency: "usd" },
+    }),
   );
 
   expect(res.status).toBe(201);
@@ -207,9 +217,10 @@ test("L7: a missing field is 400 and names what is required", async () => {
   for (const omit of ["code", "name", "type", "currency"]) {
     const body: Record<string, unknown> = { ...VALID_ACCOUNT };
     delete body[omit];
-    const res = await withOrgScope(slug, createAccountHandler())(
-      req("POST", { session: token, body }),
-    );
+    const res = await withOrgScope(
+      slug,
+      createAccountHandler(),
+    )(req("POST", { session: token, body }));
     expect(res.status).toBe(400);
     expect(errorCode(res)).toBe("INVALID_BODY");
   }
@@ -218,7 +229,10 @@ test("L7: a missing field is 400 and names what is required", async () => {
 test("L8: an object-shaped field is rejected rather than cast", async () => {
   const { token, slug } = await actor("BOOKKEEPER");
 
-  const res = await withOrgScope(slug, createAccountHandler())(
+  const res = await withOrgScope(
+    slug,
+    createAccountHandler(),
+  )(
     req("POST", {
       session: token,
       body: { ...VALID_ACCOUNT, code: { toString: "1000" } },
@@ -231,7 +245,10 @@ test("L8: an object-shaped field is rejected rather than cast", async () => {
 test("L9: creating an account without a csrf pair is 403 and writes nothing", async () => {
   const { token, slug, organizationId } = await actor("BOOKKEEPER");
 
-  const res = await withOrgScope(slug, createAccountHandler())({
+  const res = await withOrgScope(
+    slug,
+    createAccountHandler(),
+  )({
     method: "POST",
     path: "/",
     headers: {},
@@ -248,20 +265,26 @@ test("L10: another tenant cannot add an account to your chart", async () => {
   const mine = await actor("OWNER");
   const theirs = await actor("OWNER");
 
-  const res = await withOrgScope(mine.slug, createAccountHandler())(
-    req("POST", { session: theirs.token, body: VALID_ACCOUNT }),
-  );
+  const res = await withOrgScope(
+    mine.slug,
+    createAccountHandler(),
+  )(req("POST", { session: theirs.token, body: VALID_ACCOUNT }));
 
   expect(res.status).toBe(404);
   expect(
-    await prisma.account.count({ where: { organizationId: mine.organizationId } }),
+    await prisma.account.count({
+      where: { organizationId: mine.organizationId },
+    }),
   ).toBe(0);
 });
 
 test("L11: a period is created with valid dates", async () => {
   const { token, slug, organizationId } = await actor("BOOKKEEPER");
 
-  const res = await withOrgScope(slug, createPeriodHandler())(
+  const res = await withOrgScope(
+    slug,
+    createPeriodHandler(),
+  )(
     req("POST", {
       session: token,
       body: { name: "2024", startDate: "2024-01-01", endDate: "2024-12-31" },
@@ -284,9 +307,10 @@ test("L12: an unparseable date is 400, not a constraint violation", async () => 
     { startDate: "2024-01-01", endDate: "31/12/2024x" },
     { startDate: "", endDate: "2024-12-31" },
   ]) {
-    const res = await withOrgScope(slug, createPeriodHandler())(
-      req("POST", { session: token, body: { name: "2024", ...dates } }),
-    );
+    const res = await withOrgScope(
+      slug,
+      createPeriodHandler(),
+    )(req("POST", { session: token, body: { name: "2024", ...dates } }));
     expect(res.status).toBe(400);
   }
 
@@ -305,7 +329,11 @@ test("L13: overlapping periods are refused, surfaced not swallowed", async () =>
       await create(
         req("POST", {
           session: token,
-          body: { name: "2024", startDate: "2024-01-01", endDate: "2024-12-31" },
+          body: {
+            name: "2024",
+            startDate: "2024-01-01",
+            endDate: "2024-12-31",
+          },
         }),
       )
     ).status,
@@ -315,7 +343,11 @@ test("L13: overlapping periods are refused, surfaced not swallowed", async () =>
     create(
       req("POST", {
         session: token,
-        body: { name: "Overlap", startDate: "2024-06-01", endDate: "2025-06-01" },
+        body: {
+          name: "Overlap",
+          startDate: "2024-06-01",
+          endDate: "2025-06-01",
+        },
       }),
     ),
   ).rejects.toThrow();
@@ -344,7 +376,10 @@ async function ledgerReady(role: MembershipRole = "BOOKKEEPER"): Promise<{
       body: { code: "4000", name: "Revenue", type: "INCOME", currency: "USD" },
     }),
   );
-  const period = await withOrgScope(base.slug, createPeriodHandler())(
+  const period = await withOrgScope(
+    base.slug,
+    createPeriodHandler(),
+  )(
     req("POST", {
       session: base.token,
       body: { name: "2024", startDate: "2024-01-01", endDate: "2024-12-31" },
@@ -356,7 +391,10 @@ async function ledgerReady(role: MembershipRole = "BOOKKEEPER"): Promise<{
   // reversal here would fail for a reason that has nothing to do with what is
   // under test — which is exactly how the real behaviour was found.
   const thisYear = new Date().getFullYear();
-  await withOrgScope(base.slug, createPeriodHandler())(
+  await withOrgScope(
+    base.slug,
+    createPeriodHandler(),
+  )(
     req("POST", {
       session: base.token,
       body: {
@@ -378,7 +416,10 @@ async function ledgerReady(role: MembershipRole = "BOOKKEEPER"): Promise<{
 test("L14: a balanced entry posts and gets a journal number", async () => {
   const env = await ledgerReady();
 
-  const res = await withOrgScope(env.slug, postEntryHandler())(
+  const res = await withOrgScope(
+    env.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: env.token,
       body: {
@@ -412,7 +453,10 @@ test("L15: an unbalanced entry is 422 with a reason, not 500", async () => {
   // what failed is a rule about the relationship BETWEEN the fields.
   const env = await ledgerReady();
 
-  const res = await withOrgScope(env.slug, postEntryHandler())(
+  const res = await withOrgScope(
+    env.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: env.token,
       body: {
@@ -442,10 +486,7 @@ test("L16: a line with both or neither side is 400 before any write", async () =
       { accountId: env.cashId, debit: "1", credit: "1" },
       { accountId: env.revenueId, credit: "1" },
     ],
-    [
-      { accountId: env.cashId },
-      { accountId: env.revenueId, credit: "1" },
-    ],
+    [{ accountId: env.cashId }, { accountId: env.revenueId, credit: "1" }],
     [
       { accountId: env.cashId, debit: "1.23456" },
       { accountId: env.revenueId, credit: "1" },
@@ -478,7 +519,10 @@ test("L17: amounts are never round-tripped through a float", async () => {
   // through untouched for Prisma.Decimal to parse.
   const env = await ledgerReady();
 
-  const res = await withOrgScope(env.slug, postEntryHandler())(
+  const res = await withOrgScope(
+    env.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: env.token,
       body: {
@@ -512,7 +556,10 @@ test("L17: amounts are never round-tripped through a float", async () => {
 test("L18: a viewer cannot post, and nothing is written", async () => {
   const env = await ledgerReady("VIEWER");
 
-  const res = await withOrgScope(env.slug, postEntryHandler())(
+  const res = await withOrgScope(
+    env.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: env.token,
       body: {
@@ -536,7 +583,10 @@ test("L19: posting into another tenant's organization is 404", async () => {
   const mine = await ledgerReady();
   const theirs = await actor("OWNER");
 
-  const res = await withOrgScope(mine.slug, postEntryHandler())(
+  const res = await withOrgScope(
+    mine.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: theirs.token,
       body: {
@@ -557,7 +607,11 @@ test("L19: posting into another tenant's organization is 404", async () => {
 });
 
 /** The BOOKKEEPER of a ledger-ready org, as a resolved scope. */
-async function scopeFor(organizationId: string, slug: string, role = "BOOKKEEPER") {
+async function scopeFor(
+  organizationId: string,
+  slug: string,
+  role = "BOOKKEEPER",
+) {
   const membership = await prisma.membership.findFirstOrThrow({
     where: { organizationId, role: role as MembershipRole },
   });
@@ -572,7 +626,10 @@ async function postOne(env: {
   cashId: string;
   revenueId: string;
 }): Promise<string> {
-  const res = await withOrgScope(env.slug, postEntryHandler())(
+  const res = await withOrgScope(
+    env.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: env.token,
       body: {
@@ -597,8 +654,14 @@ test("L20: reversing a posted entry creates a second, opposite entry", async () 
   const env = await ledgerReady();
   const entryId = await postOne(env);
 
-  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }),
+  const res = await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(
+    req("POST", {
+      session: env.token,
+      body: { reason: "correcting a misposted accrual" },
+    }),
   );
 
   expect(res.status).toBe(201);
@@ -619,8 +682,14 @@ test("L21: the reversal inverts every line and the pair balances to zero", async
   const env = await ledgerReady();
   const entryId = await postOne(env);
 
-  await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }),
+  await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(
+    req("POST", {
+      session: env.token,
+      body: { reason: "correcting a misposted accrual" },
+    }),
   );
 
   const { entries } = await guardedListEntries(
@@ -647,10 +716,22 @@ test("L22: reversing twice is refused and the second attempt writes nothing", as
   const reverse = withOrgScope(env.slug, reverseEntryHandler(entryId));
 
   expect(
-    (await reverse(req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }))).status,
+    (
+      await reverse(
+        req("POST", {
+          session: env.token,
+          body: { reason: "correcting a misposted accrual" },
+        }),
+      )
+    ).status,
   ).toBe(201);
 
-  const second = await reverse(req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }));
+  const second = await reverse(
+    req("POST", {
+      session: env.token,
+      body: { reason: "correcting a misposted accrual" },
+    }),
+  );
   expect(second.status).toBe(422);
   expect(errorCode(second)).toBe("LEDGER_ALREADY_REVERSED");
   expect(await prisma.journalEntry.count()).toBe(2);
@@ -667,8 +748,14 @@ test("L23: a viewer cannot reverse", async () => {
     data: { role: "VIEWER" },
   });
 
-  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }),
+  const res = await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(
+    req("POST", {
+      session: env.token,
+      body: { reason: "correcting a misposted accrual" },
+    }),
   );
 
   expect(res.status).toBe(403);
@@ -680,9 +767,10 @@ test("L24: another tenant cannot reverse your entry", async () => {
   const entryId = await postOne(mine);
   const theirs = await actor("OWNER");
 
-  const res = await withOrgScope(mine.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: theirs.token, body: { reason: "mischief" } }),
-  );
+  const res = await withOrgScope(
+    mine.slug,
+    reverseEntryHandler(entryId),
+  )(req("POST", { session: theirs.token, body: { reason: "mischief" } }));
 
   expect(res.status).toBe(404);
   expect(await prisma.journalEntry.count()).toBe(1);
@@ -694,7 +782,12 @@ test("L25: an unknown entry id is 404, not 500", async () => {
   const res = await withOrgScope(
     env.slug,
     reverseEntryHandler("00000000-0000-0000-0000-000000000000"),
-  )(req("POST", { session: env.token, body: { reason: "correcting a misposted accrual" } }));
+  )(
+    req("POST", {
+      session: env.token,
+      body: { reason: "correcting a misposted accrual" },
+    }),
+  );
 
   expect(res.status).toBe(404);
 });
@@ -703,8 +796,14 @@ test("L26: a malformed asOf is 400 and reverses nothing", async () => {
   const env = await ledgerReady();
   const entryId = await postOne(env);
 
-  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { asOf: "not a date", reason: "x" } }),
+  const res = await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(
+    req("POST", {
+      session: env.token,
+      body: { asOf: "not a date", reason: "x" },
+    }),
   );
 
   expect(res.status).toBe(400);
@@ -748,8 +847,14 @@ test("L29: reversing with no period for that date is 422, not 404", async () => 
   const env = await ledgerReady();
   const entryId = await postOne(env);
 
-  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { asOf: "1990-06-01", reason: "wrong year" } }),
+  const res = await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(
+    req("POST", {
+      session: env.token,
+      body: { asOf: "1990-06-01", reason: "wrong year" },
+    }),
   );
 
   expect(res.status).toBe(422);
@@ -763,8 +868,14 @@ test("L30: an explicit asOf posts the reversal into that period", async () => {
   const env = await ledgerReady();
   const entryId = await postOne(env);
 
-  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { asOf: "2024-06-15", reason: "restate into June" } }),
+  const res = await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(
+    req("POST", {
+      session: env.token,
+      body: { asOf: "2024-06-15", reason: "restate into June" },
+    }),
   );
 
   expect(res.status).toBe(201);
@@ -778,7 +889,10 @@ test("L30: an explicit asOf posts the reversal into that period", async () => {
 test("L31: closing a period refuses further postings into it", async () => {
   const env = await ledgerReady("ACCOUNTANT");
 
-  const closed = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+  const closed = await withOrgScope(
+    env.slug,
+    transitionPeriodHandler(env.periodId),
+  )(
     req("POST", {
       session: env.token,
       body: { action: "close", reason: "year end signed off" },
@@ -787,7 +901,10 @@ test("L31: closing a period refuses further postings into it", async () => {
   expect(closed.status).toBe(200);
   expect(bodyOf(closed)["status"]).toBe("CLOSED");
 
-  const post = await withOrgScope(env.slug, postEntryHandler())(
+  const post = await withOrgScope(
+    env.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: env.token,
       body: {
@@ -820,9 +937,10 @@ test("L32: a transition with no reason is refused", async () => {
     { action: "close", reason: "   " },
     { action: "close", reason: "" },
   ]) {
-    const res = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
-      req("POST", { session: env.token, body }),
-    );
+    const res = await withOrgScope(
+      env.slug,
+      transitionPeriodHandler(env.periodId),
+    )(req("POST", { session: env.token, body }));
     expect(res.status).toBe(400);
   }
 
@@ -836,9 +954,10 @@ test("L33: an unrecognised action is refused", async () => {
   const env = await ledgerReady("ACCOUNTANT");
 
   for (const action of ["delete", "CLOSE", "reopen", ""]) {
-    const res = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
-      req("POST", { session: env.token, body: { action, reason: "because" } }),
-    );
+    const res = await withOrgScope(
+      env.slug,
+      transitionPeriodHandler(env.periodId),
+    )(req("POST", { session: env.token, body: { action, reason: "because" } }));
     expect(res.status).toBe(400);
   }
 });
@@ -850,21 +969,34 @@ test("L34: a bookkeeper cannot close, an accountant cannot lock", async () => {
   const refusedClose = await withOrgScope(
     bookkeeper.slug,
     transitionPeriodHandler(bookkeeper.periodId),
-  )(req("POST", { session: bookkeeper.token, body: { action: "close", reason: "x" } }));
+  )(
+    req("POST", {
+      session: bookkeeper.token,
+      body: { action: "close", reason: "x" },
+    }),
+  );
   expect(refusedClose.status).toBe(403);
 
   const accountant = await ledgerReady("ACCOUNTANT");
   const refusedLock = await withOrgScope(
     accountant.slug,
     transitionPeriodHandler(accountant.periodId),
-  )(req("POST", { session: accountant.token, body: { action: "lock", reason: "x" } }));
+  )(
+    req("POST", {
+      session: accountant.token,
+      body: { action: "lock", reason: "x" },
+    }),
+  );
   expect(refusedLock.status).toBe(403);
 });
 
 test("L35: an admin can lock, and a locked period refuses even an accountant", async () => {
   const env = await ledgerReady("ADMIN");
 
-  const locked = await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
+  const locked = await withOrgScope(
+    env.slug,
+    transitionPeriodHandler(env.periodId),
+  )(
     req("POST", {
       session: env.token,
       body: { action: "lock", reason: "audit in progress" },
@@ -873,7 +1005,10 @@ test("L35: an admin can lock, and a locked period refuses even an accountant", a
   expect(locked.status).toBe(200);
   expect(bodyOf(locked)["status"]).toBe("LOCKED");
 
-  const post = await withOrgScope(env.slug, postEntryHandler())(
+  const post = await withOrgScope(
+    env.slug,
+    postEntryHandler(),
+  )(
     req("POST", {
       session: env.token,
       body: {
@@ -898,12 +1033,19 @@ test("L36: the reason reaches the audit trail", async () => {
   const env = await ledgerReady("ADMIN");
   const reason = "unlocked to correct the misposted March payroll accrual";
 
-  await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
-    req("POST", { session: env.token, body: { action: "lock", reason: "audit" } }),
+  await withOrgScope(
+    env.slug,
+    transitionPeriodHandler(env.periodId),
+  )(
+    req("POST", {
+      session: env.token,
+      body: { action: "lock", reason: "audit" },
+    }),
   );
-  await withOrgScope(env.slug, transitionPeriodHandler(env.periodId))(
-    req("POST", { session: env.token, body: { action: "unlock", reason } }),
-  );
+  await withOrgScope(
+    env.slug,
+    transitionPeriodHandler(env.periodId),
+  )(req("POST", { session: env.token, body: { action: "unlock", reason } }));
 
   const rows = await prisma.auditLog.findMany({
     where: { organizationId: env.organizationId },
@@ -916,7 +1058,10 @@ test("L37: another tenant cannot transition your period", async () => {
   const mine = await ledgerReady("ADMIN");
   const theirs = await actor("OWNER");
 
-  const res = await withOrgScope(mine.slug, transitionPeriodHandler(mine.periodId))(
+  const res = await withOrgScope(
+    mine.slug,
+    transitionPeriodHandler(mine.periodId),
+  )(
     req("POST", {
       session: theirs.token,
       body: { action: "lock", reason: "mischief" },
@@ -939,9 +1084,10 @@ test("L38: a reversal with no reason is refused and reverses nothing", async () 
   const entryId = await postOne(env);
 
   for (const body of [{}, { reason: "   " }, { reason: "" }]) {
-    const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-      req("POST", { session: env.token, body }),
-    );
+    const res = await withOrgScope(
+      env.slug,
+      reverseEntryHandler(entryId),
+    )(req("POST", { session: env.token, body }));
     expect(res.status).toBe(400);
   }
 
@@ -956,9 +1102,10 @@ test("L39: the reason reaches the audit trail and the reversal description", asy
   const entryId = await postOne(env);
   const reason = "customer disputed the March invoice";
 
-  const res = await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { reason } }),
-  );
+  const res = await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(req("POST", { session: env.token, body: { reason } }));
   expect(res.status).toBe(201);
 
   const reversal = await prisma.journalEntry.findUniqueOrThrow({
@@ -979,9 +1126,10 @@ test("L40: reversing writes an audit row naming the actor", async () => {
   const env = await ledgerReady();
   const entryId = await postOne(env);
 
-  await withOrgScope(env.slug, reverseEntryHandler(entryId))(
-    req("POST", { session: env.token, body: { reason: "duplicate posting" } }),
-  );
+  await withOrgScope(
+    env.slug,
+    reverseEntryHandler(entryId),
+  )(req("POST", { session: env.token, body: { reason: "duplicate posting" } }));
 
   const audit = await prisma.auditLog.findFirstOrThrow({
     where: { organizationId: env.organizationId, action: "ledger.reverse" },

@@ -4,7 +4,10 @@ import { ensureOrg, pool, resetDb } from "../../setup";
 import { prisma } from "../../../src/server/db/client";
 import { createAccount } from "../../../src/modules/ledger/accounts";
 import { createPeriod } from "../../../src/modules/ledger/periods";
-import { listEntries, postJournalEntry } from "../../../src/modules/ledger/posting";
+import {
+  listEntries,
+  postJournalEntry,
+} from "../../../src/modules/ledger/posting";
 import { trialBalance } from "../../../src/modules/reports/trial-balance";
 import { profitAndLoss } from "../../../src/modules/reports/profit-and-loss";
 import { journalHref } from "../../../src/app/(app)/o/[orgSlug]/reports/drilldown";

@@ -9,11 +9,15 @@ import { createAccount } from "../../../src/modules/ledger/accounts";
 import { trialBalance } from "../../../src/modules/reports/trial-balance";
 import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 import { TrialBalanceUnbalancedError } from "../../../src/modules/reports/errors";
-import type { LedgerScope, AccountType } from "../../../src/modules/ledger/scope";
+import type {
+  LedgerScope,
+  AccountType,
+} from "../../../src/modules/ledger/scope";
 
 function at<T>(rows: readonly T[], i: number): T {
   const r = rows[i];
-  if (r === undefined) throw new Error(`expected a row at index ${i}, got ${rows.length} rows`);
+  if (r === undefined)
+    throw new Error(`expected a row at index ${i}, got ${rows.length} rows`);
   return r;
 }
 
@@ -102,10 +106,10 @@ test("throws TrialBalanceUnbalancedError when totalDebit ≠ totalCredit", async
 
   // Insert unbalanced journal data directly via Prisma (bypasses postJournalEntry
   // balance assertion). Creates a draft entry, attaches unbalanced lines, then posts.
-  
+
   // Disable the DB-level constraint trigger so unbalanced posted data can be inserted.
   await prisma.$executeRaw`ALTER TABLE journal_entries DISABLE TRIGGER je_balanced_check;`;
-  
+
   await prisma.$transaction(async (tx) => {
     const entry = await tx.journalEntry.create({
       data: {
@@ -146,20 +150,24 @@ test("throws TrialBalanceUnbalancedError when totalDebit ≠ totalCredit", async
 
     await tx.journalEntry.update({
       where: { id: entry.id },
-      data: { postedAt: new Date("2024-02-15T00:00:00Z"), postedBy: scope.userId, journalNumber: 1 },
+      data: {
+        postedAt: new Date("2024-02-15T00:00:00Z"),
+        postedBy: scope.userId,
+        journalNumber: 1,
+      },
     });
   });
 
   // Re-enable the balance check trigger
   await prisma.$executeRaw`ALTER TABLE journal_entries ENABLE TRIGGER je_balanced_check;`;
 
-  await expect(
-    trialBalance(scope, new Date("2024-02-28")),
-  ).rejects.toThrow(TrialBalanceUnbalancedError);
+  await expect(trialBalance(scope, new Date("2024-02-28"))).rejects.toThrow(
+    TrialBalanceUnbalancedError,
+  );
 
-  await expect(
-    trialBalance(scope, new Date("2024-02-28")),
-  ).rejects.toThrow("REPORT_TB_UNBALANCED");
+  await expect(trialBalance(scope, new Date("2024-02-28"))).rejects.toThrow(
+    "REPORT_TB_UNBALANCED",
+  );
 });
 
 // R3: Empty report when no journal entries exist
@@ -238,8 +246,16 @@ test("only includes rows for the requesting organization", async () => {
     description: "Org B entry",
     currency: "USD",
     lines: [
-      { accountId: cashB.id, debit: new Prisma.Decimal("999"), credit: new Prisma.Decimal("0") },
-      { accountId: revenueB.id, debit: new Prisma.Decimal("0"), credit: new Prisma.Decimal("999") },
+      {
+        accountId: cashB.id,
+        debit: new Prisma.Decimal("999"),
+        credit: new Prisma.Decimal("0"),
+      },
+      {
+        accountId: revenueB.id,
+        debit: new Prisma.Decimal("0"),
+        credit: new Prisma.Decimal("999"),
+      },
     ],
   });
 
@@ -264,16 +280,26 @@ test("filters entries by entry_date relative to asOf", async () => {
   const expense = await createAccountWithData("5000", "Expense", "EXPENSE");
 
   // Past entry — should be included
-  await postPosting(period.id, [
-    { accountId: cash.id, debit: "100", credit: "0" },
-    { accountId: revenue.id, debit: "0", credit: "100" },
-  ], "Past entry", new Date("2024-05-15"));
+  await postPosting(
+    period.id,
+    [
+      { accountId: cash.id, debit: "100", credit: "0" },
+      { accountId: revenue.id, debit: "0", credit: "100" },
+    ],
+    "Past entry",
+    new Date("2024-05-15"),
+  );
 
   // Future entry — should be excluded by asOf
-  await postPosting(period.id, [
-    { accountId: expense.id, debit: "50", credit: "0" },
-    { accountId: cash.id, debit: "0", credit: "50" },
-  ], "Future entry", new Date("2024-06-15"));
+  await postPosting(
+    period.id,
+    [
+      { accountId: expense.id, debit: "50", credit: "0" },
+      { accountId: cash.id, debit: "0", credit: "50" },
+    ],
+    "Future entry",
+    new Date("2024-06-15"),
+  );
 
   const result = await trialBalance(scope, new Date("2024-05-31"));
 
@@ -378,7 +404,9 @@ test("omits accounts that have no journal line activity", async () => {
   const result = await trialBalance(scope, new Date("2024-08-31"));
 
   expect(result.rows).toHaveLength(2);
-  expect(result.rows.every((r: { accountCode: string }) => r.accountCode !== "9999")).toBe(true);
+  expect(
+    result.rows.every((r: { accountCode: string }) => r.accountCode !== "9999"),
+  ).toBe(true);
   expect(result.totalDebit).toBe("75.0000");
   expect(result.totalCredit).toBe("75.0000");
 });

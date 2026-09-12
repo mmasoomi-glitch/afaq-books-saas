@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { resetDb } from "../../setup";
 import { prisma } from "../../../src/server/db/client";
-import type { HttpMethod, HttpRequest, HttpResponse } from "../../../src/server/http/types";
+import type {
+  HttpMethod,
+  HttpRequest,
+  HttpResponse,
+} from "../../../src/server/http/types";
 import {
   MAINTENANCE_HEADER,
   reapHandler,

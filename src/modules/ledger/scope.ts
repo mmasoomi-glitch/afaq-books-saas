@@ -45,7 +45,8 @@ export function unsafeCreateLedgerScope(
   return { userId, organizationId } as unknown as LedgerScope;
 }
 
-export type AccountType = "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
+export type AccountType =
+  "ASSET" | "LIABILITY" | "EQUITY" | "INCOME" | "EXPENSE";
 
 export interface CreateAccountInput {
   code: string;

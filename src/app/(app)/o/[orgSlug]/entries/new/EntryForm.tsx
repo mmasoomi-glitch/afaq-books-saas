@@ -81,7 +81,11 @@ function fromTenThousandths(value: number): string {
 function refusalMessage(body: unknown): string {
   if (typeof body === "object" && body !== null && "error" in body) {
     const wrapper: unknown = body.error;
-    if (typeof wrapper === "object" && wrapper !== null && "message" in wrapper) {
+    if (
+      typeof wrapper === "object" &&
+      wrapper !== null &&
+      "message" in wrapper
+    ) {
       const message: unknown = wrapper.message;
       if (typeof message === "string" && message !== "") {
         return `The entry was refused: ${message}.`;
@@ -135,7 +139,9 @@ export default function EntryForm({
   }
   const difference = debitTotal - creditTotal;
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     setNotice(undefined);
     setPending(true);

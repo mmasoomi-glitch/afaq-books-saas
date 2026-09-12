@@ -321,7 +321,8 @@ export function postEntryHandler(): ScopedHandler {
     // with none is not an entry — both would be refused by the deferred balance
     // trigger at COMMIT, but the message there names a constraint rather than
     // the thing the user did.
-    if (rawLines.length < 2) return badBody("an entry needs at least two lines");
+    if (rawLines.length < 2)
+      return badBody("an entry needs at least two lines");
 
     const lines: PostLineInput[] = [];
     for (const raw of rawLines) {
@@ -386,7 +387,9 @@ export function reverseEntryHandler(entryId: string): ScopedHandler {
     // reason nobody thought about, and the audit row it produces is worse than
     // no row because it looks like evidence.
     if (reason === undefined) {
-      return badBody("a reason is required, and is recorded in the audit trail");
+      return badBody(
+        "a reason is required, and is recorded in the audit trail",
+      );
     }
 
     const reversal = await guardedReverseJournalEntry(
@@ -429,7 +432,9 @@ export function transitionPeriodHandler(periodId: string): ScopedHandler {
     // nobody had to type is a reason nobody thought about, and the audit row it
     // produces is worse than no row because it looks like evidence.
     if (reason === undefined) {
-      return badBody("a reason is required, and is recorded in the audit trail");
+      return badBody(
+        "a reason is required, and is recorded in the audit trail",
+      );
     }
 
     const period =
@@ -439,6 +444,10 @@ export function transitionPeriodHandler(periodId: string): ScopedHandler {
           ? await guardedLockPeriod(scope, periodId, reason)
           : await guardedUnlockPeriod(scope, periodId, reason);
 
-    return json(200, { id: period.id, name: period.name, status: period.status });
+    return json(200, {
+      id: period.id,
+      name: period.name,
+      status: period.status,
+    });
   });
 }

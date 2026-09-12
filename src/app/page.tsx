@@ -16,8 +16,8 @@ export default function Home() {
       <p>
         The accounting API is running. You can sign in, create an organization,
         manage who has access to it, build a chart of accounts, open and close
-        accounting periods, post and reverse journal entries, and read the
-        trial balance, the profit and loss statement and the balance sheet.
+        accounting periods, post and reverse journal entries, and read the trial
+        balance, the profit and loss statement and the balance sheet.
       </p>
       <p>
         <a href="/register">Create an account</a> or{" "}
@@ -26,8 +26,8 @@ export default function Home() {
       </p>
       <p>
         Available endpoints: <code>POST /api/auth/register</code>,{" "}
-        <code>POST /api/auth/signin</code>,{" "}
-        <code>POST /api/auth/signout</code>, <code>GET /api/auth/session</code>.
+        <code>POST /api/auth/signin</code>, <code>POST /api/auth/signout</code>,{" "}
+        <code>GET /api/auth/session</code>.
       </p>
       <p>
         Progress is tracked in <code>docs/coordination/SPRINT_BOARD.md</code>{" "}

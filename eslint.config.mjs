@@ -3,6 +3,7 @@ import tseslint from "typescript-eslint";
 import nextPlugin from "@next/eslint-plugin-next";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
+import eslintConfigPrettier from "eslint-config-prettier";
 
 /**
  * Lint configuration, ESLint 9 flat config.
@@ -159,4 +160,11 @@ export default tseslint.config(
       "no-console": ["warn", { allow: ["warn", "error"] }],
     },
   },
+
+  /**
+   * Turns OFF the rules that would fight the formatter. It adds no rules of
+   * its own, and it must stay LAST: in flat config the later entry wins, so
+   * anything after this could re-enable a rule Prettier is about to violate.
+   */
+  eslintConfigPrettier,
 );

@@ -15,7 +15,11 @@ import { prisma } from "../db/client";
  * failing open.
  */
 
-export type RateLimitAction = "signin" | "signup" | "password-reset";
+export type RateLimitAction =
+  | "signin"
+  | "signup"
+  | "password-reset"
+  | "write";
 
 export interface RateLimitPolicy {
   limit: number;
@@ -33,6 +37,25 @@ export const POLICIES: Readonly<Record<RateLimitAction, RateLimitPolicy>> =
     signin: { limit: 5, windowMs: 15 * 60_000 },
     signup: { limit: 3, windowMs: 60 * 60_000 },
     "password-reset": { limit: 3, windowMs: 60 * 60_000 },
+
+    /**
+     * Authenticated writes: 300 per minute, per user.
+     *
+     * This is NOT an authorization control — everyone it applies to is already
+     * a member holding the permission for what they are doing. It is resource
+     * protection, against a runaway script or a compromised session, and the
+     * limit is chosen accordingly: deliberately far above anything a person
+     * does, and far below what a loop does.
+     *
+     * A human posting journal entries by hand manages a few a minute. 300 is
+     * five a second sustained, which no interface produces and every mistake
+     * does.
+     *
+     * Keyed on the USER, not the address. An authenticated caller has a stable
+     * identity that does not depend on trusting `x-forwarded-for` — which by
+     * default this deployment does not.
+     */
+    write: { limit: 300, windowMs: 60_000 },
   });
 
 export const MAX_DELAY_MS = 10_000;

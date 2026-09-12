@@ -1,9 +1,10 @@
 import type { HttpHandler, HttpRequest, HttpResponse } from "../types";
-import { error } from "../types";
+import { error, isMutating } from "../types";
 import { SESSION_COOKIE } from "../cookies";
 import type { OrgScope } from "../../auth/scope";
 import { resolveScopeFromSession } from "../../auth/session";
 import { AuthError } from "../../auth/errors";
+import { RateLimitedError, enforce } from "../../auth/rate-limit";
 
 /**
  * Turns a framework-agnostic handler into one that receives a VERIFIED
@@ -70,6 +71,32 @@ export function withOrgScope(
       // bug behind a response that looks like a legitimate "not found". The
       // outermost adapter is where it becomes a 500.
       throw err;
+    }
+
+    // Every authenticated WRITE is rate limited, and it is enforced HERE so a
+    // new endpoint cannot forget it. A limit applied in each handler is a
+    // limit the twelfth handler will not have.
+    //
+    // Not an authorization control: everyone reaching this line is already a
+    // member holding the permission for what they are doing. It is resource
+    // protection against a runaway script or a compromised session.
+    //
+    // Reads are deliberately not limited. They are cheap, they are the bulk of
+    // normal use, and a report that refuses to render because someone
+    // refreshed it is a worse failure than the one being prevented.
+    if (isMutating(req.method)) {
+      try {
+        await enforce("write", req.ip, scope.userId);
+      } catch (err) {
+        if (err instanceof RateLimitedError) {
+          return error(429, err.code, err.message, {
+            headers: {
+              "retry-after": String(Math.ceil(err.retryAfterMs / 1000)),
+            },
+          });
+        }
+        throw err;
+      }
     }
 
     // Outside the try, so a genuine error thrown BY THE HANDLER is not

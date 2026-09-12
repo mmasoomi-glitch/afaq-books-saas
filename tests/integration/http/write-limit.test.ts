@@ -14,6 +14,7 @@ import type {
 } from "../../../src/server/http/types";
 import { withOrgScope } from "../../../src/server/http/handlers/scoped";
 import { createAccountHandler } from "../../../src/server/http/handlers/ledger";
+import { createOrganizationHandler } from "../../../src/server/http/handlers/organizations";
 import { guardedListAccounts } from "../../../src/modules/ledger/guarded";
 import { resolveOrgScope } from "../../../src/server/auth/scope";
 
@@ -225,4 +226,45 @@ test("W8: an unauthenticated write is still 404, not 429", async () => {
   });
 
   expect(res.status).toBe(404);
+});
+
+test("W9: creating organizations is limited too, on the same budget", async () => {
+  // This route does NOT pass through `withOrgScope` — it is what creates the
+  // organization a scope would resolve against — so it needs the limit
+  // explicitly. It is also the only write a brand-new account with no
+  // memberships can make, which makes it the one worth not leaving open.
+  const email = newEmail();
+  const { userId } = await registerUser(email, PASSWORD);
+  const { rawToken } = await signIn(email, PASSWORD);
+  await burn(userId, LIMIT);
+
+  const res = await createOrganizationHandler()(
+    req("POST", rawToken, { slug: `org-${randomUUID().slice(0, 8)}`, name: "X" }),
+  );
+
+  expect(res.status).toBe(429);
+  expect(await prisma.organization.count()).toBe(0);
+});
+
+test("W10: the budget is shared, not doubled", async () => {
+  // Same "write" policy as every other mutation, deliberately. A user who has
+  // spent their budget posting entries should not find a second, separate
+  // allowance for creating tenants.
+  const o = await owner();
+  await burn(o.userId, LIMIT);
+
+  const account = await withOrgScope(o.slug, createAccountHandler())(
+    req("POST", o.token, {
+      code: "1000",
+      name: "Cash",
+      type: "ASSET",
+      currency: "USD",
+    }),
+  );
+  const organization = await createOrganizationHandler()(
+    req("POST", o.token, { slug: `org-${randomUUID().slice(0, 8)}`, name: "X" }),
+  );
+
+  expect(account.status).toBe(429);
+  expect(organization.status).toBe(429);
 });

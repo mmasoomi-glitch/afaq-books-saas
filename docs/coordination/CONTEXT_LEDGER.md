@@ -162,7 +162,51 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-13 (everything implemented is now reachable)
+## State — last hydrated 2026-09-13 (namespace fixed, debt is the backlog)
+
+**Base branch @ `6f53490`. No open PRs. 349 tests, lint clean, build green,
+typecheck clean, no drift.** PR #35 merged since the last hydration.
+
+`B-20260913-01` is **closed** — the one item with a closing window, done while
+it was still two directory renames. Organizations live at `/o/{slug}/…` and
+`/api/o/{slug}/…`; the reserved-word list is gone rather than longer.
+
+Verified by doing the thing the list existed to prevent: an organization
+slugged `members` is created, renders at `/o/members/accounts`, and its API
+works — and so does one called `api`. Old URLs 404. Format still enforced.
+
+### The reserved-list lesson, generalised
+
+The list had needed extending **twice in one session**, and the third time was
+a matter of when rather than whether.
+
+> A list that must be updated every time an unrelated thing changes is not a
+> safeguard. It is a recurring obligation that will eventually be forgotten by
+> someone who had no reason to know it existed.
+
+Worth applying to anything else in this repo that looks like it: a set of
+strings kept in sync with a set of files by nothing but attention.
+
+### The vacuous-check tally reached SIX, and one of them was the counter itself
+
+| # | The check | What was wrong |
+|---|-----------|----------------|
+| 1 | CI grep for `posting.js` | matched nothing after the extension removal |
+| 2 | `sophia_review` | answered about a different repository |
+| 3 | `await expect(() => syncFn()).toThrow()` | the `await` hid that the assertion is vacuous on a rejection |
+| 4 | a test mock hardcoding `"__Host-session"` | a rename would pass four of seven tests silently |
+| 5 | the framework-import gate | **worked** — and caught its own author, twice |
+| 6 | the DB-invariant needle list | matched a constraint name inside a `DROP CONSTRAINT` |
+
+Number 6 is the sharpest: the gate would have reported a constraint present
+while the only migration mentioning it was the one that removed it. Found by
+reading the file instead of trusting a script's own "success" output.
+
+**The standing question for any new gate: what input would make this report
+failure?** The `/o` namespace check added in the same PR was verified to FAIL
+on a planted violation before being committed, for exactly this reason.
+
+## Superseded — hydrated 2026-09-13 (everything implemented is now reachable)
 
 **Base branch @ `a8aabd2`. No open PRs. 349 tests, lint clean, build green,
 typecheck clean, no drift.** PRs #32 and #33 merged since the last hydration.
@@ -856,44 +900,40 @@ The feature backlog is no longer the constraint — **everything implemented is
 reachable.** What remains is debt, hardening and the things a real user would
 ask for on day one.
 
-1. **`B-20260913-01` — the slug namespace.** Two reservation migrations in one
-   session, and the third is a matter of time. `/o/{slug}/…` is cheap now and
-   expensive once slugs are in circulation in links, bookmarks and emailed
-   invoices. **This is the one with a closing window.**
-2. **`B-20260911-04` — Row Level Security.** Tenant isolation rests on
+1. **`B-20260911-04` — Row Level Security.** Tenant isolation rests on
    application filtering plus the `jl_org_consistency` trigger. Every one of
    the ~25 tenancy tests passes, and none of them would catch a query written
    next month that forgets its `organizationId`.
-3. **No audit trail is readable through the product.** Rows are written for
+2. **No audit trail is readable through the product.** Rows are written for
    post, reverse, lock, unlock, membership and ownership changes, and the only
    way to read them is SQL. For an accounting product that is the report an
    auditor asks for first.
-4. **No export.** No CSV, no PDF, on any report. An accountant asks on first
+3. **No export.** No CSV, no PDF, on any report. An accountant asks on first
    contact.
-5. **No drill-down.** You cannot click an account in a report to see the
+4. **No drill-down.** You cannot click an account in a report to see the
    entries behind the figure, which is the first thing anyone does when a
    number looks wrong.
-6. **The journal has no pagination or filtering** — 100 most recent. Wrong at
+5. **The journal has no pagination or filtering** — 100 most recent. Wrong at
    the first real month-end.
-7. **A reversal cannot be given a reason**, and writes no `audit_logs` row.
+6. **A reversal cannot be given a reason**, and writes no `audit_logs` row.
    I9 lists "reverse" explicitly.
-8. **No app shell.** The home page is static so it cannot know whether a
+7. **No app shell.** The home page is static so it cannot know whether a
    visitor is signed in.
-9. **`audit_logs.request_id` is null everywhere.**
-10. **Rate limiting covers only sign-in and sign-up.**
-11. **No component tests.** No jsdom setup; every screen is covered on the
+8. **`audit_logs.request_id` is null everywhere.**
+9. **Rate limiting covers only sign-in and sign-up.**
+10. **No component tests.** No jsdom setup; every screen is covered on the
     server side and not in the rendering.
-12. **Prettier**, or a decision not to have one.
-3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
+11. **Prettier**, or a decision not to have one.
+12. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init
    migration, so the answer is worth writing down once.
-4. `B-20260911-04` — ARCHITECT decides on RLS.
-5. `B-20260911-07` / `-08` — the reaper job, and something that actually reads
+13. `B-20260911-04` — ARCHITECT decides on RLS.
+14. `B-20260911-07` / `-08` — the reaper job, and something that actually reads
    `security_events`. A security log nobody reads is a log that exists for the
    auditor and not for us. Run the reaper under `tsx`, not plain `node`:
    ADR-0002 removed the extension suffixes plain Node ESM would need.
-6. Then SALES-AR: the first module that posts *through* the ledger.
+15. Then SALES-AR: the first module that posts *through* the ledger.
 
 ## Superseded — hydrated 2026-09-12 (HTTP layer and adapter merged)
 

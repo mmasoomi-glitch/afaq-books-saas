@@ -315,6 +315,47 @@ Then, roughly: CSV export, an organization switcher, Prettier, component tests
 (still no jsdom), `B-20260913-02` audit-log retention, `B-20260911-04` RLS
 (owner decision).
 
+### Session close — the judge called STOP
+
+Asked for a stop-verdict with the remaining backlog laid out and told
+explicitly to weigh stopping, Sophia returned:
+
+> **STOP: No deployment, no real users, and no owner-only decisions remain;
+> continuing is make-work.** The remaining items (CSV, org switcher, component
+> tests, RLS) are low-value polish for a pre-launch product with no customers.
+> Implementing them now risks scope creep and distraction from the core
+> accounting logic which is already verified.
+
+Honoured. Under this session's authority model the judge decides go/no-go and
+"is this done", so a STOP is not advisory.
+
+**Nine pull requests merged, one closed. 389 → 440 tests across 29 files.** Six
+CI gates green on every one, and every merged item was driven against a running
+server, not only the suite.
+
+### What remains, and who it belongs to
+
+- **CSV export**, **an organization switcher**, **component tests** (still no
+  jsdom) — judged low-value polish until there is a user.
+- **`B-20260913-02` audit-log retention** — an **owner call**, not a technical
+  one: archiving implies a storage destination, which is money and
+  infrastructure.
+- **`B-20260911-04` RLS** — an **owner call**, and deprioritised by the judge
+  three times.
+
+### Two habits that earned their keep today
+
+**Read the output, not the expectation.** The drill-down reconciled correctly
+and *still* had two defects — a full UTC timestamp in the href where the
+interface documented a date, and, separately, both cumulative statements showing
+users `2024-01-31T00:00:00.000Z` as visible text on a financial statement.
+Neither was reachable by the test suite. Both came from looking at what the page
+actually rendered.
+
+**Check the gate ran, not that the job was green.** `pnpm format:check` was
+confirmed in the CI log by name. A step can be added to a workflow and never
+execute, and a green job says nothing about a step that did not run.
+
 ## Superseded — hydrated 2026-09-12 (a maintenance reaper and an app shell)
 
 **Base branch @ `e4489d4`. No open PRs. 401 tests across 24 files, lint clean,

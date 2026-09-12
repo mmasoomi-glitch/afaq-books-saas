@@ -162,7 +162,160 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-12 (a maintenance reaper and an app shell)
+## State — last hydrated 2026-09-12 (paging, filtering, and a judge with authority)
+
+**Base branch @ `8c04f76`. No open PRs. 429 tests across 27 files, lint clean,
+typecheck clean, build green, six CI gates green.** PRs #44, #45, #46, #47, #48
+and #49 merged; #43 closed. Test count went 389 → 429 across the day.
+
+### The authority model changed mid-session, and it is worth writing down
+
+The owner restated it as absolute: **Sophia is the only authority to judge** —
+plans, verdicts, go/no-go, "is this done" — and **Forge is the only authority to
+author or modify code.** The session neither judges its own work nor writes its
+own implementation.
+
+PR #49 is the first change put through it properly: the branch was built, gated,
+and then handed to `sophia_ask` for a verdict before a pull request existed. It
+returned **PASS**, quoted in full on the PR rather than paraphrased.
+
+> **A verdict inherits the facts you hand it.** Sophia was told Forge was
+> unreachable and reasoned *"Since the Forge MCP is unreachable, no immediate
+> code changes can be enforced"* — then Forge came back up between its answer
+> and the next message. The verdict was not wrong; its premise expired. When a
+> judge's reasoning is explicitly conditional, re-ask when the condition moves
+> rather than treating the old answer as durable.
+
+### Two ledgers existed and had diverged
+
+This file was current. The **canonical SQLite ledger**
+(`.claude/context_ledger.db`, the one `ledger-stop-guard` enforces) had its last
+row on 2026-09-11 and **zero memory rows at all** — every decision of the last
+two days lived only in markdown.
+
+Three memories written this session: the cursor/filter binding, the
+`migrate diff` finding, and the `@db.Uuid` crash. Claims taken and released
+around the edit.
+
+> Hydrating one ledger is not hydrating the ledger. Check both.
+
+### Journal paging and filtering (#47, #49)
+
+The listing was capped at 100 with no way past it — a completeness failure for a
+book of record, not a convenience one. Keyset rather than offset, **because with
+an offset an entry posted mid-walk shifts every later row down by one and pushes
+the boundary row onto a page the reader has already passed.** They never see it
+and nothing says so.
+
+Filtering by account returns each entry **in full**, since a debit shown without
+its credit reads as if money appeared from nowhere. To keep that reconcilable,
+the page carries account totals summed **in SQL over the whole filtered set** —
+I4 forbids a figure derived from what the UI happens to be rendering, and a
+per-page total would be useless for the one job it has.
+
+**The cursor is fingerprinted with the filter** (`sha256(where)` → 12 hex,
+prefixed as `<fingerprint>.<entryId>`). Sophia named this failure when it
+sequenced the work; a cursor surviving a filter change returns a slice of the
+new query starting at an arbitrary row. A mismatch now serves page one.
+
+### Three bugs the tests caught before they shipped
+
+1. **A mangled cursor was a 500.** `@db.Uuid` columns reject a malformed value
+   at the type level. Validated by shape *before* the lookup rather than
+   `try`/`catch` around it — a blanket catch swallows a genuine database failure
+   and reports "page one" when the truth is the database is unreachable.
+2. **A negative page size would have returned the OLDEST entries.** A negative
+   `take` in Prisma means take from the other end: `-5` under a heading saying
+   "newest first" is a wrong answer that looks entirely right.
+3. **A local `params` helper shadowed the route-props `params`**, so paging
+   links called a Promise. `tsc` caught it; `next build` refused the module.
+
+### `B-20260912-03` was blocked for a month by an untested guess
+
+It stayed open because closing it "properly" was thought to require deciding how
+`prisma migrate diff --exit-code` treats objects Prisma cannot model. Checked in
+about thirty seconds:
+
+```text
+No difference detected.
+EXIT=0
+```
+
+**Prisma ignores a functional index exactly as it already ignores every trigger
+and `EXCLUDE` constraint in the init migration.** There was nothing to decide.
+A security hardening sat behind an assumption nobody had spent a minute on. CI
+then confirmed it independently in the real gate.
+
+`B-20260912-04` was closed too — it had been **fixed for some time** and nobody
+closed the entry. A blocker describing a solved problem costs the next reader
+the time to rediscover it is stale, and makes the open list untrustworthy.
+
+### gitleaks: a fix commit does not clear a leak
+
+PR #43 committed a test secret as a high-entropy literal. Generating it with
+`randomUUID()` fixed the tip and **not the check** — gitleaks scans a PR's
+commits, `2 commits scanned`, finding still at `6b57550`.
+
+> That is exactly why a real credential is **rotated**, not deleted. The value
+> is in the history either way, and anyone who fetched the branch has it.
+
+Force-push is forbidden, so the recovery was the sanctioned one: new branch from
+`develop`, one clean commit, new PR, old branch deleted. Rehearsed correctly on
+a harmless value. An allowlist entry was deliberately **not** used — it teaches
+the next person that a flagged finding is something you silence.
+
+### Documentation went false twice in one day
+
+`IMPLEMENTATION_STATUS.md` claimed "nothing is reachable over HTTP, and no human
+has ever posted a journal entry through a screen" long after the loop closed.
+Corrected in #46 — quoted and struck rather than deleted, with the list of what
+is **still** untrue expanded.
+
+Then the correction itself went stale within hours: it said the journal "shows
+only the 100 most recent entries and offers no way to see older ones", which
+#47 fixed the same day. Corrected again here.
+
+> A status file is a defect when it is wrong, not a chore. It goes stale at the
+> speed the product moves, which is the whole reason it is worth writing.
+
+I also corrected my own note twice: I wrote here that the journal "returns every
+entry, unbounded" when it had always defaulted to `limit = 100`, and I carried a
+backlog line saying `users.email` had no unique constraint when the schema said
+`@unique`. Both found by reading the source instead of my own note from twenty
+minutes earlier.
+
+### Forge, honestly
+
+It went **unreachable mid-task** and stayed down for roughly an hour, then
+returned. While down, the app-shell sign-out component was hand-written and said
+so at the time rather than pretending otherwise.
+
+Its one substantive contribution today was real: it found that the empty-string
+guard on `MAINTENANCE_SECRET` did not cover `"   "`, since whitespace is neither
+`undefined` nor `""`. Fixed with a length floor rather than a second special
+case. **But it reported three findings and retracted two of them inside the same
+answer**, tracing through its own claims and concluding "this seems correct".
+
+> Forge's pointers are worth reading. Its verdicts are not — that is Sophia's
+> job, and the division is now the owner's standing rule rather than a habit.
+
+### Next, by Sophia's sequencing
+
+**Report drill-down** — a trial-balance line linking to the filtered journal
+behind it. Mostly plumbing now: the filtered journal takes `account`, `from` and
+`to` as URL parameters and already reconciles.
+
+Sophia named the failure to design against as a page-boundary mismatch where the
+drill-down "shows a subset that doesn't sum to the parent total". **That one is
+already closed** — `F4` asserts the totals are computed over the whole filtered
+set and do not change with page size. Worth telling Forge explicitly so the
+property is preserved rather than rediscovered.
+
+Then, roughly: CSV export, an organization switcher, Prettier, component tests
+(still no jsdom), `B-20260913-02` audit-log retention, `B-20260911-04` RLS
+(owner decision).
+
+## Superseded — hydrated 2026-09-12 (a maintenance reaper and an app shell)
 
 **Base branch @ `e4489d4`. No open PRs. 401 tests across 24 files, lint clean,
 typecheck clean, build green.** PR #44 and PR #45 merged. PR #43 closed.

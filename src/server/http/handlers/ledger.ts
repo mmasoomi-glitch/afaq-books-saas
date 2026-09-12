@@ -11,7 +11,9 @@ import {
   guardedCreatePeriod,
   guardedPostJournalEntry,
 } from "../../../modules/ledger/guarded";
-import type { PostLineInput } from "../../../modules/ledger/posting";
+// Through `guarded`, not `posting` — that module is private to the ledger and
+// the CI gate treats a type-only import of it exactly like a value import.
+import type { PostLineInput } from "../../../modules/ledger/guarded";
 import { LedgerError } from "../../../modules/ledger/errors";
 
 /**

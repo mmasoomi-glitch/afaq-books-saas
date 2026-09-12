@@ -118,3 +118,21 @@ export async function guardedListPeriods(scope: OrgScope): Promise<Period[]> {
   assertCanDo(scope, "ledger.account.read");
   return listPeriods(toLedgerScope(scope));
 }
+
+/**
+ * The input types, re-exported so callers never have to reach past this module.
+ *
+ * The CI gate that keeps the unguarded services private cannot distinguish
+ * `import type` from `import`, and it should not try: a type-only import today
+ * is one character away from a value import tomorrow, and the gate would have
+ * to be loosened to allow the first before it could be tightened again.
+ *
+ * So `guarded.ts` is the complete public surface of this module — the functions
+ * AND the shapes they take. Nothing outside it needs to know that `posting.ts`
+ * exists.
+ */
+export type {
+  CreateAccountInput,
+  CreatePeriodInput,
+} from "./scope";
+export type { PostJournalInput, PostLineInput, PostedEntry } from "./posting";

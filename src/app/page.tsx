@@ -17,8 +17,7 @@ export default function Home() {
         The accounting API is running. You can sign in, create an organization,
         manage who has access to it, build a chart of accounts, open and close
         accounting periods, post and reverse journal entries, and read the
-        trial balance. Profit and loss and the balance sheet have no screen
-        yet, though both are implemented.
+        trial balance, the profit and loss statement and the balance sheet.
       </p>
       <p>
         <a href="/register">Create an account</a> or{" "}

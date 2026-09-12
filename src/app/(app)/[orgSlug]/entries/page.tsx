@@ -34,6 +34,10 @@ export default async function EntriesPage({ params }: PageProps) {
         <a href={`/${orgSlug}/periods`}>Periods</a>
         {" · "}
         <a href={`/${orgSlug}/reports/trial-balance`}>Trial balance</a>
+        {" · "}
+        <a href={`/${orgSlug}/reports/profit-and-loss`}>Profit and loss</a>
+        {" · "}
+        <a href={`/${orgSlug}/reports/balance-sheet`}>Balance sheet</a>
       </p>
 
       {entries.length === 0 ? (

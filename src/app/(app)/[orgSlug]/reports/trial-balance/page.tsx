@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { requirePageScope } from "../../../../../server/next/page-scope";
 import { guardedTrialBalance } from "../../../../../modules/reports/guarded";
+import ReportNav from "../ReportNav";
+import AsOfForm from "../AsOfForm";
 
 export const metadata: Metadata = {
   title: "Trial balance · Afaq Books",
@@ -65,19 +67,8 @@ export default async function TrialBalancePage({
         {scope.organizationSlug} · as at{" "}
         <time dateTime={report.asOf}>{report.asOf}</time>
       </p>
-      <p>
-        <a href={`/${orgSlug}/accounts`}>Chart of accounts</a>
-        {" · "}
-        <a href={`/${orgSlug}/entries`}>Journal</a>
-        {" · "}
-        <a href={`/${orgSlug}/periods`}>Periods</a>
-        {" · "}
-        <a href={`/${orgSlug}/entries/new`}>New journal entry</a>
-        {" · "}
-        <a href={`/${orgSlug}/members`}>Members</a>
-        {" · "}
-        <a href="/organizations">All organizations</a>
-      </p>
+      <ReportNav orgSlug={orgSlug} />
+      <AsOfForm asOf={report.asOf} />
 
       {report.rows.length === 0 ? (
         // A truthful empty state. `.claude/rules/no-mocks-no-stubs.md` forbids

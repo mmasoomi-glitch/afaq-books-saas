@@ -37,6 +37,10 @@ export default async function AccountsPage({ params }: PageProps) {
         {scope.organizationSlug} · <a href={`/${orgSlug}/reports/trial-balance`}>
           Trial balance
         </a>
+ {" · "}
+ <a href={`/${orgSlug}/reports/profit-and-loss`}>Profit and loss</a>
+ {" · "}
+ <a href={`/${orgSlug}/reports/balance-sheet`}>Balance sheet</a>
         {" · "}
         <a href={`/${orgSlug}/entries`}>Journal</a>
         {" · "}

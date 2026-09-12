@@ -42,6 +42,10 @@ export default async function PeriodsPage({ params }: PageProps) {
         <a href={`/${orgSlug}/accounts`}>Chart of accounts</a>
         {" · "}
         <a href={`/${orgSlug}/reports/trial-balance`}>Trial balance</a>
+        {" · "}
+        <a href={`/${orgSlug}/reports/profit-and-loss`}>Profit and loss</a>
+        {" · "}
+        <a href={`/${orgSlug}/reports/balance-sheet`}>Balance sheet</a>
       </p>
 
       {!covered ? (

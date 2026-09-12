@@ -243,7 +243,12 @@ test("S9: a reversal nets to zero per account against the original", async () =>
     lines: balancedLines(cash.id, revenue.id, "250.5000"),
   });
 
-  await reverseJournalEntry(scope, original.entryId, new Date("2024-01-20"));
+  await reverseJournalEntry(
+    scope,
+    original.entryId,
+    new Date("2024-01-20"),
+    "test reversal",
+  );
 
   for (const accountId of [cash.id, revenue.id]) {
     const lines = await prisma.journalLine.findMany({
@@ -271,6 +276,7 @@ test("S10: a reversal links both directions", async () => {
     scope,
     original.entryId,
     new Date("2024-01-20"),
+    "test reversal",
   );
 
   const originalRow = await prisma.journalEntry.findUniqueOrThrow({
@@ -295,10 +301,20 @@ test("S11: reversing twice is refused", async () => {
     currency: "USD",
     lines: balancedLines(cash.id, revenue.id),
   });
-  await reverseJournalEntry(scope, original.entryId, new Date("2024-01-20"));
+  await reverseJournalEntry(
+    scope,
+    original.entryId,
+    new Date("2024-01-20"),
+    "test reversal",
+  );
 
   await expect(
-    reverseJournalEntry(scope, original.entryId, new Date("2024-01-21")),
+    reverseJournalEntry(
+      scope,
+      original.entryId,
+      new Date("2024-01-21"),
+      "test reversal",
+    ),
   ).rejects.toBeInstanceOf(AlreadyReversedError);
 });
 

@@ -215,6 +215,7 @@ test("G9: a BOOKKEEPER can reverse an entry", async () => {
     scope,
     posted.entryId,
     new Date("2024-01-20"),
+    "test reversal",
   );
 
   const original = await prisma.journalEntry.findUniqueOrThrow({
@@ -233,7 +234,12 @@ test("G10: a VIEWER cannot reverse, and the original stays unreversed", async ()
   const viewer = await joinAs(owner.organizationId, owner.slug, "VIEWER");
 
   await expect(
-    guardedReverseJournalEntry(viewer, posted.entryId, new Date("2024-01-20")),
+    guardedReverseJournalEntry(
+      viewer,
+      posted.entryId,
+      new Date("2024-01-20"),
+      "test reversal",
+    ),
   ).rejects.toBeInstanceOf(ForbiddenError);
 
   const original = await prisma.journalEntry.findUniqueOrThrow({

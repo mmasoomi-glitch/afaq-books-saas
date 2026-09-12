@@ -1,0 +1,18 @@
+# Normalize line endings. Without this, Windows clones flip every file
+# to CRLF on checkout, which makes diffs and shell-script hooks misbehave.
+* text=auto eol=lf
+
+# Shell scripts must stay LF even on Windows (Git Bash / hooks).
+*.sh text eol=lf
+
+# Markdown stays LF for consistent diffs.
+*.md text eol=lf
+
+# Binary types — never normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary

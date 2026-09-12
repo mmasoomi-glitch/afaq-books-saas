@@ -1,0 +1,290 @@
+name: ledger-ci
+
+# Sprint 001. Runs the ledger typecheck and the accounting-invariant tests
+# against a REAL PostgreSQL instance.
+#
+# A service container is not a convenience here. `.claude/rules/testing-
+# release-gates.md` requires accounting-invariant tests to run against real
+# Postgres, "no in-memory SQLite - its constraint and isolation semantics
+# differ from Postgres". Most of what these tests assert (DEFERRABLE
+# constraint triggers, EXCLUDE ... USING gist, plpgsql trigger return
+# semantics) does not exist in SQLite at all, so a substitute would report
+# green while proving nothing.
+#
+# This workflow is deliberately a SEPARATE file from governance-checks.yml.
+# That file's five job names are pinned as required status checks in the
+# protect-develop and protect-main rulesets; editing it from two branches
+# at once risks a conflict that silently drops a gate.
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  ledger:
+    name: Ledger typecheck and invariant tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: naqdengi
+          POSTGRES_PASSWORD: naqdengi_ci_local_only
+          POSTGRES_DB: naqdengi_test
+        ports:
+          - 5432:5432
+        # Without a health check the steps below race the container's
+        # startup and fail intermittently on a cold runner.
+        options: >-
+          --health-cmd "pg_isready -U naqdengi"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://naqdengi:naqdengi_ci_local_only@127.0.0.1:5432/naqdengi_test
+      TEST_DATABASE_URL: postgresql://naqdengi:naqdengi_ci_local_only@127.0.0.1:5432/naqdengi_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma schema is valid
+        run: pnpm prisma validate
+
+      # The generated client is what supplies the `Prisma` namespace and the
+      # model types the service layer is written against. pnpm does not always
+      # run Prisma's postinstall hook, so without this step typecheck fails with
+      # "@prisma/client has no exported member 'Prisma'" and every downstream
+      # parameter falls back to implicit any.
+      - name: Generate the Prisma client
+        run: pnpm prisma generate
+
+      # `migrate diff` RESETS whatever database it is given as the shadow and
+      # replays the migrations into it. Pointing it at the test database left
+      # that database populated but with no _prisma_migrations history, so the
+      # next `migrate deploy` failed with P3005 "schema is not empty". The
+      # shadow database must be its own throwaway.
+      - name: Create a throwaway shadow database
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c 'CREATE DATABASE naqdengi_shadow OWNER naqdengi;'
+
+      - name: No migration drift between schema.prisma and migrations
+        run: |
+          pnpm prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code
+        env:
+          SHADOW_DATABASE_URL: postgresql://naqdengi:naqdengi_ci_local_only@127.0.0.1:5432/naqdengi_shadow
+        # --exit-code makes this fail when a diff exists. A silent drift
+        # between the schema and the migration history is exactly how a
+        # ledger constraint gets dropped in production but not in review.
+
+      - name: Apply migrations to a freshly created database
+        run: pnpm prisma migrate deploy
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # Type-aware rules, so this needs the Prisma client generated above and a
+      # second TypeScript program. It earns that on one rule:
+      # `no-floating-promises`. `strict` TypeScript says nothing about a promise
+      # nobody awaits, so a ledger write without `await` typechecks, returns
+      # immediately, and the caller reports success while the write may still
+      # fail with nobody listening.
+      - name: Lint
+        run: pnpm lint
+
+      # `--check` over the whole tree, honouring `.prettierignore`.
+      #
+      # The reviewer suggested checking "staged files only". That is a
+      # pre-commit concept and has no meaning here: CI checks out a merge
+      # commit and has no index, so there is nothing staged to look at. The
+      # equivalent that IS implementable is the whole tree minus the ignore
+      # file, which is also stricter -- a file nobody touched cannot drift
+      # unnoticed.
+      - name: Formatting
+        run: pnpm format:check
+
+      - name: Accounting-invariant tests
+        run: pnpm test
+
+      # The typecheck above runs `tsc --noEmit`, which is NOT the same question
+      # as "does this build". `moduleResolution: "bundler"` tells the type
+      # checker to behave as a bundler would; it does not configure the bundler,
+      # and the two disagreed on the `.js` import suffixes — tsc passed while
+      # `next build` could not resolve a single route file. See ADR-0002.
+      #
+      # So the build is its own gate. Without it, a resolution or a server/client
+      # boundary error reaches whoever runs `next build` next, with no hint that
+      # CI ever had an opinion.
+      - name: Production build
+        run: pnpm build
+
+      - name: Assert nothing bypasses the authorization gate
+        run: |
+          set -euo pipefail
+          # B-20260911-05. The branded LedgerScope makes ACCIDENTAL bypass a
+          # compile error. A determined caller can still mint one, so these two
+          # greps are the visible-intent half of the control.
+          fail=0
+
+          # 1. Only the auth bridge may mint a LedgerScope.
+          for f in $(grep -rl "unsafeCreateLedgerScope" src/ || true); do
+            case "$f" in
+              src/modules/ledger/scope.ts|src/server/auth/scope.ts) ;;
+              *) echo "::error file=$f::mints a LedgerScope directly instead of going through toLedgerScope"; fail=1 ;;
+            esac
+          done
+          echo "checked: who mints a LedgerScope"
+
+          # 2. Only the guarded wrappers may import the unguarded services.
+          #
+          # The pattern matches an import path ENDING in the module name, with
+          # no extension. Relative imports lost their `.js` suffixes when the
+          # repository moved to bundler resolution (ADR-0002); a pattern still
+          # looking for `posting.js` would match nothing and this gate would
+          # pass vacuously, which is the worst way for a check to fail.
+          for mod in posting periods accounts; do
+            for f in $(grep -rlE "from \"[^\"]*/$mod\"" src/ || true); do
+              case "$f" in
+                src/modules/ledger/$mod.ts|src/modules/ledger/guarded.ts) ;;
+                *) echo "::error file=$f::imports $mod directly instead of the guarded wrapper"; fail=1 ;;
+              esac
+            done
+          done
+          echo "checked: who imports the unguarded ledger services"
+
+          exit "$fail"
+
+      - name: Assert the HTTP layer stays framework-agnostic
+        run: |
+          set -euo pipefail
+          # The whole value of src/server/http is that its security properties —
+          # cookie attributes, the CSRF comparison, the 429 — are testable by
+          # calling a function with a plain object. One `import { cookies } from
+          # "next/headers"` and that stops being true: the tests would need a
+          # request context, and the cheapest way to make them pass again is to
+          # stop asserting the hard parts.
+          fail=0
+          for f in $(grep -rlE "from \"(next|react|express|fastify)" src/server/http/ || true); do
+            echo "::error file=$f::src/server/http must not import a web framework; adapt at the route handler instead"
+            fail=1
+          done
+          echo "checked: the http layer imports no framework"
+
+          # And the converse: Next-coupled SERVER code belongs in one place, so
+          # it can be recognised as such. Only src/server/next/ and src/app/
+          # may import next/*. This gate caught page-scope.ts sitting in
+          # src/server/http/ before it merged, which is the only reason the
+          # distinction survived contact with a deadline.
+          for f in $(grep -rlE "from \"next/" src/server/ || true); do
+            case "$f" in
+              src/server/next/*) ;;
+              *) echo "::error file=$f::only src/server/next/ may import next/*; move it or adapt at the page"; fail=1 ;;
+            esac
+          done
+          echo "checked: where next/* may be imported"
+
+          # The __Host- prefix is load-bearing, not cosmetic: it is what makes a
+          # browser refuse a shadowing cookie set by a sibling subdomain. A
+          # rename to a bare "session" would pass every test that checks
+          # behaviour and silently remove the protection.
+          for needle in '"__Host-session"' '"__Host-csrf"'; do
+            if ! grep -q -- "$needle" src/server/http/cookies.ts; then
+              echo "::error::src/server/http/cookies.ts no longer uses $needle"
+              fail=1
+            fi
+            echo "OK $needle"
+          done
+
+          exit "$fail"
+
+      - name: Assert the organization namespace stays exclusive
+        run: |
+          set -euo pipefail
+          # B-20260913-01. Organizations live under `/o/{slug}` and `/api/o/{slug}`
+          # so that a route can never shadow a customer's address. That holds
+          # only while `/o` contains NOTHING but the dynamic segment.
+          #
+          # Add `src/app/(app)/o/settings/` and the whole problem is back inside
+          # the new namespace — and, exactly as before, it would not error: the
+          # static segment would win and the organization slugged "settings"
+          # would quietly stop being reachable.
+          #
+          # This is the check that did not exist when the reserved-word list was
+          # dropped, and its absence was named in that PR rather than left for
+          # someone to discover.
+          fail=0
+          for base in "src/app/(app)/o" "src/app/api/o"; do
+            for child in "$base"/*; do
+              name="$(basename "$child")"
+              if [ "$name" != "[orgSlug]" ]; then
+                echo "::error file=$child::only [orgSlug] may live under $base; a static segment here shadows an organization address"
+                fail=1
+              fi
+            done
+          done
+          echo "checked: /o contains only the dynamic organization segment"
+          exit "$fail"
+
+      - name: Assert the invariants are enforced by the DATABASE, not only the schema
+        run: |
+          set -euo pipefail
+          # A regression guard on the migrations themselves. If someone rewrites
+          # a migration and drops one of these, the tests might still pass for
+          # the wrong reason, so assert the enforcement exists in SQL.
+          #
+          # Greps across ALL migration files, not one: there is more than a
+          # single migration now, and a quoted "$(ls ...)" collapses them into
+          # one bogus path.
+          #
+          # A CAVEAT this gate cannot see: it matches the constraint NAME
+          # anywhere in the migration history, including inside a
+          # `DROP CONSTRAINT`. When `organizations_slug_not_reserved` was
+          # dropped, the needle for it kept matching — the drop statement
+          # contains the name — so the gate would have reported the constraint
+          # present while it no longer existed.
+          #
+          # It is left as a name-match because the alternative is parsing SQL,
+          # and every needle below is a constraint nobody intends to drop. If
+          # one is ever dropped deliberately, REMOVE ITS NEEDLE in the same
+          # commit; leaving it is how this gate becomes decoration.
+          for needle in \
+            "jl_debit_credit_sign" \
+            "jl_reporting_amount_consistent" \
+            "period_no_overlap" \
+            "jl_org_consistency" \
+            "je_immutable" \
+            "jl_immutable" \
+            "DEFERRABLE INITIALLY DEFERRED" \
+            "je_period_open" \
+            "append_only" \
+            "organization_id_fkey" \
+            "memberships_require_owner" \
+            "organizations_slug_format"
+          do
+            if ! grep -rq -- "$needle" prisma/migrations/; then
+              echo "::error::missing database-level invariant: $needle"
+              exit 1
+            fi
+            echo "OK $needle"
+          done

@@ -1,0 +1,789 @@
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../../server/db/client";
+import type { TxClient } from "../../server/db/client";
+import { withTx } from "../../server/tx/with-tx";
+import type { LedgerScope } from "./scope";
+import {
+  AlreadyReversedError,
+  InvalidLineError,
+  NoPeriodForDateError,
+  NotFoundError,
+  NotPostedError,
+  PeriodNotOpenError,
+  UnbalancedEntryError,
+} from "./errors";
+
+const ZERO = new Prisma.Decimal(0);
+
+export interface PostLineInput {
+  accountId: string;
+  debit?: Prisma.Decimal | string;
+  credit?: Prisma.Decimal | string;
+  fxRate?: Prisma.Decimal | string;
+  memo?: string;
+}
+
+export interface PostJournalInput {
+  periodId: string;
+  entryDate: Date;
+  description: string;
+  currency: string;
+  sourceModule?: string;
+  sourceId?: string;
+  lines: PostLineInput[];
+}
+
+export interface PostedEntry {
+  entryId: string;
+  journalNumber: number;
+}
+
+/** Money is Decimal end to end. A JavaScript float anywhere near an amount is
+ *  a defect — see accounting-integrity I8. */
+function dec(value: Prisma.Decimal | string | undefined): Prisma.Decimal {
+  return value === undefined ? ZERO : new Prisma.Decimal(value);
+}
+
+/**
+ * Must match the database CHECK jl_reporting_amount_consistent exactly:
+ *   reporting_amount = round((debit + credit) * fx_rate, 4)
+ * Postgres round() on numeric rounds half away from zero, which is
+ * decimal.js ROUND_HALF_UP. Getting this wrong means every insert is
+ * rejected by the constraint.
+ */
+function reportingAmount(
+  debit: Prisma.Decimal,
+  credit: Prisma.Decimal,
+  fxRate: Prisma.Decimal,
+): Prisma.Decimal {
+  return debit
+    .add(credit)
+    .mul(fxRate)
+    .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+interface NormalisedLine {
+  accountId: string;
+  debit: Prisma.Decimal;
+  credit: Prisma.Decimal;
+  fxRate: Prisma.Decimal;
+  reportingAmount: Prisma.Decimal;
+  memo: string | null;
+}
+
+/**
+ * Service-level validation, run before anything touches the database. The
+ * database enforces all of this too; doing it here means a caller gets a named
+ * error describing what is wrong instead of a raw constraint violation.
+ */
+function normaliseLines(lines: PostLineInput[]): NormalisedLine[] {
+  if (lines.length < 2) {
+    throw new InvalidLineError(
+      `a journal entry needs at least 2 lines, got ${lines.length}`,
+    );
+  }
+
+  return lines.map((line, index) => {
+    const debit = dec(line.debit);
+    const credit = dec(line.credit);
+    const fxRate =
+      line.fxRate === undefined
+        ? new Prisma.Decimal(1)
+        : new Prisma.Decimal(line.fxRate);
+
+    if (debit.isNegative() || credit.isNegative()) {
+      throw new InvalidLineError(
+        `line ${index + 1}: amounts cannot be negative (debit=${debit.toString()}, credit=${credit.toString()})`,
+      );
+    }
+    if (debit.greaterThan(ZERO) && credit.greaterThan(ZERO)) {
+      throw new InvalidLineError(
+        `line ${index + 1}: a line is a debit or a credit, never both`,
+      );
+    }
+    if (debit.isZero() && credit.isZero()) {
+      throw new InvalidLineError(`line ${index + 1}: amount is zero`);
+    }
+    if (!fxRate.greaterThan(ZERO)) {
+      throw new InvalidLineError(`line ${index + 1}: fxRate must be positive`);
+    }
+
+    return {
+      accountId: line.accountId,
+      debit,
+      credit,
+      fxRate,
+      reportingAmount: reportingAmount(debit, credit, fxRate),
+      memo: line.memo ?? null,
+    };
+  });
+}
+
+function assertBalanced(lines: NormalisedLine[]): void {
+  const debits = lines.reduce((sum, l) => sum.add(l.debit), ZERO);
+  const credits = lines.reduce((sum, l) => sum.add(l.credit), ZERO);
+  if (!debits.equals(credits)) {
+    throw new UnbalancedEntryError(
+      `debits ${debits.toString()} do not equal credits ${credits.toString()}`,
+    );
+  }
+}
+
+/**
+ * Allocate the next journal number for (organization, period) using
+ * SELECT ... FOR UPDATE on a dedicated counter row.
+ *
+ * NOT MAX()+1: under concurrency two transactions would read the same maximum
+ * and produce a duplicate or a gap. The row lock serialises them — the second
+ * transaction blocks until the first commits, then reads the updated value.
+ */
+async function nextJournalNumber(
+  tx: TxClient,
+  organizationId: string,
+  periodId: string,
+): Promise<number> {
+  await tx.$executeRaw`
+    INSERT INTO journal_counters (organization_id, period_id, last_number)
+    VALUES (${organizationId}::uuid, ${periodId}::uuid, 0)
+    ON CONFLICT (organization_id, period_id) DO NOTHING`;
+
+  const rows = await tx.$queryRaw<Array<{ last_number: number }>>`
+    SELECT last_number FROM journal_counters
+    WHERE organization_id = ${organizationId}::uuid
+      AND period_id = ${periodId}::uuid
+    FOR UPDATE`;
+
+  const current = rows[0];
+  if (current === undefined) {
+    throw new NotFoundError(
+      `journal counter for period ${periodId} could not be allocated`,
+    );
+  }
+
+  const next = current.last_number + 1;
+  await tx.$executeRaw`
+    UPDATE journal_counters SET last_number = ${next}
+    WHERE organization_id = ${organizationId}::uuid
+      AND period_id = ${periodId}::uuid`;
+  return next;
+}
+
+async function requireOpenPeriod(
+  tx: TxClient,
+  scope: LedgerScope,
+  periodId: string,
+): Promise<void> {
+  const period = await tx.period.findFirst({
+    where: { id: periodId, organizationId: scope.organizationId },
+    select: { status: true },
+  });
+  if (period === null) {
+    throw new NotFoundError(`period ${periodId} not found`);
+  }
+  if (period.status !== "OPEN") {
+    throw new PeriodNotOpenError(
+      `cannot post into period ${periodId}: status is ${period.status}`,
+    );
+  }
+}
+
+/**
+ * Write a draft entry, its lines, then post it — all inside one transaction.
+ *
+ * The three statements cannot be collapsed. je_immutable forbids updating an
+ * entry that is already posted, and jl_immutable forbids adding a line to one,
+ * so an entry must be born as a draft and posted by an UPDATE. The deferred
+ * constraint trigger je_balanced_check then fires at COMMIT, which is what
+ * makes posting a real transaction boundary.
+ */
+async function writePostedEntry(
+  tx: TxClient,
+  scope: LedgerScope,
+  params: {
+    periodId: string;
+    entryDate: Date;
+    description: string;
+    currency: string;
+    sourceModule: string;
+    sourceId: string | null;
+    reversalOfId: string | null;
+    lines: NormalisedLine[];
+  },
+): Promise<PostedEntry> {
+  const journalNumber = await nextJournalNumber(
+    tx,
+    scope.organizationId,
+    params.periodId,
+  );
+
+  const entry = await tx.journalEntry.create({
+    data: {
+      organizationId: scope.organizationId,
+      periodId: params.periodId,
+      entryDate: params.entryDate,
+      description: params.description,
+      currency: params.currency,
+      sourceModule: params.sourceModule,
+      sourceId: params.sourceId,
+      reversalOfId: params.reversalOfId,
+    },
+  });
+
+  await tx.journalLine.createMany({
+    data: params.lines.map((line, index) => ({
+      organizationId: scope.organizationId,
+      journalEntryId: entry.id,
+      accountId: line.accountId,
+      lineNumber: index + 1,
+      debit: line.debit,
+      credit: line.credit,
+      currency: params.currency,
+      fxRate: line.fxRate,
+      reportingAmount: line.reportingAmount,
+      memo: line.memo,
+    })),
+  });
+
+  await tx.journalEntry.update({
+    where: { id: entry.id },
+    data: { postedAt: new Date(), postedBy: scope.userId, journalNumber },
+  });
+
+  return { entryId: entry.id, journalNumber };
+}
+
+export async function postJournalEntry(
+  scope: LedgerScope,
+  input: PostJournalInput,
+): Promise<PostedEntry> {
+  const lines = normaliseLines(input.lines);
+  assertBalanced(lines);
+
+  return withTx(async (tx) => {
+    await requireOpenPeriod(tx, scope, input.periodId);
+
+    // Every account must belong to this organization. The database trigger
+    // jl_org_consistency enforces it as well; this turns a constraint
+    // violation into a named error and avoids a pointless round trip.
+    const accountIds = [...new Set(lines.map((l) => l.accountId))];
+    const found = await tx.account.findMany({
+      where: { id: { in: accountIds }, organizationId: scope.organizationId },
+      select: { id: true },
+    });
+    if (found.length !== accountIds.length) {
+      const known = new Set(found.map((a) => a.id));
+      const missing = accountIds.filter((id) => !known.has(id));
+      throw new NotFoundError(`account(s) not found: ${missing.join(", ")}`);
+    }
+
+    const posted = await writePostedEntry(tx, scope, {
+      periodId: input.periodId,
+      entryDate: input.entryDate,
+      description: input.description,
+      currency: input.currency,
+      sourceModule: input.sourceModule ?? "manual",
+      sourceId: input.sourceId ?? null,
+      reversalOfId: null,
+      lines,
+    });
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId: scope.userId,
+        action: "ledger.post",
+        entityType: "JournalEntry",
+        entityId: posted.entryId,
+        after: {
+          journalNumber: posted.journalNumber,
+          periodId: input.periodId,
+          lineCount: lines.length,
+          currency: input.currency,
+        },
+      },
+    });
+
+    return posted;
+  });
+}
+
+/**
+ * Post the line-by-line inverse of an existing posted entry and link the two.
+ *
+ * Correction is never an edit — accounting-integrity I2. The original is left
+ * exactly as it was apart from its reversed_by_id pointer.
+ */
+/**
+ * `reason` is required, and it is the answer to the question an auditor asks
+ * third.
+ *
+ * "Who reversed it" and "when" were already recorded. "Why" was not, and it is
+ * the one that decides whether a reversal was a correction or a cover-up. The
+ * same argument made the reason mandatory on a period transition; a reversal
+ * moves money and deserves at least as much.
+ *
+ * It goes into the reversal entry DESCRIPTION as well as the audit row, so it
+ * is visible to anyone reading the journal without having to hold the audit
+ * page open beside it.
+ */
+export async function reverseJournalEntry(
+  scope: LedgerScope,
+  originalId: string,
+  asOfDate: Date,
+  reason: string,
+): Promise<PostedEntry> {
+  return withTx(async (tx) => {
+    const original = await tx.journalEntry.findFirst({
+      where: { id: originalId, organizationId: scope.organizationId },
+      include: { journalLines: { orderBy: { lineNumber: "asc" } } },
+    });
+    if (original === null) {
+      throw new NotFoundError(`journal entry ${originalId} not found`);
+    }
+    if (original.postedAt === null) {
+      throw new NotPostedError(
+        `journal entry ${originalId} is a draft; only posted entries can be reversed`,
+      );
+    }
+    if (original.reversedById !== null) {
+      throw new AlreadyReversedError(
+        `journal entry ${originalId} was already reversed by ${original.reversedById}`,
+      );
+    }
+
+    // The reversal is posted into whichever period covers asOfDate, which may
+    // differ from the original's period — that is the point of reversing "as
+    // of" a date rather than in place.
+    const period = await tx.period.findFirst({
+      where: {
+        organizationId: scope.organizationId,
+        startDate: { lte: asOfDate },
+        endDate: { gte: asOfDate },
+      },
+      select: { id: true, status: true },
+    });
+    if (period === null) {
+      throw new NoPeriodForDateError(
+        `no accounting period covers ${asOfDate.toISOString().slice(0, 10)}`,
+      );
+    }
+    if (period.status !== "OPEN") {
+      throw new PeriodNotOpenError(
+        `cannot post a reversal into period ${period.id}: status is ${period.status}`,
+      );
+    }
+
+    const inverted: NormalisedLine[] = original.journalLines.map((line) => ({
+      accountId: line.accountId,
+      debit: line.credit,
+      credit: line.debit,
+      fxRate: line.fxRate,
+      // Magnitude is unchanged by swapping debit and credit, so the reporting
+      // amount is recomputed rather than copied — it must still satisfy
+      // jl_reporting_amount_consistent.
+      reportingAmount: reportingAmount(line.credit, line.debit, line.fxRate),
+      memo: `reversal of line ${line.lineNumber}`,
+    }));
+    assertBalanced(inverted);
+
+    const posted = await writePostedEntry(tx, scope, {
+      periodId: period.id,
+      entryDate: asOfDate,
+      description: `Reversal of ${original.description} — ${reason}`,
+      currency: original.currency,
+      sourceModule: original.sourceModule,
+      sourceId: original.sourceId,
+      reversalOfId: original.id,
+      lines: inverted,
+    });
+
+    // Raw SQL on purpose. je_immutable permits exactly one update to a posted
+    // entry: setting reversed_by_id from NULL with every other column
+    // unchanged. Prisma's @updatedAt would also bump updated_at, the trigger's
+    // equality check would fail, and the update would be rejected.
+    await tx.$executeRaw`
+      UPDATE journal_entries SET reversed_by_id = ${posted.entryId}::uuid
+      WHERE id = ${original.id}::uuid`;
+
+    await tx.auditLog.create({
+      data: {
+        organizationId: scope.organizationId,
+        actorId: scope.userId,
+        action: "ledger.reverse",
+        entityType: "JournalEntry",
+        entityId: original.id,
+        before: { reversedById: null },
+        after: {
+          reversedById: posted.entryId,
+          reversalJournalNumber: posted.journalNumber,
+          periodId: period.id,
+          reason,
+        },
+      },
+    });
+
+    return posted;
+  });
+}
+
+export interface EntrySummaryLine {
+  readonly accountCode: string;
+  readonly accountName: string;
+  readonly debit: string;
+  readonly credit: string;
+  readonly memo: string | null;
+}
+
+export interface EntrySummary {
+  readonly id: string;
+  readonly journalNumber: number | null;
+  readonly entryDate: Date;
+  readonly description: string;
+  readonly currency: string;
+  readonly postedAt: Date | null;
+  readonly reversalOfId: string | null;
+  readonly reversedById: string | null;
+  readonly lines: readonly EntrySummaryLine[];
+}
+
+/** The most entries one request may ask for. */
+export const MAX_JOURNAL_PAGE = 100;
+
+/** What a page of the journal costs to ask for, and what it hands back. */
+/**
+ * Which entries to show. Every field is optional; all of them are AND-ed.
+ *
+ * `accountId` selects entries with **at least one line** on that account — the
+ * whole entry is returned, not the single line, because a debit shown without
+ * its matching credit is half of a double entry and reads as if money appeared
+ * from nowhere. `accountTotals` exists so the reader can still reconcile what
+ * they are looking at against the figure that sent them here.
+ */
+export interface JournalFilter {
+  readonly accountId?: string;
+  /** Inclusive. Compared against `entryDate`, not `postedAt`. */
+  readonly from?: Date;
+  /** Inclusive. */
+  readonly to?: Date;
+}
+
+export interface JournalPageOptions {
+  /** Clamped to 1…`MAX_JOURNAL_PAGE`. A non-finite value falls back to the max. */
+  readonly pageSize?: number;
+  /** The `nextCursor` from the previous page. Anything else serves page one. */
+  readonly cursor?: string;
+  readonly filter?: JournalFilter;
+}
+
+/** Debits and credits on the filtered account, across the WHOLE filtered set. */
+export interface AccountTotals {
+  readonly accountId: string;
+  readonly accountCode: string;
+  readonly accountName: string;
+  readonly debit: string;
+  readonly credit: string;
+}
+
+export interface JournalPage {
+  readonly entries: readonly EntrySummary[];
+  /** Pass back as `cursor` for the next page. `null` means this is the last. */
+  readonly nextCursor: string | null;
+  /** The page size actually used, after clamping. */
+  readonly pageSize: number;
+  /**
+   * Set when `filter.accountId` names an account in this organization.
+   *
+   * `undefined` when no account was asked for; `null` when one was asked for
+   * and does not exist here. Those are different facts and the page says
+   * different things about them — "no filter" versus "no such account" — and
+   * collapsing them would show an unfiltered journal to someone who believes
+   * they are looking at one account.
+   */
+  readonly accountTotals: AccountTotals | null | undefined;
+}
+
+/**
+ * One page of posted entries, newest first, with their lines.
+ *
+ * Org-scoped like everything else: the `organizationId` comes from the resolved
+ * scope, so there is no "all entries" query to write by accident.
+ *
+ * **Keyset, not offset, and that is a correctness choice rather than a
+ * performance one.** With `skip`/`take`, an entry posted while somebody is
+ * paging shifts every later row down by one — and the row that was at the
+ * boundary moves onto the previous page, which the reader has already passed.
+ * They never see it, and nothing tells them. For a journal, a record that
+ * silently fails to appear in a complete read is the one failure that must not
+ * happen. A cursor is anchored to a row, so a new entry appearing above it
+ * changes nothing below.
+ *
+ * The ordering ends in `id` so it is total. Two entries can share a date and a
+ * journal number is only unique within its period, so without the tiebreaker
+ * the "next" page is undefined at any tie — which is how keyset pagination
+ * quietly repeats or drops rows.
+ *
+ * Amounts are returned as STRINGS via `toFixed(4)`. Serialising a
+ * `Prisma.Decimal` to JSON produces an object, and letting one reach a React
+ * tree invites somebody to do arithmetic on it with `Number()` — which is the
+ * exact thing I8 forbids. A string cannot be added up by accident.
+ */
+export async function listEntries(
+  scope: LedgerScope,
+  options: JournalPageOptions = {},
+): Promise<JournalPage> {
+  const pageSize = clampPageSize(options.pageSize);
+  const filter = options.filter ?? {};
+
+  // The account is resolved INSIDE the scope, like the cursor. A foreign id and
+  // an id that does not exist produce the same answer, so the parameter cannot
+  // be used to ask whether another tenant has a given account.
+  const account =
+    filter.accountId === undefined
+      ? undefined
+      : ((await prisma.account.findFirst({
+          where: {
+            id: isUuid(filter.accountId) ? filter.accountId : NO_SUCH_UUID,
+            organizationId: scope.organizationId,
+          },
+          select: { id: true, code: true, name: true },
+        })) ?? null);
+
+  // An account was named and is not ours. Returning an UNFILTERED journal here
+  // would be the dangerous answer: the reader believes they are looking at one
+  // account and is looking at everything.
+  if (account === null) {
+    return { entries: [], nextCursor: null, pageSize, accountTotals: null };
+  }
+
+  const where: Prisma.JournalEntryWhereInput = {
+    organizationId: scope.organizationId,
+    postedAt: { not: null },
+    ...(account === undefined
+      ? {}
+      : { journalLines: { some: { accountId: account.id } } }),
+    ...(filter.from === undefined && filter.to === undefined
+      ? {}
+      : {
+          entryDate: {
+            ...(filter.from === undefined ? {} : { gte: filter.from }),
+            ...(filter.to === undefined ? {} : { lte: filter.to }),
+          },
+        }),
+  };
+
+  // A cursor names a row, and a row belongs to an organization. Resolving it
+  // inside this scope means a cursor from ANOTHER tenant cannot be used to page
+  // through their journal, and — just as important — cannot be used to ask
+  // whether their entry exists: an unknown id, a foreign id and a malformed
+  // string all produce the same answer, page one.
+  // A cursor is only meaningful for the query that produced it.
+  //
+  // Change the filter and keep the cursor — which is what happens when someone
+  // edits a URL, or when a filter form forgets to clear it — and the cursor
+  // names a row that may not be in the new result set at all. What comes back
+  // is then a slice of the new query starting at an arbitrary point: rows
+  // before it are silently missing, and nothing says so.
+  //
+  // So the filter is fingerprinted into the cursor and checked on the way back
+  // in. A cursor from a different filter is not an error; it is simply not a
+  // cursor for THIS query, and serves page one.
+  const fingerprint = filterFingerprint(where);
+  const cursorId = splitCursor(options.cursor, fingerprint);
+  const cursor =
+    cursorId === undefined
+      ? undefined
+      : ((await prisma.journalEntry.findFirst({
+          where: { ...where, id: cursorId },
+          select: { id: true },
+        })) ?? undefined);
+
+  const entries = await prisma.journalEntry.findMany({
+    where,
+    orderBy: [{ entryDate: "desc" }, { journalNumber: "desc" }, { id: "desc" }],
+    // One more than asked for, so "is there a next page" is answered by the
+    // same query. A separate `count()` would be a second round trip and could
+    // disagree with this one under concurrent posting.
+    take: pageSize + 1,
+    ...(cursor === undefined ? {} : { cursor: { id: cursor.id }, skip: 1 }),
+    include: {
+      journalLines: {
+        orderBy: { lineNumber: "asc" },
+        include: { account: { select: { code: true, name: true } } },
+      },
+    },
+  });
+
+  const hasMore = entries.length > pageSize;
+  const page = hasMore ? entries.slice(0, pageSize) : entries;
+  const last = page[page.length - 1];
+
+  return {
+    pageSize,
+    nextCursor:
+      hasMore && last !== undefined ? `${fingerprint}.${last.id}` : null,
+    entries: toSummaries(page),
+    accountTotals:
+      account === undefined
+        ? undefined
+        : await accountTotalsFor(scope, account, where),
+  };
+}
+
+/**
+ * Debits and credits on the filtered account across the ENTIRE filtered set —
+ * not just the page on screen.
+ *
+ * Summed in SQL from posted lines, because `accounting-integrity.md` I4 forbids
+ * a report derived from what the UI happens to be rendering. A per-page total
+ * would also be useless for the thing this exists for: checking that a
+ * drill-down reconciles to the trial-balance figure that led to it.
+ */
+async function accountTotalsFor(
+  scope: LedgerScope,
+  account: {
+    readonly id: string;
+    readonly code: string;
+    readonly name: string;
+  },
+  where: Prisma.JournalEntryWhereInput,
+): Promise<AccountTotals> {
+  const totals = await prisma.journalLine.aggregate({
+    where: {
+      organizationId: scope.organizationId,
+      accountId: account.id,
+      journalEntry: where,
+    },
+    _sum: { debit: true, credit: true },
+  });
+
+  return {
+    accountId: account.id,
+    accountCode: account.code,
+    accountName: account.name,
+    // `_sum` is null when nothing matched, which is zero rather than unknown.
+    debit: (totals._sum.debit ?? new Prisma.Decimal(0)).toFixed(4),
+    credit: (totals._sum.credit ?? new Prisma.Decimal(0)).toFixed(4),
+  };
+}
+
+/** A uuid that cannot exist, for a lookup that must find nothing. */
+const NO_SUCH_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * A short, stable fingerprint of the query a cursor belongs to.
+ *
+ * Not a security control — it is not secret and does not need to be. Its only
+ * job is to make a cursor from one filter recognisably not a cursor for
+ * another, so the mismatch becomes "page one" instead of a silently truncated
+ * result. Twelve hex characters is ample: a collision would serve a valid
+ * cursor for a different filter, which is exactly the behaviour there would be
+ * with no fingerprint at all.
+ */
+function filterFingerprint(where: Prisma.JournalEntryWhereInput): string {
+  return createHash("sha256")
+    .update(JSON.stringify(where, replaceDates))
+    .digest("hex")
+    .slice(0, 12);
+}
+
+/** `JSON.stringify` only turns a Date into a stable string via a replacer. */
+function replaceDates(_key: string, value: unknown): unknown {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * The entry id inside a cursor, if the cursor belongs to this query.
+ *
+ * Returns `undefined` — meaning "serve page one" — for absent, malformed,
+ * wrong-fingerprint and non-uuid cursors alike. From the caller's side they are
+ * all the same fact: this is not a cursor for what you are asking.
+ */
+function splitCursor(
+  raw: string | undefined,
+  fingerprint: string,
+): string | undefined {
+  if (raw === undefined || raw === "") return undefined;
+  const separator = raw.indexOf(".");
+  if (separator === -1) return undefined;
+  if (raw.slice(0, separator) !== fingerprint) return undefined;
+  const id = raw.slice(separator + 1);
+  return isUuid(id) ? id : undefined;
+}
+
+/**
+ * Is this string shaped like the `@db.Uuid` primary key?
+ *
+ * Checked BEFORE the lookup rather than catching the failure after it.
+ * Postgres rejects a malformed uuid at the type level — Prisma surfaces
+ * "Inconsistent column data: Error creating UUID" — so a mangled `?cursor=`
+ * in a link would have thrown out of the page as a 500 rather than serving
+ * page one. A caught link is not an attack and should not look like a crash.
+ *
+ * A blanket `try`/`catch` around the lookup would also work and would swallow
+ * a genuine database failure with it, reporting "page one" when the truth is
+ * that the database is unreachable.
+ */
+function isUuid(value: string | undefined): value is string {
+  return (
+    value !== undefined &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
+}
+
+/**
+ * A page size that is always a usable number.
+ *
+ * The value arrives from a query string, so it can be absent, empty, `"abc"`,
+ * `-1`, `1e9` or `NaN`. Every one of those becomes something sane rather than
+ * an error page: a mangled link is not an attack and should not look like one.
+ *
+ * `0` and negatives clamp UP to 1 rather than down. A negative `take` in Prisma
+ * means "take from the other end", which would silently return the OLDEST
+ * entries under a heading that says newest — a wrong answer that looks right.
+ */
+function clampPageSize(requested: number | undefined): number {
+  if (requested === undefined || !Number.isFinite(requested)) {
+    return MAX_JOURNAL_PAGE;
+  }
+  return Math.min(MAX_JOURNAL_PAGE, Math.max(1, Math.floor(requested)));
+}
+
+function toSummaries(
+  entries: readonly {
+    readonly id: string;
+    readonly journalNumber: number | null;
+    readonly entryDate: Date;
+    readonly description: string;
+    readonly currency: string;
+    readonly postedAt: Date | null;
+    readonly reversalOfId: string | null;
+    readonly reversedById: string | null;
+    readonly journalLines: readonly {
+      readonly account: { readonly code: string; readonly name: string };
+      readonly debit: Prisma.Decimal;
+      readonly credit: Prisma.Decimal;
+      readonly memo: string | null;
+    }[];
+  }[],
+): EntrySummary[] {
+  return entries.map((entry) => ({
+    id: entry.id,
+    journalNumber: entry.journalNumber,
+    entryDate: entry.entryDate,
+    description: entry.description,
+    currency: entry.currency,
+    postedAt: entry.postedAt,
+    reversalOfId: entry.reversalOfId,
+    reversedById: entry.reversedById,
+    lines: entry.journalLines.map((line) => ({
+      accountCode: line.account.code,
+      accountName: line.account.name,
+      debit: line.debit.toFixed(4),
+      credit: line.credit.toFixed(4),
+      memo: line.memo,
+    })),
+  }));
+}

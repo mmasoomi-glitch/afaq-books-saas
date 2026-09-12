@@ -3,7 +3,6 @@ import type { OrgScope } from "../../server/auth/scope";
 import { assertCanDo, toLedgerScope } from "../../server/auth/scope";
 import type { CreateAccountInput, CreatePeriodInput } from "./scope";
 import type {
-  EntrySummary,
   JournalPage,
   JournalPageOptions,
   PostJournalInput,

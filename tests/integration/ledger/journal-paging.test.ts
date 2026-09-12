@@ -64,7 +64,6 @@ async function postMany(f: Fixture, n: number, startDay = 1): Promise<void> {
     const day = String(startDay + i).padStart(2, "0");
     // Sequential on purpose: journal numbers are allocated under a lock, and
     // posting these concurrently would be testing the allocator, not paging.
-    // eslint-disable-next-line no-await-in-loop
     await postJournalEntry(f.scope, {
       periodId: f.period.id,
       entryDate: new Date(`2024-01-${day}`),
@@ -88,7 +87,6 @@ async function walk(
   let pages = 0;
 
   for (;;) {
-    // eslint-disable-next-line no-await-in-loop
     const page = await listEntries(scope, {
       pageSize,
       ...(cursor === undefined ? {} : { cursor }),
@@ -169,7 +167,6 @@ test("J4: an entry posted mid-walk cannot push an older one out of sight", async
 
   let cursor = first.nextCursor;
   while (cursor !== null) {
-    // eslint-disable-next-line no-await-in-loop
     const next = await listEntries(f.scope, { pageSize: 3, cursor });
     seen.push(...next.entries.map((entry) => entry.id));
     cursor = next.nextCursor;
@@ -254,7 +251,6 @@ test("J8: entries sharing a date still page without repeating or dropping one", 
   // repeats or drops rows.
   const f = await fixture();
   for (let i = 0; i < 6; i += 1) {
-    // eslint-disable-next-line no-await-in-loop
     await postJournalEntry(f.scope, {
       periodId: f.period.id,
       entryDate: new Date("2024-01-15"),

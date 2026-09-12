@@ -1,4 +1,5 @@
 import { parseCookieHeader } from "../cookies";
+import { newRequestId, runWithRequestId } from "../request-context";
 import type {
   HttpHandler,
   HttpMethod,
@@ -253,13 +254,31 @@ export function toRouteHandler(
   config?: AdapterConfig,
 ): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
+    // One id for the whole request, established before anything else runs so
+    // that every audit row written on this path carries it — including rows
+    // written several layers down inside a Prisma transaction.
+    //
+    // An inbound `x-request-id` is deliberately NOT honoured. It is
+    // client-controlled, and an audit trail whose correlation id an attacker
+    // chooses is one where they can make two unrelated actions look like one
+    // request, or collide with somebody else's. If a trusted proxy ever
+    // supplies one, it belongs behind the same opt-in as `x-forwarded-for`.
+    const requestId = newRequestId();
+
+    return runWithRequestId(requestId, async () => {
     try {
-      return toResponse(await handler(await toHttpRequest(request, config)));
+      const response = toResponse(
+        await handler(await toHttpRequest(request, config)),
+      );
+      // Echoed so a caller reporting a problem can quote it, and so it can be
+      // matched against the audit row without database access.
+      response.headers.set("x-request-id", requestId);
+      return response;
     } catch (err) {
       if (err instanceof UnsupportedMethodError) {
         return toResponse(
           error(405, err.code, "unsupported method", {
-            headers: { ...SECURITY_HEADERS },
+            headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
           }),
         );
       }
@@ -267,7 +286,7 @@ export function toRouteHandler(
       if (err instanceof PayloadTooLargeError) {
         return toResponse(
           error(413, err.code, "request body too large", {
-            headers: { ...SECURITY_HEADERS },
+            headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
           }),
         );
       }
@@ -283,12 +302,16 @@ export function toRouteHandler(
       // The message is generic on purpose. An exception message routinely
       // carries a query fragment, a file path, a column name or a constraint
       // name, and returning it would hand an attacker a map of the schema.
-      console.error("[http] unhandled error", err);
+      // Logged WITH the request id, which is the point of having one: the
+      // generic body tells the user nothing, and this is what connects their
+      // report to the stack trace.
+      console.error(`[http] unhandled error (request ${requestId})`, err);
       return toResponse(
         error(500, "INTERNAL", "internal error", {
-          headers: { ...SECURITY_HEADERS },
+          headers: { ...SECURITY_HEADERS, "x-request-id": requestId },
         }),
       );
     }
+    });
   };
 }

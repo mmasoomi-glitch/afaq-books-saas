@@ -1,5 +1,6 @@
-import type { Account, Prisma } from "@prisma/client";
+import type { Account } from "@prisma/client";
 import { prisma } from "../../server/db/client";
+import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { CreateAccountInput, LedgerScope } from "./scope";
 import { NotFoundError } from "./errors";
@@ -8,7 +9,7 @@ export async function createAccount(
   scope: LedgerScope,
   input: CreateAccountInput,
 ): Promise<Account> {
-  return withTx(async (tx: Prisma.TransactionClient) => {
+  return withTx(async (tx: TxClient) => {
     if (input.parentId !== undefined) {
       // A parent from another organization would be a cross-tenant link.
       const parent = await tx.account.findFirst({

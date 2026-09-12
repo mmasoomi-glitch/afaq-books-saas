@@ -25,6 +25,8 @@ export interface AuditEntry {
   readonly entityId: string;
   readonly before: unknown;
   readonly after: unknown;
+  /** Correlates every row written by one HTTP request. Null off the HTTP path. */
+  readonly requestId: string | null;
 }
 
 export interface AuditQuery {
@@ -85,6 +87,7 @@ export async function listAuditLog(
     entityId: row.entityId,
     before: row.before,
     after: row.after,
+    requestId: row.requestId,
   }));
 }
 

@@ -162,7 +162,70 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-13 (the accounting loop closes)
+## State — last hydrated 2026-09-13 (everything implemented is now reachable)
+
+**Base branch @ `a8aabd2`. No open PRs. 349 tests, lint clean, build green,
+typecheck clean, no drift.** PRs #32 and #33 merged since the last hydration.
+
+**There is no longer an implemented service without a way in.** Every module
+built since sprint 001 — ledger, periods, tenancy, reports — is reachable by a
+person through the product.
+
+| Surface | Route |
+|---------|-------|
+| Sign in / register | `/signin`, `/register` |
+| Organizations | `/organizations` |
+| Members, roles, ownership | `/{org}/members` |
+| Chart of accounts | `/{org}/accounts` |
+| Periods: open, close, lock, unlock | `/{org}/periods` |
+| Post an entry | `/{org}/entries/new` |
+| Journal, reversal | `/{org}/entries` |
+| Trial balance, P&L, balance sheet | `/{org}/reports/...` |
+
+Verified end to end with `curl` against a fresh build: post Cash 1000 / Sales
+1000 and Rent 300 / Cash 300, and the P&L reports income 1000, expenses 300,
+net 700, while the balance sheet reports retained earnings 700 — and refuses to
+render at all if the identity fails.
+
+### Where the UI is allowed to compute, and where it is not
+
+Established across three PRs and worth stating once:
+
+- **Totals always come from the report.** Subtracting two P&L totals in a
+  component, or summing rendered rows, produces a number that agrees with the
+  screen even when it disagrees with the ledger. I4 forbids it by name.
+- **The balance sheet page STATES the accounting identity rather than checking
+  it.** `balanceSheet` refuses to return a result where it fails, at exact
+  Decimal equality, so recomputing in the UI could only produce a second
+  opinion.
+- **The posting form's running total is explicitly a convenience**, says so on
+  screen, and does not gate submission. `je_balanced_check` at COMMIT decides.
+- **Amounts leave the ledger as strings.** A `Prisma.Decimal` in a React tree
+  invites `Number()`, which is what I8 forbids.
+
+### Reports are URLs
+
+The date controls are plain GET forms — no JavaScript, no client component.
+`?from=…&to=…` is read by the page, so a report can be bookmarked, sent to an
+accountant, and reopened next quarter, and the back button behaves. A
+client-side picker would have cost all three.
+
+### Two more near-misses, both caught by checking
+
+- A footnote claiming drafts appear in the P&L. Both queries filter on
+  `posted_at IS NOT NULL`. **Read the query rather than assuming the prose.**
+- A period screen that offered "Close" on an already-closed period. Buttons are
+  now derived from the period's current status: a control whose only outcome is
+  an error teaches people to ignore refusals.
+
+### The reason field on a period transition is mandatory
+
+I3 requires an unlock to be recorded. The services write that row — but
+"unlocked by admin@example.com" answers nothing an auditor asks. `L36` asserts
+the reason **reaches the audit trail**, because if it did not, requiring it
+would be ceremony.
+
+## Superseded — hydrated 2026-09-13 (the accounting loop closes)
 
 **Base branch @ `fda25d0`. No open PRs. 342 tests, lint clean, build green,
 typecheck clean, no drift.** PR #30 merged since the last hydration.
@@ -789,29 +852,38 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **No period screen.** A reversal now depends on an open period covering
-   today, and creating one is a raw API call. This is the last prerequisite
-   that has an endpoint and no form, and it blocks a real user at exactly the
-   moment they most need the product to work.
-2. **`B-20260913-01` — the slug namespace.** Two reservation migrations in one
-   session. The `/o/{slug}/…` prefix is cheap now and expensive once slugs are
-   in circulation, in links and in emailed invoices.
-3. **The journal has no pagination and no filtering.** It shows the 100 most
-   recent entries. Fine today, wrong at the first real month-end — and finding
-   an entry to reverse means scrolling.
-4. **A reversal cannot be given a reason.** There is nowhere to record WHY,
-   which is precisely what an auditor asks. `reverseJournalEntry` also writes
-   no `audit_logs` row; the entry rows carry `reversalOfId` / `reversedById`,
-   which is arguably sufficient and is not what I9 says.
-5. **No app shell.** The home page is static so it cannot know whether a
+The feature backlog is no longer the constraint — **everything implemented is
+reachable.** What remains is debt, hardening and the things a real user would
+ask for on day one.
+
+1. **`B-20260913-01` — the slug namespace.** Two reservation migrations in one
+   session, and the third is a matter of time. `/o/{slug}/…` is cheap now and
+   expensive once slugs are in circulation in links, bookmarks and emailed
+   invoices. **This is the one with a closing window.**
+2. **`B-20260911-04` — Row Level Security.** Tenant isolation rests on
+   application filtering plus the `jl_org_consistency` trigger. Every one of
+   the ~25 tenancy tests passes, and none of them would catch a query written
+   next month that forgets its `organizationId`.
+3. **No audit trail is readable through the product.** Rows are written for
+   post, reverse, lock, unlock, membership and ownership changes, and the only
+   way to read them is SQL. For an accounting product that is the report an
+   auditor asks for first.
+4. **No export.** No CSV, no PDF, on any report. An accountant asks on first
+   contact.
+5. **No drill-down.** You cannot click an account in a report to see the
+   entries behind the figure, which is the first thing anyone does when a
+   number looks wrong.
+6. **The journal has no pagination or filtering** — 100 most recent. Wrong at
+   the first real month-end.
+7. **A reversal cannot be given a reason**, and writes no `audit_logs` row.
+   I9 lists "reverse" explicitly.
+8. **No app shell.** The home page is static so it cannot know whether a
    visitor is signed in.
-6. **`audit_logs.request_id` is null everywhere.** The adapter is the only
-   place a request id can originate.
-7. **Rate limiting covers only sign-in and sign-up.**
-8. **No component tests.** No jsdom setup.
-9. **Profit and loss and the balance sheet have no screen**, though both
-   services exist and are tested.
-10. **Prettier**, or a decision not to have one.
+9. **`audit_logs.request_id` is null everywhere.**
+10. **Rate limiting covers only sign-in and sign-up.**
+11. **No component tests.** No jsdom setup; every screen is covered on the
+    server side and not in the rendering.
+12. **Prettier**, or a decision not to have one.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init

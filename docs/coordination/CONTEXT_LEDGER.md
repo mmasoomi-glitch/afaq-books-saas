@@ -162,7 +162,68 @@ and enforcing it via code review is sufficient for this stage."
 
 ---
 
-## State — last hydrated 2026-09-13 (the ledger has a screen)
+## State — last hydrated 2026-09-13 (the accounting loop closes)
+
+**Base branch @ `fda25d0`. No open PRs. 342 tests, lint clean, build green,
+typecheck clean, no drift.** PR #30 merged since the last hydration.
+
+**The double-entry loop is now complete through the product**: sign up →
+organization → members → chart of accounts → post a balanced entry → see it in
+the journal → reverse it → watch both appear in the trial balance. Nothing in
+that path requires touching the database.
+
+### The correction model, and why the UI labours the point
+
+A reversal **does not undo anything**. I2 makes posted rows read-only at the
+database level, so there is no edit path to write even if someone wanted one. A
+reversal posts a second, opposite entry and both stay in the journal for ever.
+
+The confirmation is two inline steps, not `window.confirm` — a browser dialog
+blocks the page and cannot be tested — and the second step spells the
+consequence out, because **someone expecting a delete and getting two entries
+will conclude the product is broken**.
+
+The reversal date defaults to TODAY rather than the original's date.
+Back-dating a correction into the period being corrected would change a period
+that may already have been reported on.
+
+### Two different facts were sharing one error class
+
+The reversal tests failed with 404. A reversal posts into whichever period
+covers its date, and the fixture had only a 2024 period.
+
+- *"That entry does not exist"* must stay opaque — it may be an attempt to
+  reach another tenant's row.
+- *"You have no period covering today"* is a gap in the caller's **own** books
+  that only they can fix, and 404 sends them looking for a missing entry
+  instead of at their period list.
+
+`NoPeriodForDateError` → `LEDGER_NO_PERIOD_FOR_DATE` → 422. **The fixture was
+masking the behaviour rather than testing it**, which is its own lesson: a
+test setup that avoids a condition is not the same as one that covers it.
+
+### The running tally of what execution found
+
+Every defect this session came from running something, not from reading it:
+
+| Round | Found by | What |
+|-------|----------|------|
+| HTTP layer | reading the diff aloud to a reviewer | email case-sensitivity — two accounts per address |
+| adapter | reviewer, then `curl` | no body cap; `Response` throws on a 204 with a body |
+| scaffold | `curl` against the built server | no `Cache-Control`; page CSP overwriting the API's |
+| membership | the test suite | trigger froze ownerless organizations |
+| posting | `curl` | a refused entry answered 500 |
+| reversal | the test suite | 404 where the user needed 422 |
+
+And one near-miss worth keeping: after fixing the 500, the live server still
+returned 500 while the tests returned 422. The tempting explanation —
+`instanceof` failing across Next's bundle chunks — would have sent me rewriting
+every error check in the HTTP layer. It was a **stale `.next`**.
+
+> **Verify the build is current before concluding anything from a running
+> server.** A live check is only evidence about the code actually running.
+
+## Superseded — hydrated 2026-09-13 (the ledger has a screen)
 
 **Base branch @ `79f7da0`. No open PRs. 331 tests, lint clean, build green,
 typecheck clean, no drift.** PRs #27 and #28 merged since the last hydration.
@@ -728,27 +789,29 @@ signal is there, but it has to be read rather than skimmed.
 
 ## Next actions, in order
 
-1. **Reversal has no screen, and the posting form now tells users it is the
-   only way to correct an entry.** That is a promise the product does not keep
-   — the gap is visible to users for the first time, which is worse than when
-   nothing was visible. `reverseJournalEntry` and `guardedReverseJournalEntry`
-   both exist; this is a route, a button and a confirmation.
-2. **No entry list.** You can post an entry and see its effect in the trial
-   balance, and no way to look at what you posted. Reversal needs this anyway —
-   you cannot reverse what you cannot find.
-3. **No period screen.** The posting page's blocked state names the endpoint,
-   which is honest and is not a substitute.
-4. **`B-20260913-01` — the slug namespace.** Two reservation migrations in one
+1. **No period screen.** A reversal now depends on an open period covering
+   today, and creating one is a raw API call. This is the last prerequisite
+   that has an endpoint and no form, and it blocks a real user at exactly the
+   moment they most need the product to work.
+2. **`B-20260913-01` — the slug namespace.** Two reservation migrations in one
    session. The `/o/{slug}/…` prefix is cheap now and expensive once slugs are
-   in circulation.
+   in circulation, in links and in emailed invoices.
+3. **The journal has no pagination and no filtering.** It shows the 100 most
+   recent entries. Fine today, wrong at the first real month-end — and finding
+   an entry to reverse means scrolling.
+4. **A reversal cannot be given a reason.** There is nowhere to record WHY,
+   which is precisely what an auditor asks. `reverseJournalEntry` also writes
+   no `audit_logs` row; the entry rows carry `reversalOfId` / `reversedById`,
+   which is arguably sufficient and is not what I9 says.
 5. **No app shell.** The home page is static so it cannot know whether a
-   visitor is signed in. A header with the current organization and a sign-out
-   control would tie together everything already built.
+   visitor is signed in.
 6. **`audit_logs.request_id` is null everywhere.** The adapter is the only
    place a request id can originate.
 7. **Rate limiting covers only sign-in and sign-up.**
 8. **No component tests.** No jsdom setup.
-9. **Prettier**, or a decision not to have one.
+9. **Profit and loss and the balance sheet have no screen**, though both
+   services exist and are tested.
+10. **Prettier**, or a decision not to have one.
 3. `B-20260912-03` — decide how `prisma migrate diff --exit-code` should treat
    database objects Prisma cannot model, then add the `lower(email)` unique
    index. The same question already applies to every trigger in the init

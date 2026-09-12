@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db/client';
+import type { TxClient } from '../db/client';
 
 export type Isolation = 'Serializable' | 'RepeatableRead' | 'ReadCommitted';
 export interface WithTxOptions {
@@ -57,7 +58,7 @@ function sleep(ms: number): Promise<void> {
  * Delegates to withTxUsing.
  */
 export async function withTx<T>(
-  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  fn: (tx: TxClient) => Promise<T>,
   opts: WithTxOptions = {}
 ): Promise<T> {
   return withTxUsing(
@@ -74,8 +75,8 @@ export async function withTx<T>(
  * can be unit-tested without a database.
  */
 export async function withTxUsing<T>(
-  runner: (fn: (tx: Prisma.TransactionClient) => Promise<T>, isolation: Isolation) => Promise<T>,
-  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+  runner: (fn: (tx: TxClient) => Promise<T>, isolation: Isolation) => Promise<T>,
+  fn: (tx: TxClient) => Promise<T>,
   opts: WithTxOptions = {}
 ): Promise<T> {
   const isolation: Isolation = opts.isolation ?? 'Serializable';

@@ -125,16 +125,34 @@ export async function createOrganization(
     // organization with no membership is unreachable by anyone, including the
     // person who just created it: a failure between the two statements would
     // leave a row nobody can see, administer or delete through the product.
-    const organization = await prisma.organization.create({
-      data: {
-        slug,
-        name: input.name,
-        memberships: { create: { userId, role: "OWNER" } },
-      },
-      select: { id: true, slug: true },
-    });
+    return await prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.create({
+        data: {
+          slug,
+          name: input.name,
+          memberships: { create: { userId, role: "OWNER" } },
+        },
+        select: { id: true, slug: true },
+      });
 
-    return { organizationId: organization.id, slug: organization.slug };
+      // Audited, and it was not until a failing test asked why there was no row
+      // to read. Creating an organization makes the creator its OWNER, which is
+      // the most consequential role grant in the system — every other grant is
+      // made BY someone who got theirs this way. I9 lists role grant as
+      // material; this is where the first one happens.
+      await tx.auditLog.create({
+        data: {
+          organizationId: organization.id,
+          actorId: userId,
+          action: "organization.create",
+          entityType: "Organization",
+          entityId: organization.id,
+          after: { slug: organization.slug, name: input.name, role: "OWNER" },
+        },
+      });
+
+      return { organizationId: organization.id, slug: organization.slug };
+    });
   } catch (error) {
     if (isUniqueViolation(error)) throw new SlugTakenError();
 

@@ -61,6 +61,11 @@ test("R1: outside a request there is no id, and that is recorded as null", async
   // A service called by a test, or later by a scheduled job, was not caused by
   // a request. Inventing an id would make the trail claim a correlation that
   // does not exist.
+  //
+  // This test originally read the audit row written by `createOrganization`
+  // and found none — because there was none. Creating an organization makes
+  // the creator its OWNER, the most consequential role grant in the system,
+  // and it was unaudited. Now it is `organization.create`.
   expect(currentRequestId()).toBeUndefined();
 
   const { scope } = await ownerScope();

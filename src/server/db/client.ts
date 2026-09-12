@@ -54,3 +54,15 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export type { PrismaClient } from "@prisma/client";
+
+/**
+ * The transaction client as seen through the EXTENSION.
+ *
+ * `Prisma.TransactionClient` describes a transaction on a bare client and no
+ * longer matches: the extension changes the shape, and typecheck says so.
+ * Deriving it from `prisma` itself means it tracks any future extension
+ * automatically rather than needing to be remembered.
+ */
+export type TxClient = Parameters<
+  Parameters<typeof prisma.$transaction>[0]
+>[0];

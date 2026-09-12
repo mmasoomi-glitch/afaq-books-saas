@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../server/db/client";
+import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "./scope";
 import {
@@ -137,7 +138,7 @@ function assertBalanced(lines: NormalisedLine[]): void {
  * transaction blocks until the first commits, then reads the updated value.
  */
 async function nextJournalNumber(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   organizationId: string,
   periodId: string,
 ): Promise<number> {
@@ -168,7 +169,7 @@ async function nextJournalNumber(
 }
 
 async function requireOpenPeriod(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   scope: LedgerScope,
   periodId: string,
 ): Promise<void> {
@@ -196,7 +197,7 @@ async function requireOpenPeriod(
  * makes posting a real transaction boundary.
  */
 async function writePostedEntry(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   scope: LedgerScope,
   params: {
     periodId: string;

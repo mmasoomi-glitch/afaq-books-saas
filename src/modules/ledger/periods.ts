@@ -1,11 +1,12 @@
 import type { Period, Prisma } from "@prisma/client";
 import { prisma } from "../../server/db/client";
+import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { CreatePeriodInput, LedgerScope } from "./scope";
 import { NotFoundError, PeriodNotOpenError } from "./errors";
 
 async function requirePeriod(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   scope: LedgerScope,
   periodId: string,
 ): Promise<Period> {

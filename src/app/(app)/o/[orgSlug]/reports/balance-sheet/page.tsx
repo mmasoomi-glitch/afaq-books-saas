@@ -60,7 +60,7 @@ function Section({
                   accountId={row.accountId}
                   accountCode={row.accountCode}
                   accountName={row.accountName}
-                  to={asOf}
+                  to={asOf.slice(0, 10)}
                 />
               </td>
               <td>{row.accountName}</td>

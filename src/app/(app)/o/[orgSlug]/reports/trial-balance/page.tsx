@@ -102,7 +102,7 @@ export default async function TrialBalancePage({
                     accountId={row.accountId}
                     accountCode={row.accountCode}
                     accountName={row.accountName}
-                    to={report.asOf}
+                    to={report.asOf.slice(0, 10)}
                   />
                 </td>
                 <td>{row.accountName}</td>

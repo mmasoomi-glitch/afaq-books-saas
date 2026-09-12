@@ -20,6 +20,13 @@ export interface DrillDownTarget {
  * show a subset that does NOT sum to the figure the reader clicked — which is
  * precisely the reconciliation this feature exists to provide. Only the profit
  * and loss, which is bounded at both ends, passes both.
+ *
+ * Callers pass a date-only `YYYY-MM-DD` string, not a full ISO timestamp. The
+ * destination would parse either, and the reason to insist is consistency: all
+ * three statements should produce the same URL shape for the same parameter,
+ * and the date-only form is what the journal's own `<input type="date">`
+ * round-trips. `report.asOf` is a full `toISOString()`, so the two cumulative
+ * statements slice it at the call site.
  */
 export function journalHref(target: DrillDownTarget): string {
   // The slug is a path segment, so URLSearchParams cannot encode it.

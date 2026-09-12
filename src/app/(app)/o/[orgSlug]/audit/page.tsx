@@ -124,6 +124,7 @@ export default async function AuditPage({ params, searchParams }: PageProps) {
               <th scope="col">Entity</th>
               <th scope="col">Before</th>
               <th scope="col">After</th>
+              <th scope="col">Request</th>
             </tr>
           </thead>
           <tbody>
@@ -148,6 +149,18 @@ export default async function AuditPage({ params, searchParams }: PageProps) {
                 </td>
                 <td>{describe(entry.before)}</td>
                 <td>{describe(entry.after)}</td>
+                <td>
+                  {/*
+                    Shown so two rows written by ONE request are visibly one
+                    action: a membership grant and the audit row beside it, or
+                    every row a future bulk import writes. It is also the value
+                    a user quotes when reporting a problem — the response
+                    carries it in `x-request-id`.
+                  */}
+                  {entry.requestId === null
+                    ? "—"
+                    : entry.requestId.slice(0, 8)}
+                </td>
               </tr>
             ))}
           </tbody>

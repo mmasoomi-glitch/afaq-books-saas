@@ -10,6 +10,7 @@ export type Action =
   | "ledger.post"
   | "ledger.reverse"
   | "report.read"
+  | "audit.read"
   | "member.read"
   | "member.invite"
   | "member.remove"
@@ -42,9 +43,21 @@ const BOOKKEEPER_ACTIONS: readonly Action[] = [
 
 const APPROVER_ACTIONS: readonly Action[] = [...BOOKKEEPER_ACTIONS];
 
+/**
+ * `audit.read` sits with ACCOUNTANT, not ADMIN, because
+ * `security-tenancy.md` says the trail must be "queryable by an authorized
+ * ACCOUNTANT for the trailing audit window" — that is the person whose job it
+ * is to read it.
+ *
+ * It is deliberately NOT a VIEWER action. The trail contains membership grants
+ * and role changes, which is organizational rather than financial information,
+ * and a bookkeeper does not need to know who was promoted last quarter to do
+ * their work.
+ */
 const ACCOUNTANT_ACTIONS: readonly Action[] = [
   ...APPROVER_ACTIONS,
   "ledger.period.close",
+  "audit.read",
 ];
 
 const ADMIN_ACTIONS: readonly Action[] = [

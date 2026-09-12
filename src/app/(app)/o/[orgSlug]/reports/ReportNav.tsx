@@ -26,6 +26,8 @@ export default function ReportNav({ orgSlug }: ReportNavProps) {
       {" · "}
       <a href={`/o/${orgSlug}/entries/new`}>New entry</a>
       {" · "}
+      <a href={`/o/${orgSlug}/audit`}>Audit trail</a>
+      {" · "}
       <a href={`/o/${orgSlug}/members`}>Members</a>
       {" · "}
       <a href="/organizations">All organizations</a>

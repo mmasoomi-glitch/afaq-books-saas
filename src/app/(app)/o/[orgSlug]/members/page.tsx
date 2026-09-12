@@ -48,6 +48,8 @@ export default async function MembersPage({ params }: PageProps) {
         {" · "}
         <a href={`/o/${orgSlug}/reports/trial-balance`}>Trial balance</a>
         {" · "}
+        <a href={`/o/${orgSlug}/audit`}>Audit trail</a>
+        {" · "}
         <a href="/organizations">All organizations</a>
       </p>
 

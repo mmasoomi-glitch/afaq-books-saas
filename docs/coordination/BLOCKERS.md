@@ -1030,6 +1030,55 @@ perform it, and that it refuses both self-transfer and a non-member target.
 
 ---
 
+### B-20260913-02 - `audit_logs` has no retention or archival policy
+
+- **Filed by:** LEDGER-CORE
+- **Date:** 2026-09-13
+- **Status:** open
+- **Type:** operational debt, raised by the independent reviewer
+
+**The situation**
+
+`audit_logs` is append-only by trigger and grows without bound. Every posted
+entry, reversal, period transition, membership grant and ownership change adds
+a row, and nothing ever removes one - by design, because that is what makes the
+trail trustworthy.
+
+Raised when the reviewer was asked what should come *before* the audit viewer.
+It was right that the viewer mattered more, and right that this is the thing
+the viewer makes visible: a table nobody could read could also be a table
+nobody noticed growing.
+
+**Why it is not urgent and is not nothing**
+
+At present volume it is irrelevant. It stops being irrelevant at the point the
+product has customers posting daily - which is also the point at which changing
+the strategy is hardest. The same shape as the slug namespace, and the same
+argument for deciding early.
+
+**What has to be DECIDED, not just implemented**
+
+- **How long must the trail be retained?** A jurisdictional question for an
+  accounting product, not an engineering one, and the answer differs by market.
+  It cannot be guessed.
+- **Archive or delete?** Deleting an audit row contradicts the append-only
+  trigger and the reason for having it at all. Archiving to cold storage keeps
+  the guarantee and adds a second place the data lives.
+- **Who may trigger it?** A retention job any admin can run is a way to destroy
+  evidence.
+
+**What it needs mechanically**
+
+A scheduled job, which this deployment does not have - the same gap as
+`B-20260911-07`, the rate-limit reaper. Both want the same scheduler, and
+deciding that once is cheaper than twice.
+
+**Owner:** ARCHITECT for the retention decision, PLATFORM-GUARDIAN for the
+scheduler.
+
+
+---
+
 
 ## Resolved
 

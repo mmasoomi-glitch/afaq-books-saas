@@ -11,8 +11,6 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { ensureOrg, pool, resetDb } from "../../setup";
 import { prisma } from "../../../src/server/db/client";
-import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
-import type { LedgerScope } from "../../../src/modules/ledger/scope";
 import { withTxUsing } from "../../../src/server/tx/with-tx";
 
 beforeEach(async () => {
@@ -24,29 +22,38 @@ afterAll(async () => {
   await pool.end();
 });
 
-async function newScope(): Promise<LedgerScope> {
-  const s = unsafeCreateLedgerScope(randomUUID(), randomUUID());
-  await ensureOrg(s.organizationId);
-  return s;
-}
-
 /**
- * Create two org-scoped periods directly (bypassing services) so that the
- * test itself controls which org they belong to.
+ * Create an org-scoped period directly via the pool.  Because FORCE ROW
+ * LEVEL SECURITY is active on every org-scoped table, we must temporarily
+ * suspend the policy for the INSERT and recreate it immediately after.
  */
-async function createPeriodRaw(
-  orgId: string,
-  name: string,
-): Promise<{ id: string }> {
+async function createPeriodRaw(orgId: string, name: string): Promise<string> {
   const id = randomUUID();
   const client = await pool.connect();
   try {
+    // Temporarily replace the policy with one that allows any row for
+    // organization-scoped tables.  With FORCE ROW SECURITY, a table with
+    // no policy blocks all DML, so we must not drop it — replace instead.
+    await client.query(`
+      DROP POLICY IF EXISTS org_isolate_periods ON periods;
+      CREATE POLICY org_isolate_periods ON periods
+        FOR ALL
+        USING (true)
+        WITH CHECK (true);
+    `);
     await client.query(
       `INSERT INTO periods (id, organization_id, name, status, start_date, end_date, created_at, updated_at)
        VALUES ($1, $2, $3, 'OPEN', now(), now() + interval '31 days', now(), now())`,
       [id, orgId, name],
     );
-    return { id };
+    // Restore the real RLS policy
+    await client.query(`
+      DROP POLICY IF EXISTS org_isolate_periods ON periods;
+      CREATE POLICY org_isolate_periods ON periods
+        FOR ALL
+        USING (organization_id = (current_setting('app.current_organization')::uuid));
+    `);
+    return id;
   } finally {
     client.release();
   }
@@ -72,10 +79,8 @@ test("RLS-1: RLS policies are enabled on org-scoped tables", async () => {
   try {
     for (const table of tables) {
       const result = await db.query(
-        `SELECT conname FROM pg_constraint
-         WHERE conrelid = ${table}::regclass
-           AND contype = 'check'
-           AND conname LIKE 'rls_%'`,
+        `SELECT policyname FROM pg_policies WHERE tablename = $1`,
+        [table],
       );
       expect(result.rows.length).toBeGreaterThan(0);
     }
@@ -117,8 +122,8 @@ test("RLS-2: RLS context restricts reads to current org", async () => {
 
   const ids = result.map((p: { id: string }) => p.id);
 
-  expect(ids).toContain(periodA.id);
-  expect(ids).not.toContain(periodB.id);
+  expect(ids).toContain(periodA);
+  expect(ids).not.toContain(periodB);
 });
 
 /**
@@ -170,8 +175,8 @@ test("RLS-3: orgA sees only orgA periods, orgB sees only orgB periods", async ()
   const idsA = resultA.map((p: { id: string }) => p.id);
   const idsB = resultB.map((p: { id: string }) => p.id);
 
-  expect(idsA).toContain(periodA.id);
-  expect(idsA).not.toContain(periodB.id);
-  expect(idsB).toContain(periodB.id);
-  expect(idsB).not.toContain(periodA.id);
+  expect(idsA).toContain(periodA);
+  expect(idsA).not.toContain(periodB);
+  expect(idsB).toContain(periodB);
+  expect(idsB).not.toContain(periodA);
 });

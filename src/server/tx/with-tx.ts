@@ -9,6 +9,20 @@ export interface WithTxOptions {
   baseDelayMs?: number;
 }
 
+/**
+ * The current organization id, carried implicitly for the life of one
+ * transaction.  The RLS policies on every organisation-scoped table filter on
+ * `current_setting('app.current_organization')`, so this value must be set
+ * before any query runs inside the transaction.
+ *
+ * `withTxUsing` sets it as a `SET LOCAL` at the top of each attempt, which
+ * means it is scoped to the transaction and reset automatically when the
+ * transaction ends — rolled back or committed.
+ */
+export interface WithTxContext {
+  readonly organizationId: string;
+}
+
 export const RETRYABLE_SQLSTATES = ["40001", "40P01", "55P03"] as const;
 
 function isRetryableCode(code: string): boolean {
@@ -62,10 +76,17 @@ function sleep(ms: number): Promise<void> {
 /**
  * Execute `fn` inside a Prisma transaction with retry logic.
  * Delegates to withTxUsing.
+ *
+ * The optional `context` carries the organization id so that every query
+ * inside the transaction is subject to Row Level Security.  If the caller
+ * omits it the transaction still runs (for tests that exercise raw-sql
+ * paths or the retry loop itself), but RLS will refuse rows from other
+ * tenants once the policies are live.
  */
 export async function withTx<T>(
   fn: (tx: TxClient) => Promise<T>,
   opts: WithTxOptions = {},
+  ctx?: WithTxContext,
 ): Promise<T> {
   return withTxUsing(
     async (innerFn, _isolation) => {
@@ -73,12 +94,18 @@ export async function withTx<T>(
     },
     fn,
     opts,
+    ctx,
   );
 }
 
 /**
  * Same retry loop as withTx but accepts a runner function so the retry logic
  * can be unit-tested without a database.
+ *
+ * If `context` is provided, sets `app.current_organization` at the top of
+ * each attempt via a raw query inside the transaction.  `SET LOCAL` is
+ * scoped to the transaction and is automatically reset when the
+ * transaction ends.
  */
 export async function withTxUsing<T>(
   runner: (
@@ -87,6 +114,7 @@ export async function withTxUsing<T>(
   ) => Promise<T>,
   fn: (tx: TxClient) => Promise<T>,
   opts: WithTxOptions = {},
+  ctx?: WithTxContext,
 ): Promise<T> {
   const isolation: Isolation = opts.isolation ?? "Serializable";
   const maxAttempts = opts.maxAttempts ?? 3;
@@ -100,7 +128,17 @@ export async function withTxUsing<T>(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      return await runner(fn, isolation);
+      return await runner(async (tx, _isolation) => {
+        // Inject RLS context so every query inside the transaction is
+        // scoped to the caller's organization.  SET LOCAL is scoped to
+        // the transaction and resets automatically on commit/rollback.
+        if (ctx?.organizationId) {
+          await tx.$executeRawUnsafe(
+            `SET LOCAL app.current_organization = '${ctx.organizationId}'`,
+          );
+        }
+        return await innerFn(tx);
+      }, isolation);
     } catch (e) {
       lastError = e;
       if (!isRetryableDbError(e) || attempt === maxAttempts) {

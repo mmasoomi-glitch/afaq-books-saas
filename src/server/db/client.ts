@@ -10,6 +10,75 @@ import { currentRequestId } from "../http/request-context";
  */
 
 /**
+ * Recursively extract an organization id from a Prisma where clause.
+ * Returns `null` when no organizationId is found.
+ */
+function extractOrgId(
+  where: unknown,
+): string | null {
+  if (where == null || typeof where !== "object") return null;
+  const w = where as Record<string, unknown>;
+
+  // Direct: { organizationId: "..." }
+  if (typeof w.organizationId === "string" && isUuid(w.organizationId)) {
+    return w.organizationId;
+  }
+
+  // Negated: { organizationId: { not: "..." } }
+  if (
+    w.not !== undefined &&
+    typeof w.not === "string" &&
+    isUuid(w.not)
+  ) {
+    return w.not;
+  }
+
+  // In: { organizationId: { in: ["..."] } }
+  if (
+    w.in !== undefined &&
+    Array.isArray(w.in) &&
+    w.in.length === 1 &&
+    typeof w.in[0] === "string" &&
+    isUuid(w.in[0])
+  ) {
+    return w.in[0];
+  }
+
+  // AND: { AND: [ { organizationId: "..." }, ... ] }
+  if (
+    w.AND !== undefined &&
+    Array.isArray(w.AND)
+  ) {
+    for (const clause of w.AND) {
+      const id = extractOrgId(clause);
+      if (id) return id;
+    }
+  }
+
+  // OR: { OR: [ ... ] } — take first org id found
+  if (
+    w.OR !== undefined &&
+    Array.isArray(w.OR)
+  ) {
+    for (const clause of w.OR) {
+      const id = extractOrgId(clause);
+      if (id) return id;
+    }
+  }
+
+  return null;
+}
+
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
+}
+
+/**
  * Every `audit_logs` row gets the current request id, injected HERE rather than
  * at each of the eleven places one is written.
  *
@@ -26,6 +95,12 @@ import { currentRequestId } from "../http/request-context";
  *
  * `??=` rather than assignment: an explicit `requestId` passed by a caller
  * wins. Nothing does that today; a replay or an import tool would want to.
+ *
+ * Additionally, a global `$allOperations` middleware sets
+ * `app.current_organization` via `SET LOCAL` before every query so that RLS
+ * policies fire even for direct `prisma` calls.  Inside a `$transaction` the
+ * `SET LOCAL` is scoped to the transaction; outside a transaction it would
+ * be a no-op, so we fall back to `SET` (session-level).
  */
 function extend(base: PrismaClient) {
   return base.$extends({
@@ -33,6 +108,28 @@ function extend(base: PrismaClient) {
       auditLog: {
         create({ args, query }) {
           args.data = { requestId: currentRequestId() ?? null, ...args.data };
+          return query(args);
+        },
+      },
+    },
+    model: {
+      $allModels: {
+        async $allOperations({ model, operation, args, query }) {
+          const orgId = extractOrgId(args.where);
+          if (orgId) {
+            // Try SET LOCAL first — works inside $transaction.
+            // Falls back to SET if outside a transaction.
+            try {
+              await base.$executeRawUnsafe(
+                `SET LOCAL app.current_organization = '${orgId}'`,
+              );
+            } catch {
+              // Not inside a transaction; use session-level SET.
+              await base.$executeRawUnsafe(
+                `SET app.current_organization = '${orgId}'`,
+              );
+            }
+          }
           return query(args);
         },
       },

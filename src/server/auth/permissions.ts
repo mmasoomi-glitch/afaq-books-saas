@@ -15,7 +15,16 @@ export type Action =
   | "member.invite"
   | "member.remove"
   | "role.grant"
-  | "ownership.transfer";
+  | "ownership.transfer"
+  | "procurement.supplier.create"
+  | "procurement.supplier.read"
+  | "procurement.bill.create"
+  | "procurement.bill.approve"
+  | "procurement.bill.cancel"
+  | "procurement.payment.create"
+  | "procurement.payment.apply"
+  | "procurement.po.create"
+  | "procurement.report.read";
 
 /**
  * `member.read` sits with VIEWER deliberately. Knowing who else is in an
@@ -58,6 +67,15 @@ const ACCOUNTANT_ACTIONS: readonly Action[] = [
   ...APPROVER_ACTIONS,
   "ledger.period.close",
   "audit.read",
+  "procurement.supplier.create",
+  "procurement.supplier.read",
+  "procurement.bill.create",
+  "procurement.bill.approve",
+  "procurement.bill.cancel",
+  "procurement.payment.create",
+  "procurement.payment.apply",
+  "procurement.po.create",
+  "procurement.report.read",
 ];
 
 const ADMIN_ACTIONS: readonly Action[] = [

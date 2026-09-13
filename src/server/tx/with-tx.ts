@@ -137,7 +137,7 @@ export async function withTxUsing<T>(
             `SET LOCAL app.current_organization = '${ctx.organizationId}'`,
           );
         }
-        return await innerFn(tx);
+        return await fn(tx);
       }, isolation);
     } catch (e) {
       lastError = e;

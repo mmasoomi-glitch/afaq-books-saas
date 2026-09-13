@@ -9,42 +9,46 @@ export async function createAccount(
   scope: LedgerScope,
   input: CreateAccountInput,
 ): Promise<Account> {
-  return withTx(async (tx: TxClient) => {
-    if (input.parentId !== undefined) {
-      // A parent from another organization would be a cross-tenant link.
-      const parent = await tx.account.findFirst({
-        where: { id: input.parentId, organizationId: scope.organizationId },
-        select: { id: true },
-      });
-      if (parent === null) {
-        throw new NotFoundError(`account ${input.parentId} not found`);
+  return withTx(
+    async (tx: TxClient) => {
+      if (input.parentId !== undefined) {
+        // A parent from another organization would be a cross-tenant link.
+        const parent = await tx.account.findFirst({
+          where: { id: input.parentId, organizationId: scope.organizationId },
+          select: { id: true },
+        });
+        if (parent === null) {
+          throw new NotFoundError(`account ${input.parentId} not found`);
+        }
       }
-    }
 
-    const account = await tx.account.create({
-      data: {
-        organizationId: scope.organizationId,
-        code: input.code,
-        name: input.name,
-        type: input.type,
-        currency: input.currency,
-        ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
-      },
-    });
+      const account = await tx.account.create({
+        data: {
+          organizationId: scope.organizationId,
+          code: input.code,
+          name: input.name,
+          type: input.type,
+          currency: input.currency,
+          ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+        },
+      });
 
-    await tx.auditLog.create({
-      data: {
-        organizationId: scope.organizationId,
-        actorId: scope.userId,
-        action: "ledger.account.create",
-        entityType: "Account",
-        entityId: account.id,
-        after: { code: account.code, name: account.name, type: account.type },
-      },
-    });
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "ledger.account.create",
+          entityType: "Account",
+          entityId: account.id,
+          after: { code: account.code, name: account.name, type: account.type },
+        },
+      });
 
-    return account;
-  });
+      return account;
+    },
+    {},
+    { organizationId: scope.organizationId },
+  );
 }
 
 /** Org-scoped. There is no "all accounts" view; see accounting-integrity I7. */

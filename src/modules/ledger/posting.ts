@@ -274,52 +274,56 @@ export async function postJournalEntry(
   const lines = normaliseLines(input.lines);
   assertBalanced(lines);
 
-  return withTx(async (tx) => {
-    await requireOpenPeriod(tx, scope, input.periodId);
+  return withTx(
+    async (tx) => {
+      await requireOpenPeriod(tx, scope, input.periodId);
 
-    // Every account must belong to this organization. The database trigger
-    // jl_org_consistency enforces it as well; this turns a constraint
-    // violation into a named error and avoids a pointless round trip.
-    const accountIds = [...new Set(lines.map((l) => l.accountId))];
-    const found = await tx.account.findMany({
-      where: { id: { in: accountIds }, organizationId: scope.organizationId },
-      select: { id: true },
-    });
-    if (found.length !== accountIds.length) {
-      const known = new Set(found.map((a) => a.id));
-      const missing = accountIds.filter((id) => !known.has(id));
-      throw new NotFoundError(`account(s) not found: ${missing.join(", ")}`);
-    }
+      // Every account must belong to this organization. The database trigger
+      // jl_org_consistency enforces it as well; this turns a constraint
+      // violation into a named error and avoids a pointless round trip.
+      const accountIds = [...new Set(lines.map((l) => l.accountId))];
+      const found = await tx.account.findMany({
+        where: { id: { in: accountIds }, organizationId: scope.organizationId },
+        select: { id: true },
+      });
+      if (found.length !== accountIds.length) {
+        const known = new Set(found.map((a) => a.id));
+        const missing = accountIds.filter((id) => !known.has(id));
+        throw new NotFoundError(`account(s) not found: ${missing.join(", ")}`);
+      }
 
-    const posted = await writePostedEntry(tx, scope, {
-      periodId: input.periodId,
-      entryDate: input.entryDate,
-      description: input.description,
-      currency: input.currency,
-      sourceModule: input.sourceModule ?? "manual",
-      sourceId: input.sourceId ?? null,
-      reversalOfId: null,
-      lines,
-    });
+      const posted = await writePostedEntry(tx, scope, {
+        periodId: input.periodId,
+        entryDate: input.entryDate,
+        description: input.description,
+        currency: input.currency,
+        sourceModule: input.sourceModule ?? "manual",
+        sourceId: input.sourceId ?? null,
+        reversalOfId: null,
+        lines,
+      });
 
-    await tx.auditLog.create({
-      data: {
-        organizationId: scope.organizationId,
-        actorId: scope.userId,
-        action: "ledger.post",
-        entityType: "JournalEntry",
-        entityId: posted.entryId,
-        after: {
-          journalNumber: posted.journalNumber,
-          periodId: input.periodId,
-          lineCount: lines.length,
-          currency: input.currency,
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "ledger.post",
+          entityType: "JournalEntry",
+          entityId: posted.entryId,
+          after: {
+            journalNumber: posted.journalNumber,
+            periodId: input.periodId,
+            lineCount: lines.length,
+            currency: input.currency,
+          },
         },
-      },
-    });
+      });
 
-    return posted;
-  });
+      return posted;
+    },
+    {},
+    { organizationId: scope.organizationId },
+  );
 }
 
 /**
@@ -347,98 +351,102 @@ export async function reverseJournalEntry(
   asOfDate: Date,
   reason: string,
 ): Promise<PostedEntry> {
-  return withTx(async (tx) => {
-    const original = await tx.journalEntry.findFirst({
-      where: { id: originalId, organizationId: scope.organizationId },
-      include: { journalLines: { orderBy: { lineNumber: "asc" } } },
-    });
-    if (original === null) {
-      throw new NotFoundError(`journal entry ${originalId} not found`);
-    }
-    if (original.postedAt === null) {
-      throw new NotPostedError(
-        `journal entry ${originalId} is a draft; only posted entries can be reversed`,
-      );
-    }
-    if (original.reversedById !== null) {
-      throw new AlreadyReversedError(
-        `journal entry ${originalId} was already reversed by ${original.reversedById}`,
-      );
-    }
+  return withTx(
+    async (tx) => {
+      const original = await tx.journalEntry.findFirst({
+        where: { id: originalId, organizationId: scope.organizationId },
+        include: { journalLines: { orderBy: { lineNumber: "asc" } } },
+      });
+      if (original === null) {
+        throw new NotFoundError(`journal entry ${originalId} not found`);
+      }
+      if (original.postedAt === null) {
+        throw new NotPostedError(
+          `journal entry ${originalId} is a draft; only posted entries can be reversed`,
+        );
+      }
+      if (original.reversedById !== null) {
+        throw new AlreadyReversedError(
+          `journal entry ${originalId} was already reversed by ${original.reversedById}`,
+        );
+      }
 
-    // The reversal is posted into whichever period covers asOfDate, which may
-    // differ from the original's period — that is the point of reversing "as
-    // of" a date rather than in place.
-    const period = await tx.period.findFirst({
-      where: {
-        organizationId: scope.organizationId,
-        startDate: { lte: asOfDate },
-        endDate: { gte: asOfDate },
-      },
-      select: { id: true, status: true },
-    });
-    if (period === null) {
-      throw new NoPeriodForDateError(
-        `no accounting period covers ${asOfDate.toISOString().slice(0, 10)}`,
-      );
-    }
-    if (period.status !== "OPEN") {
-      throw new PeriodNotOpenError(
-        `cannot post a reversal into period ${period.id}: status is ${period.status}`,
-      );
-    }
-
-    const inverted: NormalisedLine[] = original.journalLines.map((line) => ({
-      accountId: line.accountId,
-      debit: line.credit,
-      credit: line.debit,
-      fxRate: line.fxRate,
-      // Magnitude is unchanged by swapping debit and credit, so the reporting
-      // amount is recomputed rather than copied — it must still satisfy
-      // jl_reporting_amount_consistent.
-      reportingAmount: reportingAmount(line.credit, line.debit, line.fxRate),
-      memo: `reversal of line ${line.lineNumber}`,
-    }));
-    assertBalanced(inverted);
-
-    const posted = await writePostedEntry(tx, scope, {
-      periodId: period.id,
-      entryDate: asOfDate,
-      description: `Reversal of ${original.description} — ${reason}`,
-      currency: original.currency,
-      sourceModule: original.sourceModule,
-      sourceId: original.sourceId,
-      reversalOfId: original.id,
-      lines: inverted,
-    });
-
-    // Raw SQL on purpose. je_immutable permits exactly one update to a posted
-    // entry: setting reversed_by_id from NULL with every other column
-    // unchanged. Prisma's @updatedAt would also bump updated_at, the trigger's
-    // equality check would fail, and the update would be rejected.
-    await tx.$executeRaw`
-      UPDATE journal_entries SET reversed_by_id = ${posted.entryId}::uuid
-      WHERE id = ${original.id}::uuid`;
-
-    await tx.auditLog.create({
-      data: {
-        organizationId: scope.organizationId,
-        actorId: scope.userId,
-        action: "ledger.reverse",
-        entityType: "JournalEntry",
-        entityId: original.id,
-        before: { reversedById: null },
-        after: {
-          reversedById: posted.entryId,
-          reversalJournalNumber: posted.journalNumber,
-          periodId: period.id,
-          reason,
+      // The reversal is posted into whichever period covers asOfDate, which may
+      // differ from the original's period — that is the point of reversing "as
+      // of" a date rather than in place.
+      const period = await tx.period.findFirst({
+        where: {
+          organizationId: scope.organizationId,
+          startDate: { lte: asOfDate },
+          endDate: { gte: asOfDate },
         },
-      },
-    });
+        select: { id: true, status: true },
+      });
+      if (period === null) {
+        throw new NoPeriodForDateError(
+          `no accounting period covers ${asOfDate.toISOString().slice(0, 10)}`,
+        );
+      }
+      if (period.status !== "OPEN") {
+        throw new PeriodNotOpenError(
+          `cannot post a reversal into period ${period.id}: status is ${period.status}`,
+        );
+      }
 
-    return posted;
-  });
+      const inverted: NormalisedLine[] = original.journalLines.map((line) => ({
+        accountId: line.accountId,
+        debit: line.credit,
+        credit: line.debit,
+        fxRate: line.fxRate,
+        // Magnitude is unchanged by swapping debit and credit, so the reporting
+        // amount is recomputed rather than copied — it must still satisfy
+        // jl_reporting_amount_consistent.
+        reportingAmount: reportingAmount(line.credit, line.debit, line.fxRate),
+        memo: `reversal of line ${line.lineNumber}`,
+      }));
+      assertBalanced(inverted);
+
+      const posted = await writePostedEntry(tx, scope, {
+        periodId: period.id,
+        entryDate: asOfDate,
+        description: `Reversal of ${original.description} — ${reason}`,
+        currency: original.currency,
+        sourceModule: original.sourceModule,
+        sourceId: original.sourceId,
+        reversalOfId: original.id,
+        lines: inverted,
+      });
+
+      // Raw SQL on purpose. je_immutable permits exactly one update to a posted
+      // entry: setting reversed_by_id from NULL with every other column
+      // unchanged. Prisma's @updatedAt would also bump updated_at, the trigger's
+      // equality check would fail, and the update would be rejected.
+      await tx.$executeRaw`
+        UPDATE journal_entries SET reversed_by_id = ${posted.entryId}::uuid
+        WHERE id = ${original.id}::uuid`;
+
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "ledger.reverse",
+          entityType: "JournalEntry",
+          entityId: original.id,
+          before: { reversedById: null },
+          after: {
+            reversedById: posted.entryId,
+            reversalJournalNumber: posted.journalNumber,
+            periodId: period.id,
+            reason,
+          },
+        },
+      });
+
+      return posted;
+    },
+    {},
+    { organizationId: scope.organizationId },
+  );
 }
 
 export interface EntrySummaryLine {

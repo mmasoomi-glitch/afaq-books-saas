@@ -23,27 +23,31 @@ export async function createPeriod(
   scope: LedgerScope,
   input: CreatePeriodInput,
 ): Promise<Period> {
-  return withTx(async (tx) => {
-    const period = await tx.period.create({
-      data: {
-        organizationId: scope.organizationId,
-        name: input.name,
-        startDate: input.startDate,
-        endDate: input.endDate,
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        organizationId: scope.organizationId,
-        actorId: scope.userId,
-        action: "ledger.period.create",
-        entityType: "Period",
-        entityId: period.id,
-        after: { name: period.name, status: period.status },
-      },
-    });
-    return period;
-  });
+  return withTx(
+    async (tx) => {
+      const period = await tx.period.create({
+        data: {
+          organizationId: scope.organizationId,
+          name: input.name,
+          startDate: input.startDate,
+          endDate: input.endDate,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "ledger.period.create",
+          entityType: "Period",
+          entityId: period.id,
+          after: { name: period.name, status: period.status },
+        },
+      });
+      return period;
+    },
+    {},
+    { organizationId: scope.organizationId },
+  );
 }
 
 /**
@@ -74,25 +78,29 @@ export async function closePeriod(
   periodId: string,
   reason: string,
 ): Promise<Period> {
-  return withTx(async (tx) => {
-    const before = await requirePeriod(tx, scope, periodId);
-    const period = await tx.period.update({
-      where: { id: periodId },
-      data: { status: "CLOSED" },
-    });
-    await tx.auditLog.create({
-      data: {
-        organizationId: scope.organizationId,
-        actorId: scope.userId,
-        action: "ledger.period.close",
-        entityType: "Period",
-        entityId: periodId,
-        before: { status: before.status },
-        after: { status: period.status, reason },
-      },
-    });
-    return period;
-  });
+  return withTx(
+    async (tx) => {
+      const before = await requirePeriod(tx, scope, periodId);
+      const period = await tx.period.update({
+        where: { id: periodId },
+        data: { status: "CLOSED" },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "ledger.period.close",
+          entityType: "Period",
+          entityId: periodId,
+          before: { status: before.status },
+          after: { status: period.status, reason },
+        },
+      });
+      return period;
+    },
+    {},
+    { organizationId: scope.organizationId },
+  );
 }
 
 export async function lockPeriod(
@@ -100,36 +108,40 @@ export async function lockPeriod(
   periodId: string,
   reason: string,
 ): Promise<Period> {
-  return withTx(async (tx) => {
-    const before = await requirePeriod(tx, scope, periodId);
-    const period = await tx.period.update({
-      where: { id: periodId },
-      data: { status: "LOCKED", lockedAt: new Date(), lockedBy: scope.userId },
-    });
-    // period_locks is the append-only history of lock/unlock actions. A status
-    // column alone cannot answer "who locked this, when, and why".
-    await tx.periodLock.create({
-      data: {
-        organizationId: scope.organizationId,
-        periodId,
-        action: "LOCK",
-        reason,
-        actorId: scope.userId,
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        organizationId: scope.organizationId,
-        actorId: scope.userId,
-        action: "ledger.period.lock",
-        entityType: "Period",
-        entityId: periodId,
-        before: { status: before.status },
-        after: { status: period.status, reason },
-      },
-    });
-    return period;
-  });
+  return withTx(
+    async (tx) => {
+      const before = await requirePeriod(tx, scope, periodId);
+      const period = await tx.period.update({
+        where: { id: periodId },
+        data: { status: "LOCKED", lockedAt: new Date(), lockedBy: scope.userId },
+      });
+      // period_locks is the append-only history of lock/unlock actions. A status
+      // column alone cannot answer "who locked this, when, and why".
+      await tx.periodLock.create({
+        data: {
+          organizationId: scope.organizationId,
+          periodId,
+          action: "LOCK",
+          reason,
+          actorId: scope.userId,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "ledger.period.lock",
+          entityType: "Period",
+          entityId: periodId,
+          before: { status: before.status },
+          after: { status: period.status, reason },
+        },
+      });
+      return period;
+    },
+    {},
+    { organizationId: scope.organizationId },
+  );
 }
 
 export async function unlockPeriod(
@@ -137,34 +149,38 @@ export async function unlockPeriod(
   periodId: string,
   reason: string,
 ): Promise<Period> {
-  return withTx(async (tx) => {
-    const before = await requirePeriod(tx, scope, periodId);
-    const period = await tx.period.update({
-      where: { id: periodId },
-      data: { status: "OPEN", lockedAt: null, lockedBy: null },
-    });
-    await tx.periodLock.create({
-      data: {
-        organizationId: scope.organizationId,
-        periodId,
-        action: "UNLOCK",
-        reason,
-        actorId: scope.userId,
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        organizationId: scope.organizationId,
-        actorId: scope.userId,
-        action: "ledger.period.unlock",
-        entityType: "Period",
-        entityId: periodId,
-        before: { status: before.status },
-        after: { status: period.status, reason },
-      },
-    });
-    return period;
-  });
+  return withTx(
+    async (tx) => {
+      const before = await requirePeriod(tx, scope, periodId);
+      const period = await tx.period.update({
+        where: { id: periodId },
+        data: { status: "OPEN", lockedAt: null, lockedBy: null },
+      });
+      await tx.periodLock.create({
+        data: {
+          organizationId: scope.organizationId,
+          periodId,
+          action: "UNLOCK",
+          reason,
+          actorId: scope.userId,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: scope.organizationId,
+          actorId: scope.userId,
+          action: "ledger.period.unlock",
+          entityType: "Period",
+          entityId: periodId,
+          before: { status: before.status },
+          after: { status: period.status, reason },
+        },
+      });
+      return period;
+    },
+    {},
+    { organizationId: scope.organizationId },
+  );
 }
 
 /**

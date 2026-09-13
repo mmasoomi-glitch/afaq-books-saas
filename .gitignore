@@ -75,3 +75,29 @@ memory/
 .claude/context_ledger.db
 .claude/context_ledger.db-*
 .claude/.briefed/
+# added by push-all-projects.sh
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+dist/
+build/
+.next/
+.gradle/
+.mypy_cache/
+.pytest_cache/
+# secrets - never commit
+.env
+.env.local
+.env.production
+.env.development
+*.key
+*.pem
+*.pfx
+*.p12
+*.dpapi
+.cf-token
+id_rsa
+id_ed25519
+

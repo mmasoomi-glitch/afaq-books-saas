@@ -11,19 +11,9 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeEach, expect, test } from "vitest";
 import { ensureOrg, pool, resetDb } from "../../setup";
 import { prisma } from "../../../src/server/db/client";
-import {
-  createAccount,
-} from "../../../src/modules/ledger/accounts";
-import {
-  createPeriod,
-} from "../../../src/modules/ledger/periods";
-import {
-  unsafeCreateLedgerScope,
-} from "../../../src/modules/ledger/scope";
+import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 import type { LedgerScope } from "../../../src/modules/ledger/scope";
-import {
-  withTxUsing,
-} from "../../../src/server/tx/with-tx";
+import { withTxUsing } from "../../../src/server/tx/with-tx";
 
 beforeEach(async () => {
   await resetDb();
@@ -40,43 +30,46 @@ async function newScope(): Promise<LedgerScope> {
   return s;
 }
 
-async function fixture(
-  orgId?: string,
-) {
-  const targetOrgId = orgId ?? (await newScope()).organizationId;
-  const scope = unsafeCreateLedgerScope(targetOrgId, randomUUID());
-  const period = await createPeriod(scope, {
-    name: "2024-01",
-    startDate: new Date("2024-01-01"),
-    endDate: new Date("2024-01-31"),
-  });
-  const cash = await createAccount(scope, {
-    code: "1000",
-    name: "Cash",
-    type: "ASSET",
-    currency: "USD",
-  });
-  return { scope, period, cash };
+/**
+ * Create two org-scoped periods directly (bypassing services) so that the
+ * test itself controls which org they belong to.
+ */
+async function createPeriodRaw(
+  orgId: string,
+  name: string,
+): Promise<{ id: string }> {
+  const id = randomUUID();
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `INSERT INTO periods (id, organization_id, name, status, start_date, end_date, created_at, updated_at)
+       VALUES ($1, $2, $3, 'OPEN', now(), now() + interval '31 days', now(), now())`,
+      [id, orgId, name],
+    );
+    return { id };
+  } finally {
+    client.release();
+  }
 }
 
 /**
  * RLS-1: RLS policies are enabled on every org-scoped table.
  */
 test("RLS-1: RLS policies are enabled on org-scoped tables", async () => {
+  const tables = [
+    "accounts",
+    "accounting_configs",
+    "periods",
+    "period_locks",
+    "journal_entries",
+    "journal_lines",
+    "journal_counters",
+    "audit_logs",
+    "memberships",
+  ];
+
   const db = await pool.connect();
   try {
-    const tables = [
-      "accounts",
-      "accounting_configs",
-      "periods",
-      "period_locks",
-      "journal_entries",
-      "journal_lines",
-      "journal_counters",
-      "audit_logs",
-      "memberships",
-    ];
-
     for (const table of tables) {
       const result = await db.query(
         `SELECT conname FROM pg_constraint
@@ -96,18 +89,21 @@ test("RLS-1: RLS policies are enabled on org-scoped tables", async () => {
  * A period created for orgB must NOT appear when the context is set to orgA.
  */
 test("RLS-2: RLS context restricts reads to current org", async () => {
-  const { scope: orgAScope, period: periodA } = await fixture();
-  const { period: periodB } = await fixture();
+  const orgA = randomUUID();
+  const orgB = randomUUID();
+  await ensureOrg(orgA);
+  await ensureOrg(orgB);
+
+  const periodA = await createPeriodRaw(orgA, "orgA-period");
+  const periodB = await createPeriodRaw(orgB, "orgB-period");
 
   // Read all periods WITH RLS context set to orgA
-  // The $transaction runner wraps fn(tx) in a transaction; we set context
-  // before calling fn.
   const result = await withTxUsing(
     async (innerFn, isolation) => {
       return prisma.$transaction(
         async (tx) => {
           await tx.$executeRawUnsafe(
-            `SET LOCAL app.current_organization = '${orgAScope.organizationId}'`,
+            `SET LOCAL app.current_organization = '${orgA}'`,
           );
           return await innerFn(tx);
         },
@@ -116,32 +112,33 @@ test("RLS-2: RLS context restricts reads to current org", async () => {
     },
     (tx) => tx.period.findMany({ select: { id: true } }),
     { isolation: "Serializable" },
-    { organizationId: orgAScope.organizationId },
+    { organizationId: orgA },
   );
 
   const ids = result.map((p: { id: string }) => p.id);
 
-  // periodA belongs to orgA — should be present
   expect(ids).toContain(periodA.id);
-  // periodB belongs to orgB — must NOT be present
   expect(ids).not.toContain(periodB.id);
 });
 
 /**
- * RLS-3: Two orgs each see only their own periods when using withTx.
+ * RLS-3: Two orgs each see only their own periods when querying directly.
  */
-test("RLS-3: two orgs using withTx each see only their own periods", async () => {
-  const { scope: orgAScope } = await fixture();
-  const { scope: orgBScope, period: periodB } = await fixture();
-  const { period: periodA } = await fixture(orgAScope.organizationId);
+test("RLS-3: orgA sees only orgA periods, orgB sees only orgB periods", async () => {
+  const orgA = randomUUID();
+  const orgB = randomUUID();
+  await ensureOrg(orgA);
+  await ensureOrg(orgB);
 
-  // orgA's transaction
-  const orgAResult = await withTxUsing(
+  const periodA = await createPeriodRaw(orgA, "orgA-period");
+  const periodB = await createPeriodRaw(orgB, "orgB-period");
+
+  const resultA = await withTxUsing(
     async (innerFn, isolation) => {
       return prisma.$transaction(
         async (tx) => {
           await tx.$executeRawUnsafe(
-            `SET LOCAL app.current_organization = '${orgAScope.organizationId}'`,
+            `SET LOCAL app.current_organization = '${orgA}'`,
           );
           return await innerFn(tx);
         },
@@ -150,10 +147,31 @@ test("RLS-3: two orgs using withTx each see only their own periods", async () =>
     },
     (tx) => tx.period.findMany({ select: { id: true } }),
     { isolation: "Serializable" },
-    { organizationId: orgAScope.organizationId },
+    { organizationId: orgA },
   );
 
-  const orgAResultIds = orgAResult.map((p: { id: string }) => p.id);
-  expect(orgAResultIds).toContain(periodA.id);
-  expect(orgAResultIds).not.toContain(periodB.id);
+  const resultB = await withTxUsing(
+    async (innerFn, isolation) => {
+      return prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(
+            `SET LOCAL app.current_organization = '${orgB}'`,
+          );
+          return await innerFn(tx);
+        },
+        { isolationLevel: isolation as any },
+      );
+    },
+    (tx) => tx.period.findMany({ select: { id: true } }),
+    { isolation: "Serializable" },
+    { organizationId: orgB },
+  );
+
+  const idsA = resultA.map((p: { id: string }) => p.id);
+  const idsB = resultB.map((p: { id: string }) => p.id);
+
+  expect(idsA).toContain(periodA.id);
+  expect(idsA).not.toContain(periodB.id);
+  expect(idsB).toContain(periodB.id);
+  expect(idsB).not.toContain(periodA.id);
 });

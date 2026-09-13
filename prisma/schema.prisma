@@ -7,222 +7,183 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum AccountType {
-  ASSET
-  LIABILITY
-  EQUITY
-  INCOME
-  EXPENSE
-}
-
-enum PeriodStatus {
-  OPEN
-  CLOSED
-  LOCKED
-}
-
-enum PeriodLockAction {
-  LOCK
-  UNLOCK
-}
-
 model Account {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
   code           String
   name           String
   type           AccountType
-  currency       String       @db.Char(3)
-  parentId       String?      @map("parent_id") @db.Uuid
-  isActive       Boolean      @default(true) @map("is_active")
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
-
+  currency       String        @db.Char(3)
+  parentId       String?       @map("parent_id") @db.Uuid
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  parent         Account?      @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children       Account[]     @relation("AccountHierarchy")
   journalLines   JournalLine[]
-  parent         Account?     @relation("AccountHierarchy", fields: [parentId], references: [id])
-  children       Account[]    @relation("AccountHierarchy")
 
   @@unique([organizationId, code])
   @@index([organizationId, type])
   @@map("accounts")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model AccountingConfig {
   id                   String       @id @default(uuid()) @db.Uuid
-  organizationId       String       @map("organization_id") @db.Uuid
+  organizationId       String       @unique @map("organization_id") @db.Uuid
   baseCurrency         String       @map("base_currency") @db.Char(3)
   fiscalYearStartMonth Int          @map("fiscal_year_start_month")
   createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization         Organization @relation(fields: [organizationId], references: [id])
 
-  @@unique([organizationId])
   @@map("accounting_configs")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model Period {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
   name           String
-  startDate      DateTime     @map("start_date") @db.Date
-  endDate        DateTime     @map("end_date") @db.Date
-  status         PeriodStatus @default(OPEN)
-  lockedAt       DateTime?    @map("locked_at") @db.Timestamptz(6)
-  lockedBy       String?      @map("locked_by") @db.Uuid
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
-
+  startDate      DateTime       @map("start_date") @db.Date
+  endDate        DateTime       @map("end_date") @db.Date
+  status         PeriodStatus   @default(OPEN)
+  lockedAt       DateTime?      @map("locked_at") @db.Timestamptz(6)
+  lockedBy       String?        @map("locked_by") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   journalEntries JournalEntry[]
   periodLocks    PeriodLock[]
+  organization   Organization   @relation(fields: [organizationId], references: [id])
 
   @@unique([organizationId, name])
   @@index([organizationId, status])
   @@map("periods")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model PeriodLock {
-  id             String         @id @default(uuid()) @db.Uuid
-  organizationId String         @map("organization_id") @db.Uuid
-  periodId       String         @map("period_id") @db.Uuid
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  periodId       String           @map("period_id") @db.Uuid
   action         PeriodLockAction
   reason         String
-  actorId        String         @map("actor_id") @db.Uuid
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  period         Period         @relation(fields: [periodId], references: [id])
+  actorId        String           @map("actor_id") @db.Uuid
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  period         Period           @relation(fields: [periodId], references: [id])
 
   @@index([organizationId, periodId])
   @@map("period_locks")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model JournalEntry {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
-  periodId       String       @map("period_id") @db.Uuid
-  journalNumber  Int?         @map("journal_number")
-  entryDate      DateTime     @map("entry_date") @db.Date
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  periodId       String        @map("period_id") @db.Uuid
+  journalNumber  Int?          @map("journal_number")
+  entryDate      DateTime      @map("entry_date") @db.Date
   description    String
-  sourceModule   String       @map("source_module") @default("manual")
-  sourceId       String?      @map("source_id")
-  currency       String       @db.Char(3)
-  postedAt       DateTime?    @map("posted_at") @db.Timestamptz(6)
-  postedBy       String?      @map("posted_by") @db.Uuid
-  reversalOfId   String?      @map("reversal_of_id") @db.Uuid
-  reversedById   String?      @map("reversed_by_id") @db.Uuid
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
-
+  sourceModule   String        @default("manual") @map("source_module")
+  sourceId       String?       @map("source_id")
+  currency       String        @db.Char(3)
+  postedAt       DateTime?     @map("posted_at") @db.Timestamptz(6)
+  postedBy       String?       @map("posted_by") @db.Uuid
+  reversalOfId   String?       @map("reversal_of_id") @db.Uuid
+  reversedById   String?       @map("reversed_by_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  period         Period        @relation(fields: [periodId], references: [id])
   journalLines   JournalLine[]
-  period         Period       @relation(fields: [periodId], references: [id])
 
   @@unique([organizationId, periodId, journalNumber])
   @@index([organizationId, periodId])
   @@index([organizationId, postedAt])
   @@map("journal_entries")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model JournalLine {
-  id              String        @id @default(uuid()) @db.Uuid
-  organizationId  String        @map("organization_id") @db.Uuid
-  journalEntryId  String        @map("journal_entry_id") @db.Uuid
-  accountId       String        @map("account_id") @db.Uuid
-  lineNumber      Int           @map("line_number")
-  debit           Decimal       @default(0) @db.Decimal(18, 4)
-  credit          Decimal       @default(0) @db.Decimal(18, 4)
-  currency        String        @db.Char(3)
-  fxRate          Decimal       @default(1) @map("fx_rate") @db.Decimal(18, 8)
-  reportingAmount Decimal       @map("reporting_amount") @db.Decimal(18, 4)
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  journalEntryId  String       @map("journal_entry_id") @db.Uuid
+  accountId       String       @map("account_id") @db.Uuid
+  lineNumber      Int          @map("line_number")
+  debit           Decimal      @default(0) @db.Decimal(18, 4)
+  credit          Decimal      @default(0) @db.Decimal(18, 4)
+  currency        String       @db.Char(3)
+  fxRate          Decimal      @default(1) @map("fx_rate") @db.Decimal(18, 8)
+  reportingAmount Decimal      @map("reporting_amount") @db.Decimal(18, 4)
   memo            String?
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  journalEntry    JournalEntry  @relation(fields: [journalEntryId], references: [id])
-  account         Account       @relation(fields: [accountId], references: [id])
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  account         Account      @relation(fields: [accountId], references: [id])
+  journalEntry    JournalEntry @relation(fields: [journalEntryId], references: [id])
+  organization    Organization @relation(fields: [organizationId], references: [id])
 
   @@unique([journalEntryId, lineNumber])
   @@index([organizationId, accountId])
   @@map("journal_lines")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model JournalCounter {
   organizationId String       @map("organization_id") @db.Uuid
   periodId       String       @map("period_id") @db.Uuid
-  lastNumber     Int          @map("last_number") @default(0)
-  updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+  lastNumber     Int          @default(0) @map("last_number")
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@id([organizationId, periodId])
   @@map("journal_counters")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }
 
 model AuditLog {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  actorId        String   @map("actor_id") @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  actorId        String       @map("actor_id") @db.Uuid
   action         String
-  entityType     String   @map("entity_type")
-  entityId       String   @map("entity_id") @db.Uuid
+  entityType     String       @map("entity_type")
+  entityId       String       @map("entity_id") @db.Uuid
   before         Json?
   after          Json?
-  requestId      String?  @map("request_id")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  requestId      String?      @map("request_id")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, createdAt])
   @@index([organizationId, entityType, entityId])
   @@map("audit_logs")
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-}
-
-// ── Tenancy and identity (AUTH-TENANCY) ─────────────────────────────
-// Added so the ledger's organization_id can carry a real foreign key.
-// Closes B-20260911-02.
-
-enum MembershipRole {
-  VIEWER
-  BOOKKEEPER
-  APPROVER
-  ACCOUNTANT
-  ADMIN
-  OWNER
 }
 
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  slug      String   @unique
-  name      String
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
-
-  memberships Membership[]
-  accounts Account[]
-  accountingConfigs AccountingConfig[]
-  periods Period[]
-  periodLocks PeriodLock[]
-  journalEntries JournalEntry[]
-  journalLines JournalLine[]
-  journalCounters JournalCounter[]
-  auditLogs AuditLog[]
+  id                String            @id @default(uuid()) @db.Uuid
+  slug              String            @unique
+  name              String
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  accountingConfigs AccountingConfig?
+  accounts          Account[]
+  auditLogs         AuditLog[]
+  journalCounters   JournalCounter[]
+  journalEntries    JournalEntry[]
+  journalLines      JournalLine[]
+  memberships       Membership[]
+  periodLocks       PeriodLock[]
+  periods           Period[]
 
   @@map("organizations")
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model User {
-  id            String    @id @default(uuid()) @db.Uuid
-  email         String    @unique
+  id            String        @id @default(uuid()) @db.Uuid
+  email         String        @unique
   name          String?
-  passwordHash  String?   @map("password_hash")
-  emailVerified DateTime? @map("email_verified") @db.Timestamptz(6)
+  passwordHash  String?       @map("password_hash")
+  emailVerified DateTime?     @map("email_verified") @db.Timestamptz(6)
   image         String?
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
-
-  memberships  Membership[]
-  sessions     Session[]
-  authAccounts AuthAccount[]
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  authAccounts  AuthAccount[]
+  memberships   Membership[]
+  sessions      Session[]
 
   @@map("users")
 }
@@ -234,10 +195,9 @@ model Membership {
   organizationId String         @map("organization_id") @db.Uuid
   role           MembershipRole
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime       @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
-
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
   @@index([organizationId, role])
@@ -249,12 +209,8 @@ model Session {
   sessionToken String   @unique @map("session_token")
   userId       String   @map("user_id") @db.Uuid
   expires      DateTime @db.Timestamptz(6)
-  // Sliding renewal moves `expires` forward on use. `createdAt` is the anchor
-  // for the ABSOLUTE ceiling, which renewal may never cross — without it a
-  // session that is merely touched often enough would live for ever.
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expires])
@@ -276,8 +232,7 @@ model AuthAccount {
   scope             String?
   idToken           String? @map("id_token")
   sessionState      String? @map("session_state")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -292,11 +247,6 @@ model VerificationToken {
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
-
-// ── Rate limiting and security events (AUTH-TENANCY) ────────────────
-// Strategy decided by independent review: Postgres-backed fixed window,
-// limited on both source address and account, progressive delay rather
-// than lockout, failing open. See B-20260911-06.
 
 /// One fixed-window counter. `key` encodes action, dimension and value,
 /// e.g. "signin:ip:203.0.113.7" or "signin:account:a@b.test".
@@ -324,4 +274,32 @@ model SecurityEvent {
   @@index([eventType, createdAt])
   @@index([email, createdAt])
   @@map("security_events")
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum PeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
+}
+
+enum PeriodLockAction {
+  LOCK
+  UNLOCK
+}
+
+enum MembershipRole {
+  VIEWER
+  BOOKKEEPER
+  APPROVER
+  ACCOUNTANT
+  ADMIN
+  OWNER
 }

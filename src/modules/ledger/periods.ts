@@ -46,7 +46,7 @@ export async function createPeriod(
       return period;
     },
     {},
-    { organizationId: scope.organizationId },
+    { organizationId: scope.organizationId, userId: scope.userId },
   );
 }
 
@@ -99,7 +99,7 @@ export async function closePeriod(
       return period;
     },
     {},
-    { organizationId: scope.organizationId },
+    { organizationId: scope.organizationId, userId: scope.userId },
   );
 }
 
@@ -140,7 +140,7 @@ export async function lockPeriod(
       return period;
     },
     {},
-    { organizationId: scope.organizationId },
+    { organizationId: scope.organizationId, userId: scope.userId },
   );
 }
 
@@ -179,7 +179,7 @@ export async function unlockPeriod(
       return period;
     },
     {},
-    { organizationId: scope.organizationId },
+    { organizationId: scope.organizationId, userId: scope.userId },
   );
 }
 

@@ -47,7 +47,7 @@ export async function createAccount(
       return account;
     },
     {},
-    { organizationId: scope.organizationId },
+    { organizationId: scope.organizationId, userId: scope.userId },
   );
 }
 

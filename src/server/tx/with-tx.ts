@@ -21,6 +21,7 @@ export interface WithTxOptions {
  */
 export interface WithTxContext {
   readonly organizationId: string;
+  readonly userId?: string;
 }
 
 export const RETRYABLE_SQLSTATES = ["40001", "40P01", "55P03"] as const;
@@ -135,6 +136,11 @@ export async function withTxUsing<T>(
         if (ctx?.organizationId) {
           await tx.$executeRawUnsafe(
             `SET LOCAL app.current_organization = '${ctx.organizationId}'`,
+          );
+        }
+        if (ctx?.userId) {
+          await tx.$executeRawUnsafe(
+            `SET LOCAL app.current_user_id = '${ctx.userId}'`,
           );
         }
         return await fn(tx);

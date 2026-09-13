@@ -322,7 +322,7 @@ export async function postJournalEntry(
       return posted;
     },
     {},
-    { organizationId: scope.organizationId },
+    { organizationId: scope.organizationId, userId: scope.userId },
   );
 }
 
@@ -445,7 +445,7 @@ export async function reverseJournalEntry(
       return posted;
     },
     {},
-    { organizationId: scope.organizationId },
+    { organizationId: scope.organizationId, userId: scope.userId },
   );
 }
 

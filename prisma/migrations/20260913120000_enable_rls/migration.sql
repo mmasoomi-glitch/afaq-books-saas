@@ -20,10 +20,17 @@
 -- NOT be marked IMMUTABLE — RLS constant-folds IMMUTABLE function calls
 -- at plan time, which would bake the setting value into the policy at
 -- creation rather than evaluation time.
--- ------------------------------------------------------------------
+--
+-- When the setting is empty or missing, returns NULL so the policy allows
+-- no rows (NOT blocks all DML).  If FORCE ROW LEVEL SECURITY is active on
+-- the table and no policy allows the row, DML is rejected.  For SELECT
+-- without a setting, the policy just matches zero rows.
 CREATE OR REPLACE FUNCTION app.current_org_id()
 RETURNS uuid AS $$
-  SELECT current_setting('app.current_organization')::uuid;
+  SELECT CASE
+    WHEN current_setting('app.current_organization', true) = '' THEN NULL
+    ELSE current_setting('app.current_organization', true)::uuid
+  END;
 $$ LANGUAGE sql STABLE;
 
 -- ------------------------------------------------------------------

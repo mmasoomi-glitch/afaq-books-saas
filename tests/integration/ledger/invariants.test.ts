@@ -25,8 +25,30 @@ async function query<T extends QueryResultRow>(
 ): Promise<T[]> {
   const client = await pool.connect();
   try {
+    // Temporarily disable RLS for the test helper so it can insert raw
+    // data to test database constraints without needing org-scoped setup.
+    await client.query("ALTER TABLE periods NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE accounts NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE journal_lines NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE journal_entries NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE journal_counters NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE audit_logs NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE accounting_configs NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE period_locks NO FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE memberships NO FORCE ROW LEVEL SECURITY");
     const res = await client.query(sql, params);
-    return res.rows as T[];
+    const rows = res.rows as T[];
+    // Restore FORCE ROW LEVEL SECURITY
+    await client.query("ALTER TABLE periods FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE accounts FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE journal_lines FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE journal_entries FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE journal_counters FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE accounting_configs FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE period_locks FORCE ROW LEVEL SECURITY");
+    await client.query("ALTER TABLE memberships FORCE ROW LEVEL SECURITY");
+    return rows;
   } finally {
     client.release();
   }

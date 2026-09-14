@@ -18,7 +18,10 @@ export function syncHistoryHandler() {
       return error(404, "NOT_FOUND", "not found");
     }
 
-    const connectorId = match[1];
+    const connectorId = match[1] ?? "";
+    if (!connectorId) {
+      return error(400, "BAD_REQUEST", "missing connector id");
+    }
 
     // Parse optional query params from the request path
     const url = new URL(path, "http://localhost");

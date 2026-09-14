@@ -5,6 +5,7 @@ import type { HttpRequest, HttpResponse } from "../../../server/http/types";
 import { json, error } from "../../../server/http/types";
 import { ConnectorRegistry } from "../registry";
 import { AuthManager } from "../auth-manager";
+import { ConnectorNotFoundError } from "../errors";
 
 let registry: ConnectorRegistry | null = null;
 let authManager: AuthManager | null = null;
@@ -34,7 +35,10 @@ export function configureHandler() {
       return error(404, "NOT_FOUND", "not found");
     }
 
-    const connectorId = match[1];
+    const connectorId = match[1] ?? "";
+    if (!connectorId) {
+      return error(400, "BAD_REQUEST", "missing connector id");
+    }
     const connector = registry.getById(connectorId);
     if (connector === undefined) {
       throw new ConnectorNotFoundError(

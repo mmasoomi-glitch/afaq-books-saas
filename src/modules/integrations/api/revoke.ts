@@ -35,7 +35,10 @@ export function revokeHandler() {
       return error(404, "NOT_FOUND", "not found");
     }
 
-    const connectorId = match[1];
+    const connectorId = match[1] ?? "";
+    if (!connectorId) {
+      return error(400, "BAD_REQUEST", "missing connector id");
+    }
     const connector = registry.getById(connectorId);
     if (connector === undefined) {
       throw new ConnectorNotFoundError(

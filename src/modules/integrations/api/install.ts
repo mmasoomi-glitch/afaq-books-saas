@@ -3,10 +3,10 @@ import { adapterConfig } from "../../../server/http/config";
 import { withOrgScope } from "../../../server/http/handlers/scoped";
 import type { HttpRequest, HttpResponse } from "../../../server/http/types";
 import { readString } from "../../../server/http/handlers/scoped";
-import { ConnectorRegistry } from "../../registry";
-import { AuthManager } from "../../auth-manager";
+import { ConnectorRegistry } from "../registry";
+import { AuthManager } from "../auth-manager";
 import { json, error } from "../../../server/http/types";
-import { ConnectorNotFoundError } from "../../errors";
+import { ConnectorNotFoundError } from "../errors";
 
 let registry: ConnectorRegistry | null = null;
 let authManager: AuthManager | null = null;
@@ -36,7 +36,10 @@ export function installHandler() {
       return error(404, "NOT_FOUND", "not found");
     }
 
-    const connectorId = match[1];
+    const connectorId = match[1] ?? "";
+    if (!connectorId) {
+      return error(400, "BAD_REQUEST", "missing connector id");
+    }
     const connector = registry.getById(connectorId);
     if (connector === undefined) {
       throw new ConnectorNotFoundError(

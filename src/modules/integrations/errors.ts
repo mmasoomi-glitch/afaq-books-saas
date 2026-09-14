@@ -78,9 +78,9 @@ export class SyncFailedError extends IntegrationError {
 
 /** An external API returned an error (4xx/5xx). */
 export class ExternalApiError extends IntegrationError {
-  readonly statusCode?: number | undefined;
+  readonly statusCode?: number;
 
-  constructor(message: string, statusCode?: number): void {
+  constructor(message: string, statusCode?: number) {
     super(message, "INTEGRATION_EXTERNAL_API");
     this.name = "ExternalApiError";
     if (statusCode !== undefined) {

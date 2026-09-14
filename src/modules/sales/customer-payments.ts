@@ -118,7 +118,7 @@ export async function createCustomerPayment(
       },
     });
 
-    return toSummary(payment, []);
+    return toSummary(payment);
   });
 }
 
@@ -439,12 +439,12 @@ function toSummary(
     memo: string | null;
     createdAt: Date;
     updatedAt: Date;
+    paymentAllocations?: Array<{
+      invoiceId: string;
+      amount: Prisma.Decimal;
+      invoice?: { invoiceNumber: number | null };
+    }>;
   },
-  allocations: Array<{
-    invoiceId: string;
-    invoiceNumber: number | null;
-    amount: Prisma.Decimal;
-  }>,
 ): PaymentSummary {
   return {
     id: payment.id,
@@ -458,9 +458,9 @@ function toSummary(
     method: payment.method,
     reference: payment.reference,
     memo: payment.memo,
-    allocations: allocations.map((a) => ({
+    allocations: (payment.paymentAllocations ?? []).map((a) => ({
       invoiceId: a.invoiceId,
-      invoiceNumber: a.invoiceNumber,
+      invoiceNumber: a.invoice?.invoiceNumber ?? null,
       amount: a.amount.toString(),
     })),
     createdAt: payment.createdAt,
@@ -497,7 +497,7 @@ export async function listPayments(
     where,
     orderBy: { paymentDate: "desc" },
     include: {
-      allocations: {
+      paymentAllocations: {
         include: {
           invoice: { select: { invoiceNumber: true } },
         },

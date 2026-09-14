@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import type { PaymentSummary } from "../../../../../modules/sales/customer-payments";
-import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
-import { guardedListPayments } from "../../../../../modules/sales/guarded";
+import type { PaymentSummary } from "../../../../../../modules/sales/customer-payments";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
+import { guardedListPayments } from "../../../../../../modules/sales/guarded";
 
 export const metadata: Metadata = {
   title: "Payments · Naqdengi",

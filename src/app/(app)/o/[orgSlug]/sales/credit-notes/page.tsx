@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
-import { guardedListCreditNotes } from "../../../../../modules/sales/guarded";
+import type { CreditNoteSummary } from "../../../../../../modules/sales/credit-notes";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
+import { guardedListCreditNotes } from "../../../../../../modules/sales/guarded";
 
 export const metadata: Metadata = {
   title: "Credit notes · Naqdengi",
@@ -56,10 +57,10 @@ export default async function CreditNotesPage({ params }: PageProps) {
             </tr>
           </thead>
           <tbody>
-            {notes.map((n) => (
+            {notes.map((n: CreditNoteSummary) => (
               <tr key={n.id}>
                 <td>{n.creditNoteNumber ?? "—"}</td>
-                <td>{n.customerName ?? "—"}</td>
+                <td>{(n as unknown as { customerName?: string }).customerName ?? "—"}</td>
                 <td>{n.issueDate.toISOString().slice(0, 10)}</td>
                 <td>{Number(n.totalAmount).toFixed(2)}</td>
                 <td>{Number(n.remainingAmount).toFixed(2)}</td>

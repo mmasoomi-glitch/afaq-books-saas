@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import type { InvoiceSummary } from "../../../../../modules/sales/invoices";
-import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
-import { guardedListInvoices } from "../../../../../modules/sales/guarded";
+import type { InvoiceSummary } from "../../../../../../modules/sales/invoices";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
+import { guardedListInvoices } from "../../../../../../modules/sales/guarded";
 import NewInvoice from "./NewInvoice";
 
 export const metadata: Metadata = {

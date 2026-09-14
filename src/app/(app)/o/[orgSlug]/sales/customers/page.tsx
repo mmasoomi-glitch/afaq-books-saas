@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import type { CustomerSummary } from "../../../../../modules/sales/customers";
-import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
-import { guardedListCustomers } from "../../../../../modules/sales/guarded";
-import { can } from "../../../../../server/auth/permissions";
+import type { CustomerSummary } from "../../../../../../modules/sales/customers";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
+import { guardedListCustomers } from "../../../../../../modules/sales/guarded";
+import { can } from "../../../../../../server/auth/permissions";
 import NewCustomer from "./NewCustomer";
 
 export const metadata: Metadata = {

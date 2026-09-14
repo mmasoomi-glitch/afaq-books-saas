@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import type { AgingBucket, CustomerAging } from "../../../../../modules/sales/ar-aging";
-import { cachedPageScope } from "../../../../../server/next/page-scope-cache";
-import { guardedArAging } from "../../../../../modules/sales/guarded";
+import type { AgingBucket, CustomerAging } from "../../../../../../modules/sales/ar-aging";
+import { cachedPageScope } from "../../../../../../server/next/page-scope-cache";
+import { guardedArAging } from "../../../../../../modules/sales/guarded";
 
 export const metadata: Metadata = {
   title: "AR aging · Naqdengi",

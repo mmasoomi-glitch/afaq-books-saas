@@ -99,6 +99,7 @@ const BOOKKEEPER_ACTIONS: readonly Action[] = [
   "sales.invoice.create",
   "sales.payment.create",
   "sales.payment.read",
+  "sales.report.read",
 ];
 
 const APPROVER_ACTIONS: readonly Action[] = [

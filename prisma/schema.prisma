@@ -432,11 +432,11 @@ model Invoice {
   currency       String            @db.Char(3)
   fxRate         Decimal           @default(1) @map("fx_rate") @db.Decimal(18, 8)
   status         SalesInvoiceStatus @default(DRAFT)
-  subtotal       Decimal           @default(0) @db.Decimal(18, 4)
-  taxAmount      Decimal           @default(0) @db.Decimal(18, 4)
-  totalAmount    Decimal           @default(0) @db.Decimal(18, 4)
-  amountPaid     Decimal           @default(0) @db.Decimal(18, 4)
-  amountDue      Decimal           @default(0) @db.Decimal(18, 4)
+  subtotal       Decimal           @default(0) @map("subtotal") @db.Decimal(18, 4)
+  taxAmount      Decimal           @default(0) @map("tax_amount") @db.Decimal(18, 4)
+  totalAmount    Decimal           @default(0) @map("total_amount") @db.Decimal(18, 4)
+  amountPaid     Decimal           @default(0) @map("amount_paid") @db.Decimal(18, 4)
+  amountDue      Decimal           @default(0) @map("amount_due") @db.Decimal(18, 4)
   memo           String?
   notes          String?
   createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -462,11 +462,11 @@ model InvoiceLine {
   lineNumber    Int      @map("line_number")
   description   String
   accountId     String   @map("account_id") @db.Uuid
-  quantity      Decimal  @default(0) @db.Decimal(18, 4)
-  unitPrice     Decimal  @default(0) @db.Decimal(18, 4)
-  taxRate       Decimal  @default(0) @db.Decimal(18, 4)
-  taxAmount     Decimal  @default(0) @db.Decimal(18, 4)
-  lineTotal     Decimal  @default(0) @db.Decimal(18, 4)
+  quantity      Decimal  @default(0) @map("quantity") @db.Decimal(18, 4)
+  unitPrice     Decimal  @default(0) @map("unit_price") @db.Decimal(18, 4)
+  taxRate       Decimal  @default(0) @map("tax_rate") @db.Decimal(18, 4)
+  taxAmount     Decimal  @default(0) @map("tax_amount") @db.Decimal(18, 4)
+  lineTotal     Decimal  @default(0) @map("line_total") @db.Decimal(18, 4)
 
   invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   account       Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)

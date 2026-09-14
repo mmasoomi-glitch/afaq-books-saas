@@ -117,8 +117,8 @@ function ledgerFixture(
       data: {
         organizationId: scope.organizationId,
         name: "P1",
-        startDate: "2026-01-01",
-        endDate: "2026-01-31",
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2026-01-31"),
       },
     }),
     prisma.account.create({
@@ -135,7 +135,7 @@ function ledgerFixture(
         organizationId: scope.organizationId,
         code: "4000",
         name: "Revenue",
-        type: "REVENUE",
+        type: "INCOME",
         currency: "USD",
       },
     }),

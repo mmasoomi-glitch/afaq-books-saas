@@ -1,10 +1,14 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
-import { withTx } from "../../server/tx/with-tx";
-import { NotFoundError } from "../ledger/errors";
-import type { LedgerScope } from "../ledger/scope";
-import { BankAccountNotFoundError } from "./bank-accounts";
+// NOTE: prisma, TxClient, withTx, NotFoundError, LedgerScope, and
+// BankAccountNotFoundError are unused because all service functions are
+// commented out (bankAccount/bankTransaction/bankFeedRule models missing
+// from schema.prisma). Kept for when migration is applied.
+// import { prisma } from "../../server/db/client";
+// import type { TxClient } from "../../server/db/client";
+// import { withTx } from "../../server/tx/with-tx";
+// import { NotFoundError } from "../ledger/errors";
+// import type { LedgerScope } from "../ledger/scope";
+// import { BankAccountNotFoundError } from "./bank-accounts";
 
 // ── Types ───────────────────────────────────────────────────────────────
 

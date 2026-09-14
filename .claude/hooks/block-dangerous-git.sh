@@ -81,20 +81,89 @@ if [[ "$cmd_norm" == *"--no-verify"* ]]; then
   deny "use of --no-verify is forbidden (hook/signing bypass)"
 fi
 
-# 3b. Force-push variants
-if [[ "$cmd_norm" =~ git[[:space:]]+push.*(--force|--force-with-lease|[[:space:]]-f[[:space:]]|[[:space:]]-f$) ]]; then
-  deny "force pushes are forbidden on this repository"
-fi
+# 3b/3c. Force pushes, and pushes targeting main or develop
+#     The push is PARSED, one shell segment at a time, rather than matched as
+#     a substring of the whole line (B-20260911-09). The old regex denied
+#     `git push origin feat && gh pr create --base develop` because "develop"
+#     appeared in the second command, and let `git push origin +feat` through
+#     because a leading `+` forces without saying --force.
+#
+#     Each segment: find `git`, skip git's global options, require the
+#     subcommand `push`, then read push's own arguments. The first positional
+#     is the remote, the rest are refspecs. A refspec's destination is what
+#     follows its last `:`, or the refspec itself.
+segments="$(printf '%s' "$cmd_lc" | sed 's/[[:space:]]*\(&&\|||\|;\||\)[[:space:]]*/\n/g')"
+while IFS= read -r seg; do
+  [[ -z "$seg" ]] && continue
+  read -ra words <<< "$seg"
+  [[ ${#words[@]} -eq 0 ]] && continue
 
-# 3c. Push targeting main or develop
-#     Matches: `git push <remote> main`, `... develop`, `... main:main`,
-#     `... HEAD:main`, `... HEAD:refs/heads/main`, etc.
-if [[ "$cmd_norm" =~ git[[:space:]]+push ]]; then
-  # Look for main/develop as a ref on the right-hand side of a push.
-  if [[ "$cmd_norm" =~ (:main([[:space:]]|$)|:develop([[:space:]]|$)|[[:space:]]main([[:space:]]|$)|[[:space:]]develop([[:space:]]|$)|refs/heads/main|refs/heads/develop) ]]; then
-    deny "pushing to main or develop is forbidden; open a PR instead"
+  # Strip quoting and substitution punctuation from both ends of each word,
+  # so `bash -c 'git push --force x'` and `$(git push ...)` still parse.
+  for i in "${!words[@]}"; do
+    w="${words[$i]}"
+    while [[ "$w" =~ ^[\"\'\(\$\`] ]]; do w="${w:1}"; done
+    while [[ "$w" =~ [\"\'\)\`]$ ]]; do w="${w%?}"; done
+    words[$i]="$w"
+  done
+
+  git_idx=-1
+  for i in "${!words[@]}"; do
+    if [[ "${words[$i]}" == "git" || "${words[$i]}" == */git ]]; then
+      git_idx=$i
+      break
+    fi
+  done
+  [[ $git_idx -eq -1 ]] && continue
+
+  sub_idx=-1
+  for (( i = git_idx + 1; i < ${#words[@]}; i++ )); do
+    case "${words[$i]}" in
+      -C|-c|--git-dir|--work-tree|--namespace) (( i++ )) || true ;;
+      -*) ;;
+      *) sub_idx=$i; break ;;
+    esac
+  done
+  [[ $sub_idx -eq -1 || "${words[$sub_idx]}" != "push" ]] && continue
+
+  remote=""
+  refspecs=()
+  skip_next=false
+  for (( i = sub_idx + 1; i < ${#words[@]}; i++ )); do
+    arg="${words[$i]}"
+    if $skip_next; then skip_next=false; continue; fi
+    case "$arg" in
+      -o|--push-option|--repo|--receive-pack|--exec) skip_next=true ;;
+      --force|--force=*|--force-with-lease|--force-with-lease=*|--force-if-includes)
+        deny "force pushes are forbidden on this repository" ;;
+      --all|--mirror)
+        deny "git push --all/--mirror would push main/develop; push one named branch" ;;
+      --*) ;;
+      -*)
+        # Combined short flags, e.g. -uf
+        [[ "$arg" == *f* ]] && deny "force pushes are forbidden on this repository" ;;
+      *)
+        if [[ -z "$remote" ]]; then remote="$arg"; else refspecs+=("$arg"); fi ;;
+    esac
+  done
+
+  if [[ ${#refspecs[@]} -eq 0 ]]; then
+    cur="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [[ "$cur" == "main" || "$cur" == "develop" ]]; then
+      deny "bare git push while on $cur is forbidden; name the branch explicitly"
+    fi
+    continue
   fi
-fi
+
+  for ref in "${refspecs[@]}"; do
+    [[ "$ref" == +* ]] && deny "a +refspec is a force push and is forbidden"
+    dst="${ref##*:}"
+    dst="${dst#refs/heads/}"
+    if [[ "$dst" == "main" || "$dst" == "develop" ]]; then
+      deny "pushing to main or develop is forbidden; open a PR instead"
+    fi
+  done
+done <<< "$segments"
 
 # 3d. Destructive resets
 if [[ "$cmd_norm" =~ git[[:space:]]+reset[[:space:]]+--hard ]]; then
@@ -127,7 +196,14 @@ fi
 #     We can't perfectly know "another agent's branch" from text alone,
 #     so the rule is strict: refuse `git branch -D` outright. Agents may
 #     delete a branch they own via -d (safe delete) or via GitHub UI.
-if [[ "$cmd_norm" =~ git[[:space:]]+branch[[:space:]]+(-D|--delete[[:space:]]+--force) ]]; then
+#
+#     Matched on the CASE-PRESERVED command. Every other rule reads the
+#     lowercased copy, in which `-D` cannot exist, so this rule used to be
+#     dead code that let `git branch -D x` straight through.
+cmd_cs="$(printf '%s' "$command_str" | tr -s '[:space:]' ' ')"
+if [[ "$cmd_cs" =~ git[[:space:]]+branch[[:space:]] ]] &&
+   [[ "$cmd_cs" =~ [[:space:]](-[a-zA-Z]*D[a-zA-Z]*|-[a-zA-Z]*(d[a-zA-Z]*f|f[a-zA-Z]*d)[a-zA-Z]*)([[:space:]]|$) ||
+      ( "$cmd_cs" =~ [[:space:]](--delete|-d)([[:space:]]|$) && "$cmd_cs" =~ [[:space:]](--force|-f)([[:space:]]|$) ) ]]; then
   deny "force branch deletion (-D) is forbidden from agents; use -d or coordinate with GitKeeper"
 fi
 

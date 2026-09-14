@@ -71,6 +71,57 @@ jobs:
                 | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
           echo "$out"
           echo "$out" | grep -q 'exit=0'
+      # B-20260911-09: the push target is parsed per shell segment. Each case
+      # below was answered WRONGLY by the substring-matching guard it replaced.
+      - name: block-dangerous-git allows feature push followed by a PR against develop
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push -u origin feat-x && gh pr create --base develop"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=0'
+      - name: block-dangerous-git allows a push followed by an unrelated rm -f
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin feat-x && rm -f /tmp/y"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=0'
+      - name: block-dangerous-git rejects a +refspec force push
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin +feat-x"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: block-dangerous-git rejects push --all
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --all origin"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: block-dangerous-git rejects push to main through git -C
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git -C /tmp/repo push origin HEAD:main"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: block-dangerous-git rejects branch -D (case-sensitive flag)
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git branch -D agent/x"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=2'
+      - name: block-dangerous-git allows safe branch -d
+        run: |
+          set -e
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git branch -d agent/x"}}' \
+                | bash .claude/hooks/block-dangerous-git.sh; echo "exit=$?")
+          echo "$out"
+          echo "$out" | grep -q 'exit=0'
       - name: check-agent-ownership blocks cross-owner write
         run: |
           set -e

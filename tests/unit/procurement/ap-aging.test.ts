@@ -1,11 +1,10 @@
-import { expect, test, describe } from "vitest";
+import { expect, test } from "vitest";
 import { prisma } from "../../../src/server/db/client";
 import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 import { apAging } from "../../../src/modules/procurement/ap-aging";
 import { createSupplier } from "../../../src/modules/procurement/suppliers";
 import { createBill } from "../../../src/modules/procurement/bills";
 import { approveBill } from "../../../src/modules/procurement/bills";
-import { createAccount } from "../../../src/modules/ledger/accounts";
 import { createPeriod } from "../../../src/modules/ledger/periods";
 
 const scope = unsafeCreateLedgerScope("test-user-1", "test-org-1");

@@ -73,7 +73,7 @@ export async function arAging(
   }
 
   const customers: CustomerAging[] = [];
-  let grandTotal: Record<string, Prisma.Decimal> = {};
+  const grandTotal: Record<string, Prisma.Decimal> = {};
 
   for (const [cid, data] of customerMap) {
     // Sort buckets.

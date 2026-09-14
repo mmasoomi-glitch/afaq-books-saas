@@ -60,7 +60,7 @@ export async function revokeRoute(
   request: Request,
   ctx: { params: Promise<{ orgSlug: string; connectorId: string }> },
 ): Promise<Response> {
-  const { orgSlug, connectorId } = await ctx.params;
+  const { orgSlug, connectorId: _connectorId } = await ctx.params;
   return toRouteHandler(
     withOrgScope(orgSlug, revokeHandler()),
     adapterConfig(),

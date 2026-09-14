@@ -1,15 +1,8 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
+import { prisma, type TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
-import { NotFoundError, UnbalancedEntryError } from "../ledger/errors";
-import { postJournalEntry } from "../ledger/posting";
-import { assertPeriodOpen } from "../ledger/periods";
-import {
-  type CustomerSummary,
-  listCustomers,
-} from "./customers";
+import { NotFoundError } from "../ledger/errors";
 import type { InvoiceStatus } from "./errors";
 
 export type { InvoiceStatus } from "./errors";
@@ -63,38 +56,6 @@ export interface InvoiceFilters {
   customerId?: string;
 }
 
-interface InvoiceWithLines {
-  id: string;
-  organizationId: string;
-  customerId: string;
-  invoiceNumber: number | null;
-  issueDate: Date;
-  dueDate: Date;
-  currency: string;
-  exchangeRate: Prisma.Decimal;
-  status: InvoiceStatus;
-  subtotal: Prisma.Decimal;
-  taxAmount: Prisma.Decimal;
-  totalAmount: Prisma.Decimal;
-  amountPaid: Prisma.Decimal;
-  amountDue: Prisma.Decimal;
-  memo: string | null;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  invoiceLines: {
-    id: string;
-    lineNumber: number;
-    description: string;
-    accountId: string;
-    quantity: Prisma.Decimal;
-    unitPrice: Prisma.Decimal;
-    taxRate: Prisma.Decimal;
-    taxAmount: Prisma.Decimal;
-    lineTotal: Prisma.Decimal;
-  }[];
-}
-
 const ZERO = new Prisma.Decimal(0);
 
 /** Calculate subtotal, taxAmount and total from lines. */
@@ -128,15 +89,6 @@ async function nextInvoiceNumber(
   organizationId: string,
 ): Promise<number> {
   // Upsert a counter row (id = organizationId), increment, return next.
-  const result = await tx.$executeRaw`
-    INSERT INTO sales_invoice_counters (organization_id, last_number)
-    VALUES (${organizationId}::uuid, 1)
-    ON CONFLICT (organization_id) DO UPDATE
-      SET last_number = sales_invoice_counters.last_number + 1
-    RETURNING last_number`;
-
-  // $executeRaw returns the number of rows affected, not the value.
-  // We need a different approach — use a SELECT+UPDATE.
   const rows = await tx.$queryRaw<
     Array<{ next_number: number }>
   >`

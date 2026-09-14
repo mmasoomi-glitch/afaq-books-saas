@@ -330,7 +330,7 @@ export async function applyCreditNote(
 
     await tx.invoice.update({
       where: { id: invoiceId },
-      data: { amountPaid: newPaid, amountDue: newDue, status: invNewStatus as any },
+      data: { amountPaid: newPaid, amountDue: newDue, status: invNewStatus as Prisma.EnumInvoiceStatus },
     });
 
     await tx.auditLog.create({

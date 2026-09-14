@@ -1,6 +1,4 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
 
 const ZERO = new Prisma.Decimal(0);
 

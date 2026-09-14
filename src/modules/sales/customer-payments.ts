@@ -1,9 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
-import { NotFoundError, UnbalancedEntryError } from "../ledger/errors";
+import { NotFoundError } from "../ledger/errors";
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -368,7 +367,7 @@ export async function unapplyPayment(
     }
 
     // Reverse the invoice amounts.
-    const paymentAmount = new Prisma.Decimal(alloc.customerPayment.amount);
+    void new Prisma.Decimal(alloc.customerPayment.amount);
     const newPaid = new Prisma.Decimal(alloc.invoice.amountPaid).sub(alloc.amount);
     const newDue = new Prisma.Decimal(alloc.invoice.totalAmount).sub(newPaid);
 
@@ -386,7 +385,7 @@ export async function unapplyPayment(
       data: {
         amountPaid: newPaid,
         amountDue: newDue,
-        status: newStatus as any,
+        status: newStatus as Prisma.EnumInvoiceStatus,
       },
     });
 

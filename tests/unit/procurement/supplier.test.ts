@@ -1,4 +1,4 @@
-import { expect, test, describe } from "vitest";
+import { expect, test } from "vitest";
 import { prisma } from "../../../src/server/db/client";
 import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 import {

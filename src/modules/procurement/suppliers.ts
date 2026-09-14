@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { Supplier } from "@prisma/client";
 import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
@@ -33,12 +32,6 @@ export interface SupplierFilter {
   isActive?: boolean;
   currency?: string;
   search?: string;
-}
-
-const ZERO = new Prisma.Decimal(0);
-
-function dec(value: Prisma.Decimal | string | undefined): Prisma.Decimal {
-  return value === undefined ? ZERO : new Prisma.Decimal(value);
 }
 
 export async function createSupplier(

@@ -1,5 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { prisma } from "../../../src/server/db/client";
+import { beforeEach, describe, expect, it } from "vitest";
 import { OrgScope } from "../../../src/server/auth/scope";
 import { setupTestOrg, type TestOrg } from "../../../tests/setup";
 import {
@@ -9,18 +8,17 @@ import {
   updateBankAccount,
   deactivateBankAccount,
   getBankAccountSummary,
-  setupOpeningBalance,
   BankAccountNotFoundError,
 } from "../../../src/modules/banking/bank-accounts";
 import type { BankAccountSummary, CreateBankAccountInput, UpdateBankAccountInput } from "../../../src/modules/banking/bank-accounts";
 
 let org: TestOrg;
-let scope: OrgScope;
+let _scope: OrgScope;
 let ledgerScope: { organizationId: string; userId: string };
 
 beforeEach(async () => {
   org = await setupTestOrg();
-  scope = {
+  _scope = {
     userId: org.ownerId,
     organizationId: org.id,
     role: "owner",

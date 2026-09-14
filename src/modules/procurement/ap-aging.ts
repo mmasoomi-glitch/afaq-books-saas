@@ -1,5 +1,4 @@
 import { Prisma } from "@prisma/client";
-import type { Bill } from "@prisma/client";
 import { prisma } from "../../server/db/client";
 import type { LedgerScope } from "../ledger/scope";
 

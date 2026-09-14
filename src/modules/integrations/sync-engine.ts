@@ -116,13 +116,13 @@ export class SyncEngine {
     cursor?: string | null,
   ): Promise<{ runId: string; success: boolean }> {
     let retryCount = 0;
-    let lastError: Error | undefined;
+    let _lastError: Error | undefined;
 
     while (retryCount <= MAX_RETRIES) {
       try {
         return await this._doIncrementalSync(connector, direction, cursor);
       } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
+        _lastError = err instanceof Error ? err : new Error(String(err));
 
         if (retryCount >= MAX_RETRIES) {
           // Give up — dead-letter this run
@@ -175,7 +175,7 @@ export class SyncEngine {
         }));
 
         // Check for duplicates (upsert pattern)
-        for (const key of idempotencyKeys) {
+        for (const _key of idempotencyKeys) {
           await tx.connectorCredential.upsert({
             where: {
               // Placeholder: real implementation would use dedicated idempotency table
@@ -253,12 +253,10 @@ export class SyncEngine {
     direction: SyncDirection,
     intervalMs: number,
   ): { cancel: () => void } {
-    const interval = setInterval(async () => {
-      try {
-        await this.incrementalSync(connector, direction);
-      } catch {
+    const interval = setInterval(() => {
+      this.incrementalSync(connector, direction).catch(() => {
         // Logged by the sync engine; don't crash the poller
-      }
+      });
     }, intervalMs);
 
     // Prevent the interval from keeping the process alive
@@ -299,7 +297,7 @@ export class SyncEngine {
 
     const eventId = crypto.randomUUID();
 
-    await this.eventBus.publish({
+    this.eventBus.publish({
       eventType: event.eventType,
       payload: event.data,
       tenantId: "placeholder",

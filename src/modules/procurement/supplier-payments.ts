@@ -1,7 +1,5 @@
 import { Prisma } from "@prisma/client";
 import type { SupplierPayment, BillPaymentAllocation } from "@prisma/client";
-import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
@@ -64,7 +62,7 @@ export async function createSupplierPayment(
         amount: dec(input.amount),
         currency: input.currency ?? "USD",
         exchangeRate: input.exchangeRate !== undefined ? dec(input.exchangeRate) : new Prisma.Decimal(1),
-        method: input.method as any,
+        method: input.method as Prisma.EnumSupplierPaymentMethod,
         reference: input.reference ?? null,
         memo: input.memo ?? null,
       },

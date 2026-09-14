@@ -1,5 +1,4 @@
 import {
-  type ConnectorManifest,
   type ConnectorRegistration,
   type Category,
 } from "./schema";

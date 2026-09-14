@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
-import type { PurchaseOrder, PurchaseOrderLine } from "@prisma/client";
+import type { PurchaseOrder } from "@prisma/client";
 import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
@@ -141,7 +140,7 @@ export async function listPurchaseOrders(
 ): Promise<PurchaseOrder[]> {
   const where: Prisma.PurchaseOrderWhereInput = {
     organizationId: scope.organizationId,
-    ...(filters.status !== undefined ? { status: filters.status as any } : {}),
+    ...(filters.status !== undefined ? { status: filters.status as Prisma.EnumPurchaseOrderStatus | Prisma.EnumPurchaseOrderStatus[] } : {}),
     ...(filters.supplierId !== undefined ? { supplierId: filters.supplierId } : {}),
   };
 
@@ -250,7 +249,7 @@ export async function receivePurchaseOrder(
       const currency = po.currency;
 
       // Build bill lines from PO lines
-      const billLines = po.poLines.map((poLine, index) => ({
+      const billLines = po.poLines.map((poLine) => ({
         lineNumber: poLine.lineNumber,
         description: poLine.description,
         accountId: "", // Would need GL account mapping — default to empty
@@ -286,7 +285,7 @@ export async function receivePurchaseOrder(
           status: "DRAFT",
           memo: `Auto-generated from PO ${po.poNumber ?? po.id}`,
           billLines: {
-            create: billLines.map((l, idx) => ({
+            create: billLines.map((l) => ({
               lineNumber: l.lineNumber,
               description: l.description,
               accountId: l.accountId,

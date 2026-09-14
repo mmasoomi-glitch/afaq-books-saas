@@ -3,23 +3,21 @@ import { adapterConfig } from "../../../../server/http/config";
 import { withOrgScope } from "../../../../server/http/handlers/scoped";
 import type { HttpRequest, HttpResponse } from "../../../../server/http/types";
 import { ConnectorRegistry } from "../registry";
+import { ConnectorNotFoundError } from "../errors";
 import { json, error } from "../../../../server/http/types";
 
 let registry: ConnectorRegistry | null = null;
-let authManager: AuthManager | null = null;
 
 export function initHealthDeps(
   registryRef: ConnectorRegistry,
-  authManagerRef: AuthManager,
 ) {
   registry = registryRef;
-  authManager = authManagerRef;
 }
 
 export function healthHandler() {
   return async (
     req: HttpRequest,
-    scope: { organizationId: string; userId: string },
+    _scope: { organizationId: string; userId: string },
   ): Promise<HttpResponse> => {
     if (!registry) {
       return error(503, "SERVICE_UNAVAILABLE", "integration platform not initialized");
@@ -61,7 +59,7 @@ export async function healthRoute(
   request: Request,
   ctx: { params: Promise<{ orgSlug: string; connectorId: string }> },
 ): Promise<Response> {
-  const { orgSlug, connectorId } = await ctx.params;
+  const { orgSlug, connectorId: _connectorId } = await ctx.params;
   return toRouteHandler(
     withOrgScope(orgSlug, healthHandler()),
     adapterConfig(),

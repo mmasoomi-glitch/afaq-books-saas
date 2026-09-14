@@ -1,12 +1,9 @@
 import { Prisma } from "@prisma/client";
-import type { Bill } from "@prisma/client";
 import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError, UnbalancedEntryError } from "../ledger/errors";
-import { nextJournalNumber, reportingAmount, NormalisedLine } from "./posting-helpers";
-import { requireOpenPeriod } from "./posting-helpers";
+import { nextJournalNumber, reportingAmount } from "./posting-helpers";
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -171,7 +168,7 @@ export async function listBills(
 ): Promise<Bill[]> {
   const where: Prisma.BillWhereInput = {
     organizationId: scope.organizationId,
-    ...(filters.status !== undefined ? { status: filters.status as any } : {}),
+    ...(filters.status !== undefined ? { status: filters.status as Prisma.EnumBillStatus | Prisma.EnumBillStatus[] } : {}),
     ...(filters.supplierId !== undefined ? { supplierId: filters.supplierId } : {}),
     ...(filters.from !== undefined || filters.to !== undefined
       ? {

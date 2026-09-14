@@ -1,4 +1,4 @@
-import { expect, test, describe } from "vitest";
+import { expect, test } from "vitest";
 import { prisma } from "../../../src/server/db/client";
 import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 import {
@@ -9,8 +9,6 @@ import {
   cancelBill,
   voidBill,
 } from "../../../src/modules/procurement/bills";
-import { createAccount } from "../../../src/modules/ledger/accounts";
-import { createPeriod } from "../../../src/modules/ledger/periods";
 import { createSupplier } from "../../../src/modules/procurement/suppliers";
 
 const scope = unsafeCreateLedgerScope("test-user-1", "test-org-1");
@@ -73,7 +71,7 @@ test("createBill creates a draft bill with auto-calculated totals", async () => 
   await seedUser();
   const supplier = await seedSupplier();
   const expenseAccount = await seedExpenseAccount();
-  const liabilityAccount = await seedLiabilityAccount();
+  const _liabilityAccount = await seedLiabilityAccount();
   await seedPeriod();
 
   const bill = await createBill(scope, {
@@ -158,8 +156,8 @@ test("approveBill transitions DRAFT -> APPROVED and creates journal entry", asyn
   await seedUser();
   const supplier = await seedSupplier();
   const expenseAccount = await seedExpenseAccount();
-  const liabilityAccount = await seedLiabilityAccount();
-  const period = await seedPeriod();
+  const _liabilityAccount = await seedLiabilityAccount();
+  const _period = await seedPeriod();
 
   const bill = await createBill(scope, {
     supplierId: supplier.id,

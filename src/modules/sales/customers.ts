@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../server/db/client";
-import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";

@@ -1,4 +1,4 @@
-import { expect, test, describe } from "vitest";
+import { expect, test } from "vitest";
 import { prisma } from "../../../src/server/db/client";
 import { unsafeCreateLedgerScope } from "../../../src/modules/ledger/scope";
 import {
@@ -9,7 +9,6 @@ import {
 import { createBill } from "../../../src/modules/procurement/bills";
 import { approveBill } from "../../../src/modules/procurement/bills";
 import { createSupplier } from "../../../src/modules/procurement/suppliers";
-import { createAccount } from "../../../src/modules/ledger/accounts";
 import { createPeriod } from "../../../src/modules/ledger/periods";
 
 const scope = unsafeCreateLedgerScope("test-user-1", "test-org-1");
@@ -107,7 +106,7 @@ test("applyPayment allocates to bill and creates journal entry", async () => {
   await seedUser();
   const supplier = await seedSupplier();
   const expenseAccount = await seedExpenseAccount();
-  const liabilityAccount = await seedLiabilityAccount();
+  const _liabilityAccount = await seedLiabilityAccount();
   await seedAssetAccount();
   await seedPeriod();
 
@@ -174,7 +173,7 @@ test("bill goes to PARTIAL status when partially paid", async () => {
   await seedUser();
   const supplier = await seedSupplier();
   const expenseAccount = await seedExpenseAccount();
-  const liabilityAccount = await seedLiabilityAccount();
+  const _liabilityAccount = await seedLiabilityAccount();
   await seedAssetAccount();
   await seedPeriod();
 
@@ -242,7 +241,7 @@ test("unapplyPayment reverses allocation", async () => {
   await seedUser();
   const supplier = await seedSupplier();
   const expenseAccount = await seedExpenseAccount();
-  const liabilityAccount = await seedLiabilityAccount();
+  const _liabilityAccount = await seedLiabilityAccount();
   await seedAssetAccount();
   await seedPeriod();
 
@@ -298,7 +297,7 @@ test("unapplied payment (allocation less than payment amount)", async () => {
   await seedUser();
   const supplier = await seedSupplier();
   const expenseAccount = await seedExpenseAccount();
-  const liabilityAccount = await seedLiabilityAccount();
+  const _liabilityAccount = await seedLiabilityAccount();
   await seedAssetAccount();
   await seedPeriod();
 

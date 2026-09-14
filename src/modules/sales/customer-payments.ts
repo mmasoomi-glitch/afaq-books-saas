@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, SalesInvoiceStatus } from "@prisma/client";
 import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
@@ -385,7 +385,7 @@ export async function unapplyPayment(
       data: {
         amountPaid: newPaid,
         amountDue: newDue,
-        status: newStatus as Prisma.SalesInvoiceStatus,
+        status: newStatus as SalesInvoiceStatus,
       },
     });
 

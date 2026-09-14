@@ -183,7 +183,7 @@ export async function guardedRecordUnappliedPayment(
   currency: string,
 ): Promise<PaymentSummary> {
   assertCanDo(scope, "sales.payment.create");
-  return recordUnappliedPayment(toLedgerScope(scope), customerId, amount, method as Prisma.SalesCustomerPaymentMethod, currency);
+  return recordUnappliedPayment(toLedgerScope(scope), customerId, amount, method as CreatePaymentInput["method"], currency);
 }
 
 // ── Credit Notes ──────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, SalesInvoiceStatus } from "@prisma/client";
 import { withTx } from "../../server/tx/with-tx";
+import type { TxClient } from "../../server/db/client";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
 
@@ -50,7 +51,7 @@ function calcCreditNoteTotal(
 }
 
 async function nextCreditNoteNumber(
-  tx: Prisma.TransactionClient,
+  tx: TxClient,
   organizationId: string,
 ): Promise<number> {
   const rows = await tx.$queryRaw<
@@ -330,7 +331,7 @@ export async function applyCreditNote(
 
     await tx.invoice.update({
       where: { id: invoiceId },
-      data: { amountPaid: newPaid, amountDue: newDue, status: invNewStatus as Prisma.SalesInvoiceStatus },
+      data: { amountPaid: newPaid, amountDue: newDue, status: invNewStatus as SalesInvoiceStatus },
     });
 
     await tx.auditLog.create({
@@ -353,6 +354,7 @@ export async function expireCreditNote(
   return withTx(async (tx) => {
     const cn = await tx.creditNote.findFirst({
       where: { id: creditNoteId, organizationId: scope.organizationId },
+      include: { creditNoteLines: true },
     });
     if (cn === null) {
       throw new NotFoundError(`credit note ${creditNoteId} not found`);

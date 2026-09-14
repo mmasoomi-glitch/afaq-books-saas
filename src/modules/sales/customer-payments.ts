@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
@@ -94,7 +95,7 @@ export async function createCustomerPayment(
         paymentDate: input.paymentDate,
         amount,
         currency: input.currency,
-        exchangeRate: input.exchangeRate ?? 1,
+        fxRate: new Prisma.Decimal(input.exchangeRate ?? 1),
         method: input.method,
         reference: input.reference ?? null,
         memo: input.memo ?? null,
@@ -261,11 +262,11 @@ export async function applyPayment(
           debit: paymentAmount,
           credit: ZERO,
           currency: payment.currency,
-          fxRate: new Prisma.Decimal(payment.exchangeRate ?? 1),
+          fxRate: new Prisma.Decimal(payment.fxRate ?? 1),
           reportingAmount: new Prisma.Decimal(
             paymentAmount
               .add(ZERO)
-              .mul(new Prisma.Decimal(payment.exchangeRate ?? 1))
+              .mul(new Prisma.Decimal(payment.fxRate ?? 1))
               .toFixed(4, 1),
           ),
           memo: `Payment ${payment.paymentNumber}`,
@@ -278,11 +279,11 @@ export async function applyPayment(
           debit: ZERO,
           credit: paymentAmount,
           currency: payment.currency,
-          fxRate: new Prisma.Decimal(payment.exchangeRate ?? 1),
+          fxRate: new Prisma.Decimal(payment.fxRate ?? 1),
           reportingAmount: new Prisma.Decimal(
             ZERO
               .add(paymentAmount)
-              .mul(new Prisma.Decimal(payment.exchangeRate ?? 1))
+              .mul(new Prisma.Decimal(payment.fxRate ?? 1))
               .toFixed(4, 1),
           ),
           memo: `Payment ${payment.paymentNumber} — A/R`,
@@ -317,7 +318,7 @@ export async function applyPayment(
       const newTotalAmount = new Prisma.Decimal(inv.totalAmount);
       const newDue = newTotalAmount.sub(newPaid);
       let newStatus = inv.status;
-      if (newPaid.greaterThanOrEqual(newTotalAmount)) {
+      if (newPaid.greaterThanOrEqualTo(newTotalAmount)) {
         newStatus = "PAID";
       } else if (newPaid.greaterThan(ZERO)) {
         newStatus = "PARTIAL";
@@ -371,7 +372,7 @@ export async function unapplyPayment(
     const newDue = new Prisma.Decimal(alloc.invoice.totalAmount).sub(newPaid);
 
     let newStatus: string = alloc.invoice.status;
-    if (newPaid.greaterThanOrEqual(new Prisma.Decimal(alloc.invoice.totalAmount))) {
+    if (newPaid.greaterThanOrEqualTo(new Prisma.Decimal(alloc.invoice.totalAmount))) {
       newStatus = "PAID";
     } else if (newPaid.greaterThan(ZERO)) {
       newStatus = "PARTIAL";

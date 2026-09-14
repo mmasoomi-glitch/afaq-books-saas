@@ -322,7 +322,7 @@ export async function applyCreditNote(
 
     // Update invoice.
     let invNewStatus: string = inv.status;
-    if (newPaid.greaterThanOrEqual(new Prisma.Decimal(inv.totalAmount))) {
+    if (newPaid.greaterThanOrEqualTo(new Prisma.Decimal(inv.totalAmount))) {
       invNewStatus = "PAID";
     } else if (newPaid.greaterThan(ZERO)) {
       invNewStatus = "PARTIAL";

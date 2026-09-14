@@ -31,7 +31,7 @@ export async function arAging(
     customer_name: unknown;
     bucket: string;
     sum_due: unknown;
-  }>>(`
+  }>>(Prisma.sql`
     SELECT
       c.id              AS customer_id,
       c.name            AS customer_name,

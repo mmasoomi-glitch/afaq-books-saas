@@ -77,7 +77,7 @@ export async function createCustomer(
         name: input.name,
         email: input.email ?? null,
         phone: input.phone ?? null,
-        billingAddress: input.billingAddress ?? null,
+        billingAddress: input.billingAddress || undefined,
         taxId: input.taxId ?? null,
         currency: input.currency ?? "USD",
         accountNumber: input.accountNumber ?? null,

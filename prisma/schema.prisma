@@ -357,6 +357,7 @@ enum SalesInvoiceStatus {
   PAID
   OVERDUE
   CANCELLED
+  VOID
 }
 
 enum SalesCreditNoteStatus {

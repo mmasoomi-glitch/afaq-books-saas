@@ -5,7 +5,7 @@ CREATE TYPE "SalesCustomerPaymentMethod" AS ENUM (
 );
 
 CREATE TYPE "SalesInvoiceStatus" AS ENUM (
-  'DRAFT', 'SENT', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED'
+  'DRAFT', 'SENT', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED', 'VOID'
 );
 
 CREATE TYPE "SalesCreditNoteStatus" AS ENUM (

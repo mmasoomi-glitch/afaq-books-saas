@@ -3,6 +3,7 @@ import { prisma, type TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
+import { nextJournalNumber } from "../ledger/posting";
 import type { InvoiceStatus } from "./errors";
 
 export type { InvoiceStatus } from "./errors";
@@ -353,6 +354,12 @@ export async function postInvoice(
     }
 
     // Post the journal entry directly (we're already in a tx, so skip withTx).
+    const journalNumber = await nextJournalNumber(
+      tx,
+      scope.organizationId,
+      period.id,
+    );
+
     const journalEntry = await tx.journalEntry.create({
       data: {
         organizationId: scope.organizationId,
@@ -362,6 +369,7 @@ export async function postInvoice(
         currency: invoice.currency,
         sourceModule: "sales",
         sourceId: invoice.id,
+        journalNumber,
       },
     });
 
@@ -528,7 +536,7 @@ export async function cancelInvoice(
         action: "sales.invoice.cancel",
         entityType: "Invoice",
         entityId: invoiceId,
-        after: { status: "CANCELLED", reason },
+        after: { status: "VOID", reason },
       },
     });
   });
@@ -555,7 +563,7 @@ export async function voidInvoice(
 
     await tx.invoice.update({
       where: { id: invoiceId },
-      data: { status: "CANCELLED" },
+      data: { status: "VOID" },
     });
 
     await tx.auditLog.create({
@@ -565,7 +573,7 @@ export async function voidInvoice(
         action: "sales.invoice.void",
         entityType: "Invoice",
         entityId: invoiceId,
-        after: { status: "CANCELLED" },
+        after: { status: "VOID" },
       },
     });
   });
@@ -610,11 +618,11 @@ function toSummary(
     currency: invoice.currency,
     fxRate: invoice.fxRate.toString(),
     status: invoice.status as InvoiceStatus,
-    subtotal: invoice.subtotal.toString(),
-    taxAmount: invoice.taxAmount.toString(),
-    totalAmount: invoice.totalAmount.toString(),
-    amountPaid: invoice.amountPaid.toString(),
-    amountDue: invoice.amountDue.toString(),
+    subtotal: invoice.subtotal.toFixed(2),
+    taxAmount: invoice.taxAmount.toFixed(2),
+    totalAmount: invoice.totalAmount.toFixed(2),
+    amountPaid: invoice.amountPaid.toFixed(2),
+    amountDue: invoice.amountDue.toFixed(2),
     memo: invoice.memo,
     notes: invoice.notes,
     createdAt: invoice.createdAt,

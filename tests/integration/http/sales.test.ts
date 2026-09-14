@@ -124,7 +124,7 @@ function ledgerFixture(
     prisma.account.create({
       data: {
         organizationId: scope.organizationId,
-        code: "1300",
+        code: "1200",
         name: "Accounts Receivable",
         type: "ASSET",
         currency: "USD",
@@ -205,8 +205,8 @@ test("SC4: listing customers returns an empty array when none exist", async () =
 
   expect(res.status).toBe(200);
   const body = bodyOf(res);
-  expect(Array.isArray(body)).toBe(true);
-  expect(body.length).toBe(0);
+  expect(Array.isArray(body["customers"])).toBe(true);
+  expect(body["customers"].length).toBe(0);
 });
 
 test("SC5: getCustomer returns 404 for a non-existent customer", async () => {

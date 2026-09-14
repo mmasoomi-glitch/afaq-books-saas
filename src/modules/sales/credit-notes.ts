@@ -4,6 +4,7 @@ import { withTx } from "../../server/tx/with-tx";
 import type { TxClient } from "../../server/db/client";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
+import { nextJournalNumber } from "../ledger/posting";
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -207,6 +208,12 @@ export async function issueCreditNote(
       memo: `Credit note ${cn.creditNoteNumber} — A/R credit`,
     });
 
+    const journalNumber = await nextJournalNumber(
+      tx,
+      scope.organizationId,
+      period.id,
+    );
+
     const journalEntry = await tx.journalEntry.create({
       data: {
         organizationId: scope.organizationId,
@@ -216,6 +223,7 @@ export async function issueCreditNote(
         currency: cn.currency,
         sourceModule: "sales",
         sourceId: creditNoteId,
+        journalNumber,
       },
     });
 
@@ -401,6 +409,12 @@ export async function expireCreditNote(
       });
 
       if (period !== null && period.status === "OPEN" && lines.length > 0) {
+        const journalNumber = await nextJournalNumber(
+          tx,
+          scope.organizationId,
+          period.id,
+        );
+
         const reversalEntry = await tx.journalEntry.create({
           data: {
             organizationId: scope.organizationId,
@@ -410,6 +424,7 @@ export async function expireCreditNote(
             currency: cn.currency,
             sourceModule: "sales",
             sourceId: creditNoteId,
+            journalNumber,
           },
         });
 
@@ -478,8 +493,8 @@ function toSummary(cn: {
     creditNoteNumber: cn.creditNoteNumber,
     issueDate: cn.issueDate,
     currency: cn.currency,
-    totalAmount: cn.totalAmount.toString(),
-    remainingAmount: cn.remainingAmount.toString(),
+    totalAmount: cn.totalAmount.toFixed(2),
+    remainingAmount: cn.remainingAmount.toFixed(2),
     reason: cn.reason,
     status: cn.status,
     createdAt: cn.createdAt,

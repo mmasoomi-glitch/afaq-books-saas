@@ -4,6 +4,7 @@ import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
 import { NotFoundError } from "../ledger/errors";
+import { nextJournalNumber } from "../ledger/posting";
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -241,6 +242,12 @@ export async function applyPayment(
     }
 
     // Post journal entry: Dr Bank/Cash, Cr A/R.
+    const journalNumber = await nextJournalNumber(
+      tx,
+      scope.organizationId,
+      period.id,
+    );
+
     const journalEntry = await tx.journalEntry.create({
       data: {
         organizationId: scope.organizationId,
@@ -250,6 +257,7 @@ export async function applyPayment(
         currency: payment.currency,
         sourceModule: "sales",
         sourceId: paymentId,
+        journalNumber,
       },
     });
 

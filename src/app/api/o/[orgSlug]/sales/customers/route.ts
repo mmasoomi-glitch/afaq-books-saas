@@ -1,7 +1,7 @@
-import { toRouteHandler } from "../../../../../../../server/http/adapters/web";
-import { adapterConfig } from "../../../../../../../server/http/config";
-import { withOrgScope } from "../../../../../../../server/http/handlers/scoped";
-import { createCustomerHandler } from "../../../../../../../server/http/handlers/sales";
+import { toRouteHandler } from "../../../../../../server/http/adapters/web";
+import { adapterConfig } from "../../../../../../server/http/config";
+import { withOrgScope } from "../../../../../../server/http/handlers/scoped";
+import { createCustomerHandler } from "../../../../../../server/http/handlers/sales";
 
 export async function POST(
   request: Request,

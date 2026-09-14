@@ -41,7 +41,7 @@ import type {
   CreditNoteLineInput,
 } from "../../../modules/sales/credit-notes";
 import { SalesError } from "../../../modules/sales/errors";
-import type { InvoiceStatus, CreditNoteStatus } from "../../../modules/sales/errors";
+import type { InvoiceStatus } from "../../../modules/sales/errors";
 
 /**
  * Sales endpoints.

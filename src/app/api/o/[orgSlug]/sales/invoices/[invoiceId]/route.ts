@@ -3,7 +3,6 @@ import { adapterConfig } from "../../../../../../../server/http/config";
 import { withOrgScope } from "../../../../../../../server/http/handlers/scoped";
 import {
   getInvoiceHandler,
-  cancelInvoiceHandler,
   voidInvoiceHandler,
 } from "../../../../../../../server/http/handlers/sales";
 

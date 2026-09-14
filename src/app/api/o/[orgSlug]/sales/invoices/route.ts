@@ -1,10 +1,10 @@
-import { toRouteHandler } from "../../../../../../../server/http/adapters/web";
-import { adapterConfig } from "../../../../../../../server/http/config";
-import { withOrgScope } from "../../../../../../../server/http/handlers/scoped";
+import { toRouteHandler } from "../../../../../../server/http/adapters/web";
+import { adapterConfig } from "../../../../../../server/http/config";
+import { withOrgScope } from "../../../../../../server/http/handlers/scoped";
 import {
   createInvoiceHandler,
   listInvoicesHandler,
-} from "../../../../../../../server/http/handlers/sales";
+} from "../../../../../../server/http/handlers/sales";
 
 export async function POST(
   request: Request,

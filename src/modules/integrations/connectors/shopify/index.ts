@@ -1,4 +1,4 @@
-import { BaseConnector } from "../../connector-base";
+import { BaseConnectorImpl } from "../../connector-base";
 import type {
   SyncDirection,
   SyncResult,
@@ -44,7 +44,7 @@ export const SHOPIFY_MANIFEST: ConnectorManifest = {
   },
 };
 
-export class ShopifyConnector extends BaseConnector {
+export class ShopifyConnector extends BaseConnectorImpl {
   private shopDomain: string;
   private accessToken: string;
 

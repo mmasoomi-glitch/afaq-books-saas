@@ -1,4 +1,4 @@
-import { BaseConnector } from "../../connector-base";
+import { BaseConnectorImpl } from "../../connector-base";
 import type {
   SyncDirection,
   SyncResult,
@@ -41,7 +41,7 @@ export const STRIPE_MANIFEST: ConnectorManifest = {
   },
 };
 
-export class StripeConnector extends BaseConnector {
+export class StripeConnector extends BaseConnectorImpl {
   private apiKey: string;
 
   constructor(config?: Record<string, unknown>) {

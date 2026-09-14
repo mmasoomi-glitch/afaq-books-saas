@@ -85,6 +85,7 @@ export class ExternalApiError extends IntegrationError {
     this.name = "ExternalApiError";
     if (statusCode !== undefined) {
       this.statusCode = statusCode;
+    }
   }
 }
 

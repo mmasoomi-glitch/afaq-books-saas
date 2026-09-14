@@ -385,7 +385,7 @@ export async function unapplyPayment(
       data: {
         amountPaid: newPaid,
         amountDue: newDue,
-        status: newStatus as Prisma.EnumInvoiceStatus,
+        status: newStatus as Prisma.SalesInvoiceStatus,
       },
     });
 

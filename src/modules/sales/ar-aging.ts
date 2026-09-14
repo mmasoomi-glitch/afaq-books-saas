@@ -77,7 +77,7 @@ export async function arAging(
 
   for (const [cid, data] of customerMap) {
     // Sort buckets.
-    data.buckets.sort((a, b) => bucketOrder[a.bucket] - bucketOrder[b.bucket]);
+    data.buckets.sort((a, b) => (bucketOrder[a.bucket] ?? 99) - (bucketOrder[b.bucket] ?? 99));
 
     let totalDue = ZERO;
     for (const b of data.buckets) {

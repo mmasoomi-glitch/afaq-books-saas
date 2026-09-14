@@ -143,7 +143,7 @@ export async function issueCreditNote(
   return withTx(async (tx) => {
     const cn = await tx.creditNote.findFirst({
       where: { id: creditNoteId, organizationId: scope.organizationId },
-      include: { creditNoteLines: { orderBy: { lineNumber: "asc" } } },
+      include: { creditNoteLines: true },
     });
     if (cn === null) {
       throw new NotFoundError(`credit note ${creditNoteId} not found`);
@@ -330,7 +330,7 @@ export async function applyCreditNote(
 
     await tx.invoice.update({
       where: { id: invoiceId },
-      data: { amountPaid: newPaid, amountDue: newDue, status: invNewStatus as Prisma.EnumInvoiceStatus },
+      data: { amountPaid: newPaid, amountDue: newDue, status: invNewStatus as Prisma.SalesInvoiceStatus },
     });
 
     await tx.auditLog.create({

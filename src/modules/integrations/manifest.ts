@@ -113,7 +113,7 @@ function validateStringArray(
 function validateCategory(value: string): asserts value is Category {
   if (!VALID_CATEGORIES.has(value as Category)) {
     throw new InvalidManifestError(
-      `${field} must be one of: ${[...VALID_CATEGORIES].join(", ")}`,
+      `category must be one of: ${[...VALID_CATEGORIES].join(", ")}`,
       "category",
     );
   }

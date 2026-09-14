@@ -24,7 +24,17 @@ export type Action =
   | "procurement.payment.create"
   | "procurement.payment.apply"
   | "procurement.po.create"
-  | "procurement.report.read";
+  | "procurement.report.read"
+  | "sales.customer.create"
+  | "sales.customer.read"
+  | "sales.invoice.create"
+  | "sales.invoice.post"
+  | "sales.invoice.cancel"
+  | "sales.payment.create"
+  | "sales.payment.apply"
+  | "sales.creditNote.create"
+  | "sales.creditNote.apply"
+  | "sales.report.read";
 
 /**
  * `member.read` sits with VIEWER deliberately. Knowing who else is in an
@@ -48,9 +58,20 @@ const BOOKKEEPER_ACTIONS: readonly Action[] = [
   "ledger.period.create",
   "ledger.post",
   "ledger.reverse",
+  "sales.customer.create",
+  "sales.customer.read",
+  "sales.invoice.create",
+  "sales.payment.create",
 ];
 
-const APPROVER_ACTIONS: readonly Action[] = [...BOOKKEEPER_ACTIONS];
+const APPROVER_ACTIONS: readonly Action[] = [
+  ...BOOKKEEPER_ACTIONS,
+  "sales.invoice.post",
+  "sales.invoice.cancel",
+  "sales.payment.apply",
+  "sales.creditNote.create",
+  "sales.creditNote.apply",
+];
 
 /**
  * `audit.read` sits with ACCOUNTANT, not ADMIN, because
@@ -76,6 +97,16 @@ const ACCOUNTANT_ACTIONS: readonly Action[] = [
   "procurement.payment.apply",
   "procurement.po.create",
   "procurement.report.read",
+  "sales.customer.create",
+  "sales.customer.read",
+  "sales.invoice.create",
+  "sales.invoice.post",
+  "sales.invoice.cancel",
+  "sales.payment.create",
+  "sales.payment.apply",
+  "sales.creditNote.create",
+  "sales.creditNote.apply",
+  "sales.report.read",
 ];
 
 const ADMIN_ACTIONS: readonly Action[] = [

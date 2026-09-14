@@ -16,8 +16,9 @@ Re-verified against the working tree, CI and a running server. **440 tests
 across 29 files pass against a real `postgres:14` container** in `ledger-ci.yml`
 on every pull request; `tsc --noEmit`, `eslint` and `next build` are all clean.
 
-`develop` @ `c34782c`. `main` @ `3a91656` is still the empty root commit and is
-still the public default branch — see `B-20260911-03`.
+Code now lives in the private repository `mmasoomi-glitch/naqdengi`, where
+`main` = `develop` = `848e7ca`; pod work is on branch `pod-20260914`
+(`B-20260911-03` superseded 2026-09-14).
 
 **What changed since the last verification is the honest headline:** the
 previous version of this file said "nothing is reachable over HTTP, and no
@@ -27,7 +28,7 @@ than quietly deleted.
 
 | Layer / module | State | Owner | Notes |
 |----------------|-------|-------|-------|
-| Repository | working | Lead | `develop` @ `5f29213`. `main` unchanged and still default — `B-20260911-03` |
+| Repository | working | Lead | `mmasoomi-glitch/naqdengi` (private): `main` = `develop` = `848e7ca`; pod work on `pod-20260914`. `B-20260911-03` superseded |
 | Governance docs | working | ARCHITECT | `CLAUDE.md`, 6 rule files, coordination docs, ADR-0001, `INTENTION_CONTRACT.md` v1, `CONTEXT_LEDGER.md` |
 | Branch protection | working + verified | repo owner / Lead | Rulesets `protect-develop` (22882053) + `protect-main` (22882054), active, verified via the resolved-rules endpoint |
 | Claude hooks | working + tested | PLATFORM-GUARDIAN | `B-20260911-01` **closed**. `check-agent-ownership.sh` now gates `Write`/`Edit`/`NotebookEdit`/`MultiEdit` as well as Bash, knows `src/modules/**`, resolves longest-prefix, matches owners by exact token. 35 local cases + 8 CI cases |

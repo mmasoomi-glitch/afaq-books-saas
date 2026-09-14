@@ -41,6 +41,21 @@ Numbering: `B-YYYYMMDD-NN` where NN is sequential within that date.
 
 ## Open
 
+> **Triage 2026-09-14 (lead session), re-checked against the code, not the
+> headers.** Several entries below still say `Status: open` in their header
+> but carry a RESOLVED trailer; the trailer is authoritative. What is
+> genuinely open after this pass:
+>
+> | Blocker | State | Why it stays open |
+> |---|---|---|
+> | `B-20260911-04` RLS | **BLOCKED — owner/architect** | No `CREATE POLICY` in any migration (`grep -rln "ROW LEVEL SECURITY\|CREATE POLICY" prisma/migrations` → nothing). Deferred three times by the judge; recorded as an owner call in the ledger. |
+> | `B-20260911-08` security_events alerting | **BLOCKED — needs a deployment target** | No reader of `security_events` in `src/`. Where alerting lives depends on where the app runs, and nothing is deployed. |
+> | `B-20260912-02` CSRF not session-bound | **BLOCKED — owner** | `H16` still asserts a cross-session token passes. The fix needs a new server secret in a deployment vault that does not exist yet, and its trigger is third-party embedding, which nobody has asked for. |
+> | `B-20260913-02` audit_logs retention | **BLOCKED — owner** | Retention period is jurisdictional; archive destination is storage cost. |
+>
+> Closed in this pass: `B-20260911-09` (fixed) and `B-20260911-03`
+> (superseded by the move to `naqdengi`); trailers on each.
+
 ### B-20260527-01 — Branch protection on `main` and `develop` is not configured
 
 - **Filed by:** Lead Orchestrator
@@ -320,6 +335,20 @@ main
   checks for any change to `main`, so option (a) is a normal PR, not
   a direct push.
 
+**SUPERSEDED 2026-09-14.** Written against the predecessor repository. The
+code now lives in the private repository `mmasoomi-glitch/naqdengi`, bootstrapped
+from a single commit, where `main` and `develop` are the same commit:
+
+```text
+$ git ls-remote git@gh-naqdengi:mmasoomi-glitch/naqdengi.git
+848e7cae…  HEAD
+848e7cae…  refs/heads/develop
+848e7cae…  refs/heads/main
+```
+
+Nothing is behind anything, and the repository is not public. If `develop`
+advances past `main` again, that is a new blocker, not this one.
+
 ---
 
 ### B-20260911-04 — No Row Level Security; tenant isolation is application-level only
@@ -573,6 +602,37 @@ whether the string "develop" appears anywhere nearby.
 - PLATFORM-GUARDIAN: parse the push target properly, and add a CI case
   asserting that a feature-branch push is still allowed when the command line
   also mentions a protected branch name.
+
+**RESOLVED 2026-09-14**, on `fix/push-guard-refspec-sprint-002`.
+
+The push is now parsed one shell segment at a time: find `git`, skip its
+global options (`-C`, `-c`, …), require the subcommand `push`, then read push's
+own arguments. The first positional is the remote, the rest are refspecs, and a
+refspec's destination is what follows its last `:`.
+
+**Rewriting it found two holes worse than the false positive.**
+
+- `git branch -D x` was **allowed**. Every rule matches a lowercased copy of the
+  command, where `-D` cannot exist, so rule 3h was dead code. It now reads the
+  case-preserved command.
+- `git push origin +feat` was **allowed**. A leading `+` forces without the
+  word `--force`. Also newly denied: `--all`, `--mirror`, combined `-uf`, and
+  `git -C <dir> push origin main`, which the old regex did not cover.
+
+The old force regex also denied `git push origin x && rm -f /tmp/y`, because
+`-f` appeared in the second command; flags are now read from push's arguments
+only.
+
+```text
+28-case matrix, new hook vs the hook at 289216c:  pass=28 fail=0
+old hook wrong on 12: allowed push -uf, +feat-x, --all, --mirror,
+  git -C … push origin main, branch -D, -Dr, -d -f, -df;
+  denied "push … && gh pr create --base develop" and "push … && rm -f"
+governance-checks.yml block-dangerous-git steps run locally: steps=11 failed=0
+```
+
+Seven of those cases are now CI steps in `governance-checks.yml`, including
+the one this blocker asked for.
 
 ---
 
@@ -1175,6 +1235,11 @@ financial compliance".
 
 ## Resolved
 
+- **`B-20260911-09`** — the git guard parsed substrings, not push targets.
+  Closed 2026-09-14; the rewrite also found `branch -D` and `+refspec` were
+  never blocked at all.
+- **`B-20260911-03`** — `main` behind `develop`. Superseded 2026-09-14: in
+  `naqdengi` both are `848e7ca`.
 - **`B-20260911-07`** — nothing reaped expired rate-limit rows. Closed 2026-09-13
   by a shared-secret maintenance endpoint for an external scheduler.
 - **`B-20260913-01`** — the organization/route slug namespace. Closed 2026-09-13

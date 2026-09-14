@@ -92,9 +92,7 @@ export async function resetDb() {
         journal_counters, periods, accounts, accounting_configs,
         memberships, sessions, auth_accounts, verification_tokens,
         rate_limits, security_events,
-        users, organizations,
-        purchase_order_lines, purchase_orders, bill_payment_allocations,
-        supplier_payments, bill_lines, bills, suppliers
+        users, organizations
       RESTART IDENTITY CASCADE
     `);
     await client.query("COMMIT");

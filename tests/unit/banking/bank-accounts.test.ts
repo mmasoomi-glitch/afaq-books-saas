@@ -10,7 +10,7 @@ import {
   getBankAccountSummary,
   BankAccountNotFoundError,
 } from "../../../src/modules/banking/bank-accounts";
-import type { BankAccountSummary, CreateBankAccountInput, UpdateBankAccountInput } from "../../../src/modules/banking/bank-accounts";
+import type { CreateBankAccountInput, UpdateBankAccountInput } from "../../../src/modules/banking/bank-accounts";
 
 let org: TestOrg;
 let _scope: OrgScope;

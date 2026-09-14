@@ -39,6 +39,8 @@ model Account {
   updatedAt      DateTime     @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   journalLines   JournalLine[]
+  invoiceLines   InvoiceLine[]
+  creditNoteLines CreditNoteLine[]
   parent         Account?     @relation("AccountHierarchy", fields: [parentId], references: [id])
   children       Account[]    @relation("AccountHierarchy")
 
@@ -206,6 +208,16 @@ model Organization {
   journalLines JournalLine[]
   journalCounters JournalCounter[]
   auditLogs AuditLog[]
+  salesInvoiceCounters SalesInvoiceCounter[]
+  salesPaymentCounters SalesPaymentCounter[]
+  salesCreditNoteCounters SalesCreditNoteCounter[]
+  customers Customer[]
+  invoices Invoice[]
+  invoiceLines InvoiceLine[]
+  customerPayments CustomerPayment[]
+  paymentAllocations PaymentAllocation[]
+  creditNotes CreditNote[]
+  creditNoteLines CreditNoteLine[]
 
   @@map("organizations")
 }
@@ -324,4 +336,228 @@ model SecurityEvent {
   @@index([eventType, createdAt])
   @@index([email, createdAt])
   @@map("security_events")
+}
+
+// ── Sales / A/R module ──────────────────────────────────────────────────
+// Migrated via 20260913130000_add_sales_ar.
+
+enum SalesCustomerPaymentMethod {
+  WIRE
+  CHECK
+  CREDIT_CARD
+  CASH
+  ONLINE
+  CONNECTOR
+}
+
+enum SalesInvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum SalesCreditNoteStatus {
+  DRAFT
+  ISSUED
+  APPLIED
+  EXPIRED
+}
+
+model SalesInvoiceCounter {
+  organizationId String @id @map("organization_id") @db.Uuid
+  lastNumber     Int    @map("last_number") @default(0)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@map("sales_invoice_counters")
+}
+
+model SalesPaymentCounter {
+  organizationId String @id @map("organization_id") @db.Uuid
+  lastNumber     Int    @map("last_number") @default(0)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@map("sales_payment_counters")
+}
+
+model SalesCreditNoteCounter {
+  organizationId String @id @map("organization_id") @db.Uuid
+  lastNumber     Int    @map("last_number") @default(0)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@map("sales_credit_note_counters")
+}
+
+model Customer {
+  id              String                  @id @default(uuid()) @db.Uuid
+  organizationId  String                  @map("organization_id") @db.Uuid
+  name            String
+  email           String?                 @db.VarChar(320)
+  phone           String?                 @db.VarChar(50)
+  billingAddress  Json?                   @map("billing_address")
+  taxId           String?                 @map("tax_id") @db.VarChar(50)
+  currency        String                  @db.Char(3) @default("USD")
+  accountNumber   String?                 @map("account_number") @db.VarChar(100)
+  paymentTerms    Int?                    @map("payment_terms") @default(30)
+  isActive        Boolean                 @default(true) @map("is_active")
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime                @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  invoices        Invoice[]
+  customerPayments CustomerPayment[]
+  creditNotes     CreditNote[]
+
+  @@unique([organizationId, email])
+  @@unique([organizationId, accountNumber])
+  @@index([organizationId, isActive])
+  @@map("customers")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model Invoice {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  customerId     String            @map("customer_id") @db.Uuid
+  invoiceNumber  Int?              @map("invoice_number")
+  issueDate      DateTime          @map("issue_date") @db.Date
+  dueDate        DateTime          @map("due_date") @db.Date
+  currency       String            @db.Char(3)
+  fxRate         Decimal           @default(1) @map("fx_rate") @db.Decimal(18, 8)
+  status         SalesInvoiceStatus @default(DRAFT)
+  subtotal       Decimal           @default(0) @db.Decimal(18, 4)
+  taxAmount      Decimal           @default(0) @db.Decimal(18, 4)
+  totalAmount    Decimal           @default(0) @db.Decimal(18, 4)
+  amountPaid     Decimal           @default(0) @db.Decimal(18, 4)
+  amountDue      Decimal           @default(0) @db.Decimal(18, 4)
+  memo           String?
+  notes          String?
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime          @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  invoiceLines  InvoiceLine[]
+  customer      Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customerPayments CustomerPayment[]
+  paymentAllocations PaymentAllocation[]
+
+  @@unique([organizationId, invoiceNumber])
+  @@index([organizationId, customerId])
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+  @@map("invoices")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model InvoiceLine {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizationId String  @map("organization_id") @db.Uuid
+  invoiceId     String   @map("invoice_id") @db.Uuid
+  lineNumber    Int      @map("line_number")
+  description   String
+  accountId     String   @map("account_id") @db.Uuid
+  quantity      Decimal  @default(0) @db.Decimal(18, 4)
+  unitPrice     Decimal  @default(0) @db.Decimal(18, 4)
+  taxRate       Decimal  @default(0) @db.Decimal(18, 4)
+  taxAmount     Decimal  @default(0) @db.Decimal(18, 4)
+  lineTotal     Decimal  @default(0) @db.Decimal(18, 4)
+
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([invoiceId, lineNumber])
+  @@map("invoice_lines")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model CustomerPayment {
+  id             String                  @id @default(uuid()) @db.Uuid
+  organizationId String                  @map("organization_id") @db.Uuid
+  customerId     String                  @map("customer_id") @db.Uuid
+  invoiceId      String?                 @map("invoice_id") @db.Uuid
+  paymentNumber  Int?                    @map("payment_number")
+  paymentDate    DateTime                @map("payment_date") @db.Date
+  amount         Decimal                 @default(0) @db.Decimal(18, 4)
+  currency       String                  @db.Char(3)
+  fxRate         Decimal                 @default(1) @map("fx_rate") @db.Decimal(18, 8)
+  method         SalesCustomerPaymentMethod
+  reference      String?
+  memo           String?
+  createdAt      DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime                @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  customer       Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  invoice        Invoice?                @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  paymentAllocations PaymentAllocation[]
+
+  @@index([organizationId, customerId])
+  @@index([organizationId, paymentDate])
+  @@map("customer_payments")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model PaymentAllocation {
+  id                 String            @id @default(uuid()) @db.Uuid
+  organizationId     String            @map("organization_id") @db.Uuid
+  customerPaymentId  String            @map("customer_payment_id") @db.Uuid
+  invoiceId          String            @map("invoice_id") @db.Uuid
+  amount             Decimal           @default(0) @db.Decimal(18, 4)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  customerPayment    CustomerPayment   @relation(fields: [customerPaymentId], references: [id], onDelete: Restrict)
+  invoice            Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([customerPaymentId, invoiceId])
+  @@map("payment_allocations")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model CreditNote {
+  id               String              @id @default(uuid()) @db.Uuid
+  organizationId   String              @map("organization_id") @db.Uuid
+  customerId       String              @map("customer_id") @db.Uuid
+  creditNoteNumber Int?                @map("credit_note_number")
+  issueDate        DateTime            @map("issue_date") @db.Date
+  currency         String              @db.Char(3)
+  totalAmount      Decimal             @default(0) @db.Decimal(18, 4)
+  remainingAmount  Decimal             @default(0) @db.Decimal(18, 4)
+  reason           String?
+  memo             String?
+  status           SalesCreditNoteStatus @default(DRAFT)
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime            @updatedAt @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  creditNoteLines  CreditNoteLine[]
+  customer         Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, creditNoteNumber])
+  @@index([organizationId, customerId])
+  @@index([organizationId, status])
+  @@map("credit_notes")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+}
+
+model CreditNoteLine {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  creditNoteId   String    @map("credit_note_id") @db.Uuid
+  lineNumber     Int       @map("line_number")
+  description    String
+  accountId      String    @map("account_id") @db.Uuid
+  quantity       Decimal   @default(0) @db.Decimal(18, 4)
+  unitPrice      Decimal   @default(0) @db.Decimal(18, 4)
+  lineTotal      Decimal   @default(0) @db.Decimal(18, 4)
+
+  creditNote     CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  account        Account    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@unique([creditNoteId, lineNumber])
+  @@map("credit_note_lines")
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 }

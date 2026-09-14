@@ -150,7 +150,7 @@ export async function createInvoice(
 
     // Create lines — use a raw transaction within the outer tx.
     await tx.invoiceLine.createMany({
-      data: input.lines.map((line, idx) => {
+      data: input.lines.map((line) => {
         const qty = new Prisma.Decimal(line.quantity);
         const price = new Prisma.Decimal(line.unitPrice);
         const rate = new Prisma.Decimal(line.taxRate ?? 0);

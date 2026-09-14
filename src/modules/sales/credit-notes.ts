@@ -1,4 +1,5 @@
 import { Prisma, SalesInvoiceStatus } from "@prisma/client";
+import { prisma } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { TxClient } from "../../server/db/client";
 import type { LedgerScope } from "../ledger/scope";
@@ -484,4 +485,37 @@ function toSummary(cn: {
     createdAt: cn.createdAt,
     updatedAt: cn.updatedAt,
   };
+}
+
+export interface CreditNoteFilters {
+  readonly customerId?: string;
+  readonly from?: Date;
+  readonly to?: Date;
+}
+
+export async function listCreditNotes(
+  scope: LedgerScope,
+  filters?: CreditNoteFilters,
+): Promise<CreditNoteSummary[]> {
+  const where: Prisma.CreditNoteWhereInput = {
+    organizationId: scope.organizationId,
+  };
+
+  if (filters?.customerId) {
+    where.customerId = filters.customerId;
+  }
+  if (filters?.from) {
+    where.issueDate = { gte: filters.from };
+  }
+  if (filters?.to) {
+    const dateWhere = where.issueDate as Prisma.DateTimeFilter | undefined;
+    where.issueDate = { ...dateWhere, lte: filters.to } as Prisma.DateTimeFilter;
+  }
+
+  const notes = await prisma.creditNote.findMany({
+    where,
+    orderBy: { issueDate: "desc" },
+  });
+
+  return notes.map(toSummary);
 }

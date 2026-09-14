@@ -34,8 +34,10 @@ export type Action =
   | "sales.invoice.post"
   | "sales.invoice.cancel"
   | "sales.payment.create"
+  | "sales.payment.read"
   | "sales.payment.apply"
   | "sales.creditNote.create"
+  | "sales.creditNote.read"
   | "sales.creditNote.apply"
   | "sales.creditNote.expire"
   | "sales.report.read"
@@ -96,6 +98,7 @@ const BOOKKEEPER_ACTIONS: readonly Action[] = [
   "sales.customer.delete",
   "sales.invoice.create",
   "sales.payment.create",
+  "sales.payment.read",
 ];
 
 const APPROVER_ACTIONS: readonly Action[] = [
@@ -105,6 +108,7 @@ const APPROVER_ACTIONS: readonly Action[] = [
   "sales.invoice.cancel",
   "sales.payment.apply",
   "sales.creditNote.create",
+  "sales.creditNote.read",
   "sales.creditNote.apply",
   "sales.creditNote.expire",
 ];
@@ -144,6 +148,7 @@ const ACCOUNTANT_ACTIONS: readonly Action[] = [
   "sales.payment.create",
   "sales.payment.apply",
   "sales.creditNote.create",
+  "sales.creditNote.read",
   "sales.creditNote.apply",
   "sales.creditNote.expire",
   "sales.report.read",

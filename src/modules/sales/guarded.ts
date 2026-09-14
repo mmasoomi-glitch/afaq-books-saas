@@ -32,23 +32,27 @@ import type {
   CreatePaymentInput,
   PaymentAllocationInput,
   PaymentSummary,
+  PaymentFilters,
 } from "./customer-payments";
 import {
   createCustomerPayment,
   applyPayment,
   unapplyPayment,
   recordUnappliedPayment,
+  listPayments,
 } from "./customer-payments";
 
 import type {
   CreateCreditNoteInput,
   CreditNoteSummary,
+  CreditNoteFilters,
 } from "./credit-notes";
 import {
   createCreditNote,
   issueCreditNote,
   applyCreditNote,
   expireCreditNote,
+  listCreditNotes,
 } from "./credit-notes";
 
 import type { ArAgingResult } from "./ar-aging";
@@ -186,6 +190,14 @@ export async function guardedRecordUnappliedPayment(
   return recordUnappliedPayment(toLedgerScope(scope), customerId, amount, method as CreatePaymentInput["method"], currency);
 }
 
+export async function guardedListPayments(
+  scope: OrgScope,
+  filters?: PaymentFilters,
+): Promise<PaymentSummary[]> {
+  assertCanDo(scope, "sales.payment.read");
+  return listPayments(toLedgerScope(scope), filters);
+}
+
 // ── Credit Notes ──────────────────────────────────────────────────────
 
 export async function guardedCreateCreditNote(
@@ -220,6 +232,14 @@ export async function guardedExpireCreditNote(
 ): Promise<void> {
   assertCanDo(scope, "sales.creditNote.expire");
   return expireCreditNote(toLedgerScope(scope), creditNoteId);
+}
+
+export async function guardedListCreditNotes(
+  scope: OrgScope,
+  filters?: CreditNoteFilters,
+): Promise<CreditNoteSummary[]> {
+  assertCanDo(scope, "sales.creditNote.read");
+  return listCreditNotes(toLedgerScope(scope), filters);
 }
 
 // ── Reports ───────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { Prisma, SalesInvoiceStatus } from "@prisma/client";
+import { prisma } from "../../server/db/client";
 import type { TxClient } from "../../server/db/client";
 import { withTx } from "../../server/tx/with-tx";
 import type { LedgerScope } from "../ledger/scope";
@@ -465,4 +466,44 @@ function toSummary(
     createdAt: payment.createdAt,
     updatedAt: payment.updatedAt,
   };
+}
+
+export interface PaymentFilters {
+  readonly customerId?: string;
+  readonly from?: Date;
+  readonly to?: Date;
+}
+
+export async function listPayments(
+  scope: LedgerScope,
+  filters?: PaymentFilters,
+): Promise<PaymentSummary[]> {
+  const where: Prisma.CustomerPaymentWhereInput = {
+    organizationId: scope.organizationId,
+  };
+
+  if (filters?.customerId) {
+    where.customerId = filters.customerId;
+  }
+  if (filters?.from) {
+    where.paymentDate = { gte: filters.from };
+  }
+  if (filters?.to) {
+    const dateWhere = where.paymentDate as Prisma.DateTimeFilter | undefined;
+    where.paymentDate = { ...dateWhere, lte: filters.to } as Prisma.DateTimeFilter;
+  }
+
+  const payments = await prisma.customerPayment.findMany({
+    where,
+    orderBy: { paymentDate: "desc" },
+    include: {
+      allocations: {
+        include: {
+          invoice: { select: { invoiceNumber: true } },
+        },
+      },
+    },
+  });
+
+  return payments.map(toSummary);
 }

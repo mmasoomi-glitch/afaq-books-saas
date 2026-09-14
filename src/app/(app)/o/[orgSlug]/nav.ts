@@ -60,6 +60,11 @@ export const NAV: readonly NavEntry[] = [
   },
   { label: "Members", segment: "members", action: "member.read" },
   { label: "Audit trail", segment: "audit", action: "audit.read" },
+  { label: "Customers", segment: "sales/customers", action: "sales.customer.read" },
+  { label: "Invoices", segment: "sales/invoices", action: "sales.invoice.read" },
+  { label: "Payments", segment: "sales/payments", action: "sales.payment.read" },
+  { label: "Credit notes", segment: "sales/credit-notes", action: "sales.creditNote.read" },
+  { label: "AR aging", segment: "sales/ar-aging", action: "sales.report.read" },
 ];
 
 /**

@@ -1,13 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../../server/db/client";
-import { withTx } from "../../server/tx/with-tx";
-import type { LedgerScope } from "../ledger/scope";
-import { unsafeCreateLedgerScope } from "../ledger/scope";
 import { postJournalEntry } from "../ledger/posting";
-import type { PostingServiceError } from "../ledger/errors";
 import { NotFoundError as LedgerNotFoundError } from "../ledger/errors";
-
-const TOLERANCE = new Prisma.Decimal("0.005");
 
 // ── Types ───────────────────────────────────────────────────────────────
 

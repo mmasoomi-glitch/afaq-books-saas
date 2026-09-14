@@ -1,7 +1,6 @@
 import {
   type ConnectorManifest,
   type ConnectorRegistration,
-  type BaseConnector,
   type Category,
 } from "./schema";
 import { registerConnector } from "./manifest";

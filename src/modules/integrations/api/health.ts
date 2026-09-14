@@ -3,9 +3,7 @@ import { adapterConfig } from "../../../../server/http/config";
 import { withOrgScope } from "../../../../server/http/handlers/scoped";
 import type { HttpRequest, HttpResponse } from "../../../../server/http/types";
 import { ConnectorRegistry } from "../registry";
-import { AuthManager } from "../auth-manager";
 import { json, error } from "../../../../server/http/types";
-import { ConnectorNotFoundError, HealthCheckFailedError } from "../errors";
 
 let registry: ConnectorRegistry | null = null;
 let authManager: AuthManager | null = null;

@@ -1,6 +1,5 @@
 import {
   type DomainEvent,
-  SUPPORTED_EVENTS,
 } from "./schema";
 
 /**

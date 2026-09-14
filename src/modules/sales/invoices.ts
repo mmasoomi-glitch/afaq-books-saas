@@ -257,24 +257,30 @@ export async function listInvoices(
   scope: LedgerScope,
   filters?: InvoiceFilters,
 ): Promise<InvoiceSummary[]> {
-  const where: Prisma.InvoiceWhereInput = {
-    organizationId: scope.organizationId,
+  const whereConditions: Prisma.InvoiceWhereInput[] = [
+    { organizationId: scope.organizationId },
     ...(filters?.status !== undefined
       ? Array.isArray(filters.status)
-        ? { status: { in: filters.status } }
-        : { status: filters.status }
-      : {}),
+        ? [{ status: { in: filters.status } }]
+        : [{ status: filters.status }]
+      : []),
     ...(filters?.customerId !== undefined
-      ? { customerId: filters.customerId }
-      : {}),
-    ...(filters?.from !== undefined && filters?.to !== undefined
-      ? { issueDate: { gte: filters.from, lte: filters.to } }
-      : filters?.from !== undefined
-        ? { issueDate: { gte: filters.from } }
-        : filters?.to !== undefined
-          ? { issueDate: { lte: filters.to } }
-          : {},
-  };
+      ? [{ customerId: filters.customerId }]
+      : []),
+  ];
+
+  if (filters?.from !== undefined && filters?.to !== undefined) {
+    whereConditions.push({ issueDate: { gte: filters.from, lte: filters.to } });
+  } else if (filters?.from !== undefined) {
+    whereConditions.push({ issueDate: { gte: filters.from } });
+  } else if (filters?.to !== undefined) {
+    whereConditions.push({ issueDate: { lte: filters.to } });
+  }
+
+  const where: Prisma.InvoiceWhereInput =
+    whereConditions.length === 1
+      ? whereConditions[0]
+      : Object.assign({}, ...whereConditions);
 
   const invoices = await prisma.invoice.findMany({
     where,

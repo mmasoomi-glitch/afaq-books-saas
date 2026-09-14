@@ -2,14 +2,8 @@ import crypto from "node:crypto";
 import type {
   BaseConnector,
   SyncDirection,
-  SyncRunRecord,
-  DomainEvent,
-  DeadLetterEntry,
-  LivConcept,
-  SyncResult,
 } from "./schema";
 import { prisma } from "../../server/db/client";
-import { withTx } from "../../server/tx/with-tx";
 import { EventBus } from "./events";
 
 const MAX_RETRIES = 3;

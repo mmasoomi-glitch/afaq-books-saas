@@ -70,3 +70,11 @@ export class InvalidLineError extends LedgerError {
     super(message, "LEDGER_INVALID_LINE");
   }
 }
+
+/** Thrown when posting validation fails at the service layer (e.g. a required
+ *  account is missing, the period is closed, etc.). */
+export class PostingServiceError extends LedgerError {
+  constructor(message: string) {
+    super(message, "LEDGER_POSTING_SERVICE");
+  }
+}

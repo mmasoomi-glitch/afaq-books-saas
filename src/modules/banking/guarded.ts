@@ -1,7 +1,5 @@
-import { prisma } from "../../server/db/client";
 import { OrgScope } from "../server/auth/scope";
 import { assertCanDo } from "../server/auth/permissions";
-import { withTx, type WithTx } from "../../server/tx/with-tx";
 
 import * as bankAccounts from "./bank-accounts";
 import * as bankTransactions from "./bank-transactions";

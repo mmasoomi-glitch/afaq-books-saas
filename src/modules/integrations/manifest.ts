@@ -5,7 +5,6 @@ import {
   type AuthenticationType,
   type ConnectorManifest,
   type ConnectorRegistration,
-  type BaseConnectorConstructor,
 } from "./schema";
 
 const VALID_CATEGORIES = new Set<Category>([

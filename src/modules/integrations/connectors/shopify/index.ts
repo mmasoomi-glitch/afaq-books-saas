@@ -62,8 +62,8 @@ export class ShopifyConnector extends BaseConnector {
   }
 
   async sync(
-    direction: SyncDirection,
-    cursor?: string | null,
+    _direction: SyncDirection,
+    _cursor?: string | null,
   ): Promise<SyncResult> {
     if (!this.initialized) {
       throw new Error("shopify: connector not initialized");

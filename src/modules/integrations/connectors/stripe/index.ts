@@ -77,12 +77,15 @@ export class StripeConnector extends BaseConnector {
   }
 
   async healthCheck(): Promise<HealthStatus> {
-    return {
+    const result: { healthy: boolean; latencyMs: number; lastSyncAt: Date | null; error?: string } = {
       healthy: this.initialized && this.apiKey.length > 0,
       latencyMs: 0,
       lastSyncAt: this.lastSyncAt,
-      error: this.initialized ? undefined : "not initialized",
     };
+    if (!this.initialized) {
+      result.error = "not initialized";
+    }
+    return result;
   }
 
   async disconnect(): Promise<void> {

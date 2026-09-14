@@ -36,7 +36,7 @@ export interface InvoiceSummary {
   readonly issueDate: Date;
   readonly dueDate: Date;
   readonly currency: string;
-  readonly exchangeRate: string;
+  readonly fxRate: string;
   readonly status: InvoiceStatus;
   readonly subtotal: string;
   readonly taxAmount: string;
@@ -136,7 +136,7 @@ export async function createInvoice(
         issueDate: input.issueDate,
         dueDate: input.dueDate,
         currency: input.currency,
-        exchangeRate: input.exchangeRate ?? 1,
+        fxRate: new Prisma.Decimal(input.exchangeRate ?? 1),
         status: "DRAFT",
         subtotal,
         taxAmount,
@@ -304,7 +304,7 @@ export async function postInvoice(
     }
 
     const fxRate = new Prisma.Decimal(
-      invoice.exchangeRate ?? 1,
+      invoice.fxRate ?? 1,
     );
 
     // Build journal lines:
@@ -428,7 +428,7 @@ export async function cancelInvoice(
   return withTx(async (tx) => {
     const invoice = await tx.invoice.findFirst({
       where: { id: invoiceId, organizationId: scope.organizationId },
-      select: { status: true, totalAmount: true, amountPaid: true },
+      select: { status: true, totalAmount: true, amountPaid: true, invoiceNumber: true },
     });
     if (invoice === null) {
       throw new NotFoundError(`invoice ${invoiceId} not found`);
@@ -585,7 +585,7 @@ function toSummary(
     issueDate: Date;
     dueDate: Date;
     currency: string;
-    exchangeRate: Prisma.Decimal;
+    fxRate: Prisma.Decimal;
     status: InvoiceStatus;
     subtotal: Prisma.Decimal;
     taxAmount: Prisma.Decimal;
@@ -608,7 +608,7 @@ function toSummary(
     issueDate: invoice.issueDate,
     dueDate: invoice.dueDate,
     currency: invoice.currency,
-    exchangeRate: invoice.exchangeRate.toString(),
+    fxRate: invoice.fxRate.toString(),
     status: invoice.status as InvoiceStatus,
     subtotal: invoice.subtotal.toString(),
     taxAmount: invoice.taxAmount.toString(),

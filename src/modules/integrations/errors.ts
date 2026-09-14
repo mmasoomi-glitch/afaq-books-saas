@@ -78,12 +78,13 @@ export class SyncFailedError extends IntegrationError {
 
 /** An external API returned an error (4xx/5xx). */
 export class ExternalApiError extends IntegrationError {
-  readonly statusCode?: number;
+  readonly statusCode?: number | undefined;
 
-  constructor(message: string, statusCode?: number) {
+  constructor(message: string, statusCode?: number): void {
     super(message, "INTEGRATION_EXTERNAL_API");
     this.name = "ExternalApiError";
-    this.statusCode = statusCode;
+    if (statusCode !== undefined) {
+      this.statusCode = statusCode;
   }
 }
 

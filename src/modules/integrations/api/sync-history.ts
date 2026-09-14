@@ -1,9 +1,9 @@
-import { toRouteHandler } from "../../../../server/http/adapters/web";
-import { adapterConfig } from "../../../../server/http/config";
-import { withOrgScope } from "../../../../server/http/handlers/scoped";
-import type { HttpRequest, HttpResponse } from "../../../../server/http/types";
-import { json, error } from "../../../../server/http/types";
-import { prisma } from "../../../../server/db/client";
+import { toRouteHandler } from "../../../server/http/adapters/web";
+import { adapterConfig } from "../../../server/http/config";
+import { withOrgScope } from "../../../server/http/handlers/scoped";
+import type { HttpRequest, HttpResponse } from "../../../server/http/types";
+import { json, error } from "../../../server/http/types";
+import { prisma } from "../../../server/db/client";
 
 export function syncHistoryHandler() {
   return async (

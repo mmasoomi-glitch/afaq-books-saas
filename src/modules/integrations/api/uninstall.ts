@@ -1,11 +1,11 @@
-import { toRouteHandler } from "../../../../server/http/adapters/web";
-import { adapterConfig } from "../../../../server/http/config";
-import { withOrgScope } from "../../../../server/http/handlers/scoped";
-import type { HttpRequest, HttpResponse } from "../../../../server/http/types";
+import { toRouteHandler } from "../../../server/http/adapters/web";
+import { adapterConfig } from "../../../server/http/config";
+import { withOrgScope } from "../../../server/http/handlers/scoped";
+import type { HttpRequest, HttpResponse } from "../../../server/http/types";
 import { ConnectorRegistry } from "../registry";
 import { AuthManager } from "../auth-manager";
-import { json, error } from "../../../../server/http/types";
-import { prisma } from "../../../../server/db/client";
+import { json, error } from "../../../server/http/types";
+import { prisma } from "../../../server/db/client";
 import { ConnectorNotFoundError } from "../errors";
 
 let registry: ConnectorRegistry | null = null;

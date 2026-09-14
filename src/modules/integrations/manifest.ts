@@ -73,7 +73,7 @@ function validateVersion(value: string): void {
   // Semver-ish: major.minor.patch or major.minor
   if (!/^\d+\.\d+(\.\d+)?$/.test(value)) {
     throw new InvalidManifestError(
-      `${field} must be a valid semver string (e.g. 1.0.0)`,
+      `version must be a valid semver string (e.g. 1.0.0)`,
       "version",
     );
   }
@@ -98,8 +98,10 @@ function validateStringArray(
   minItems = 1,
 ): asserts value is string[] {
   validateArray(value, field, minItems);
-  for (let i = 0; i < value.length; i++) {
-    if (typeof value[i] !== "string" || value[i].trim() === "") {
+  const arr = value as unknown[];
+  for (let i = 0; i < arr.length; i++) {
+    const item = arr[i];
+    if (typeof item !== "string" || item.trim() === "") {
       throw new InvalidManifestError(
         `${field}[${i}] must be a non-empty string`,
         `${field}[${i}]`,

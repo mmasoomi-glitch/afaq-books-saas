@@ -16,9 +16,9 @@ import type {
  * sync engine), not the connector itself. A connector operates on whatever
  * credentials it was initialized with.
  */
-export abstract class BaseConnector implements BaseConnector {
+export abstract class BaseConnectorImpl implements BaseConnector {
   protected initialized = false;
-  protected lastSyncAt: Date | null = null;
+  protected _lastSyncAt: Date | null = null;
 
   abstract initialize(): Promise<void>;
   abstract sync(
@@ -40,6 +40,6 @@ export abstract class BaseConnector implements BaseConnector {
    * When the last successful sync completed.
    */
   get lastSyncAt(): Date | null {
-    return this.lastSyncAt;
+    return this._lastSyncAt;
   }
 }

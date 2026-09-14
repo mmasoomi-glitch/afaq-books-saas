@@ -111,7 +111,12 @@ async function actor(role: MembershipRole): Promise<{
 
 function ledgerFixture(
   scope: { organizationId: string },
-): Promise<{ periodId: string; arAccountId: string; revenueAccountId: string }> {
+): Promise<{
+  periodId: string;
+  arAccountId: string;
+  revenueAccountId: string;
+  bankAccountId: string;
+}> {
   return Promise.all([
     prisma.period.create({
       data: {
@@ -119,6 +124,15 @@ function ledgerFixture(
         name: "P1",
         startDate: new Date("2026-01-01"),
         endDate: new Date("2026-01-31"),
+      },
+    }),
+    prisma.account.create({
+      data: {
+        organizationId: scope.organizationId,
+        code: "1000",
+        name: "Bank/Cash",
+        type: "ASSET",
+        currency: "USD",
       },
     }),
     prisma.account.create({
@@ -139,10 +153,11 @@ function ledgerFixture(
         currency: "USD",
       },
     }),
-  ]).then(([period, ar, revenue]) => ({
+  ]).then(([period, bank, ar, revenue]) => ({
     periodId: period.id,
     arAccountId: ar.id,
     revenueAccountId: revenue.id,
+    bankAccountId: bank.id,
   }));
 }
 

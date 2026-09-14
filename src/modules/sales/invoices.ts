@@ -419,7 +419,7 @@ export async function postInvoice(
         after: {
           invoiceNumber: invoice.invoiceNumber,
           journalEntryId: journalEntry.id,
-          status: "SENT",
+          status: "ISSUED",
           totalAmount: invoice.totalAmount.toString(),
         },
       },
@@ -448,7 +448,7 @@ export async function cancelInvoice(
     }
 
     // If the invoice was already posted (SENT/PARTIAL), reverse the journal entry.
-    if (invoice.status === "SENT") {
+    if (invoice.status === "ISSUED") {
       const postedEntry = await tx.journalEntry.findFirst({
         where: {
           organizationId: scope.organizationId,

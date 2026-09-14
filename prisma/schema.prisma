@@ -353,6 +353,7 @@ enum SalesCustomerPaymentMethod {
 enum SalesInvoiceStatus {
   DRAFT
   SENT
+  ISSUED
   PARTIAL
   PAID
   OVERDUE

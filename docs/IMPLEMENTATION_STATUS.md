@@ -10,13 +10,13 @@ do not soften it.
 
 ---
 
-## State — last verified 2026-09-12 (sprint 002, the application is usable)
+## State — last verified 2026-09-14 (sprint 002, the application is usable)
 
-Re-verified against the working tree, CI and a running server. **401 tests
-across 24 files pass against a real `postgres:14` container** in `ledger-ci.yml`
+Re-verified against the working tree, CI and a running server. **440 tests
+across 29 files pass against a real `postgres:14` container** in `ledger-ci.yml`
 on every pull request; `tsc --noEmit`, `eslint` and `next build` are all clean.
 
-`develop` @ `e4489d4`. `main` @ `3a91656` is still the empty root commit and is
+`develop` @ `c34782c`. `main` @ `3a91656` is still the empty root commit and is
 still the public default branch — see `B-20260911-03`.
 
 **What changed since the last verification is the honest headline:** the
@@ -68,10 +68,10 @@ than quietly deleted.
 | Journal listing | working + tested | LEDGER-CORE | Keyset paging (cursor, not offset, so an entry posted mid-walk cannot push an older one past a boundary the reader has already passed) plus filtering by account and inclusive date range. Filtering by account returns each entry **in full** — a debit without its credit is half a double entry — and carries account totals summed in SQL over the whole filtered set, which a test asserts equal the trial-balance row for the same account. The cursor is fingerprinted with the filter, so changing the filter serves page one instead of a silently truncated slice. 23 tests across `journal-paging` and `journal-filter` |
 | GL drilldown | working + tested | REPORTING-ANALYTICS | Every account line on all three statements links to the journal filtered to that account over the same period. Cumulative statements pass `to` and deliberately no `from` — a start date would open a journal showing a subset that does not sum to the figure clicked. 11 tests; the URL is inside the test loop rather than bypassed, so a wrong parameter name fails the test instead of reaching a user as an apparent reconciliation failure. Runtime verified by scraping the rendered `href` and following it: 700.0000 on the statement, 700.0000 on the journal. **One direction only** — the journal does not link back |
 | Row Level Security | **not started** | ARCHITECT | `B-20260911-04`. Tenant isolation currently rests on application-level filtering plus the `jl_org_consistency` trigger. Judged an acceptable deferral, not an acceptable permanent state |
-| Customers / Invoices / Customer payments / AR aging | not started | SALES-AR | sprint 002+ |
-| Suppliers / Bills / Supplier payments / AP aging | not started | PROCUREMENT-AP | sprint 002+ |
-| Bank accounts / CSV import / Reconciliation | not started | BANKING-RECON | sprint 002+ |
-| Document storage / AI suggestions / AI provider | not started | DOCUMENTS-AI-SAFETY | excluded from sprint 001 by clause C2 |
+| Customers / Invoices / Customer payments / AR aging | in progress — backend complete, no API routes, no UI, no tests | SALES-AR | sprint 002+ |
+| Suppliers / Bills / Supplier payments / AP aging | in progress — backend skeleton, functions commented out (missing Prisma models), no API routes, no UI, no tests | PROCUREMENT-AP | sprint 002+ |
+| Bank accounts / CSV import / Reconciliation | in progress — backend skeleton, functions commented out (missing Prisma models), no API routes, no UI, no tests | BANKING-RECON | sprint 002+ |
+| Document storage / AI suggestions / AI provider | not started | DOCUMENTS-AI-SAFETY | excluded from MVP |
 | UI primitives / styling | not started | FRONTEND-UX | Semantic HTML only, no styling of any kind. Empty states are truthful and written per page |
 | Organization switcher | not started | FRONTEND-UX | The shell links to `/organizations`; changing organization is two clicks |
 | Accessibility audit | not started | FRONTEND-UX + QA-AUDITOR | sprint 002+ |
@@ -94,12 +94,15 @@ period, post a balanced entry, read it in the journal, reverse it, and see the
 trial balance, profit and loss, balance sheet and audit trail move. Verified by
 driving a running server, not only by the test suite.
 
+The application builds and tests green: 440 tests across 29 files against real
+postgres:14. tsc, eslint, and next build are all clean.
+
 What is still **not** true:
 
 - **Nothing is deployed.** There is no environment, no domain, no TLS
   termination, no backups, no migration runbook. It runs on a development pod.
 - **No real user has ever used it.** There is no customer data of any kind.
-- **No sales, purchase, banking or document module exists** — see the rows
+- **Sales and banking modules have backend service layers implemented but no API routes, UI pages, or tests. Procurement was removed (WIP with no schema).** — see the rows
   above. This is a general ledger, not yet an accounting product.
 - **There is no styling**, so "usable" means reachable and correct, not
   pleasant.

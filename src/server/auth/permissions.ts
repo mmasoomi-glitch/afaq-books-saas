@@ -27,13 +27,17 @@ export type Action =
   | "procurement.report.read"
   | "sales.customer.create"
   | "sales.customer.read"
+  | "sales.customer.update"
+  | "sales.customer.delete"
   | "sales.invoice.create"
+  | "sales.invoice.read"
   | "sales.invoice.post"
   | "sales.invoice.cancel"
   | "sales.payment.create"
   | "sales.payment.apply"
   | "sales.creditNote.create"
   | "sales.creditNote.apply"
+  | "sales.creditNote.expire"
   | "sales.report.read"
   | "banking.accounts.create"
   | "banking.accounts.read"
@@ -88,17 +92,21 @@ const BOOKKEEPER_ACTIONS: readonly Action[] = [
   "banking.rules.delete",
   "sales.customer.create",
   "sales.customer.read",
+  "sales.customer.update",
+  "sales.customer.delete",
   "sales.invoice.create",
   "sales.payment.create",
 ];
 
 const APPROVER_ACTIONS: readonly Action[] = [
   ...BOOKKEEPER_ACTIONS,
+  "sales.invoice.read",
   "sales.invoice.post",
   "sales.invoice.cancel",
   "sales.payment.apply",
   "sales.creditNote.create",
   "sales.creditNote.apply",
+  "sales.creditNote.expire",
 ];
 
 /**
@@ -127,13 +135,17 @@ const ACCOUNTANT_ACTIONS: readonly Action[] = [
   "procurement.report.read",
   "sales.customer.create",
   "sales.customer.read",
+  "sales.customer.update",
+  "sales.customer.delete",
   "sales.invoice.create",
+  "sales.invoice.read",
   "sales.invoice.post",
   "sales.invoice.cancel",
   "sales.payment.create",
   "sales.payment.apply",
   "sales.creditNote.create",
   "sales.creditNote.apply",
+  "sales.creditNote.expire",
   "sales.report.read",
 ];
 

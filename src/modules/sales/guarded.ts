@@ -85,7 +85,7 @@ export async function guardedUpdateCustomer(
   customerId: string,
   input: UpdateCustomerInput,
 ): Promise<CustomerSummary> {
-  assertCanDo(scope, "sales.customer.create");
+  assertCanDo(scope, "sales.customer.update");
   return updateCustomer(toLedgerScope(scope), customerId, input);
 }
 
@@ -93,7 +93,7 @@ export async function guardedDeactivateCustomer(
   scope: OrgScope,
   customerId: string,
 ): Promise<CustomerSummary> {
-  assertCanDo(scope, "sales.customer.create");
+  assertCanDo(scope, "sales.customer.delete");
   return deactivateCustomer(toLedgerScope(scope), customerId);
 }
 
@@ -111,7 +111,7 @@ export async function guardedGetInvoice(
   scope: OrgScope,
   invoiceId: string,
 ): Promise<InvoiceSummary | null> {
-  assertCanDo(scope, "sales.customer.read");
+  assertCanDo(scope, "sales.invoice.read");
   return getInvoice(toLedgerScope(scope), invoiceId);
 }
 
@@ -119,7 +119,7 @@ export async function guardedListInvoices(
   scope: OrgScope,
   filters?: InvoiceFilters,
 ): Promise<InvoiceSummary[]> {
-  assertCanDo(scope, "sales.customer.read");
+  assertCanDo(scope, "sales.invoice.read");
   return listInvoices(toLedgerScope(scope), filters);
 }
 
@@ -218,7 +218,7 @@ export async function guardedExpireCreditNote(
   scope: OrgScope,
   creditNoteId: string,
 ): Promise<void> {
-  assertCanDo(scope, "sales.creditNote.create");
+  assertCanDo(scope, "sales.creditNote.expire");
   return expireCreditNote(toLedgerScope(scope), creditNoteId);
 }
 

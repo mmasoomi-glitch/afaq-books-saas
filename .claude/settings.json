@@ -28,8 +28,8 @@
   },
   "permissions": {
     "deny": [
-      "Bash(git push:* origin main*)",
-      "Bash(git push:* origin develop*)",
+      "Bash(git push* origin main*)",
+      "Bash(git push* origin develop*)",
       "Bash(git push --force:*)",
       "Bash(git push --force-with-lease:*)",
       "Bash(git push -f:*)",

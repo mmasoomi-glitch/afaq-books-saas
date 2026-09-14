@@ -1,14 +1,14 @@
 -- Sales / A/R module
 
-CREATE TYPE "sales_customer_payment_method" AS ENUM (
+CREATE TYPE "SalesCustomerPaymentMethod" AS ENUM (
   'WIRE', 'CHECK', 'CREDIT_CARD', 'CASH', 'ONLINE', 'CONNECTOR'
 );
 
-CREATE TYPE "sales_invoice_status" AS ENUM (
+CREATE TYPE "SalesInvoiceStatus" AS ENUM (
   'DRAFT', 'SENT', 'PARTIAL', 'PAID', 'OVERDUE', 'CANCELLED'
 );
 
-CREATE TYPE "sales_credit_note_status" AS ENUM (
+CREATE TYPE "SalesCreditNoteStatus" AS ENUM (
   'DRAFT', 'ISSUED', 'APPLIED', 'EXPIRED'
 );
 
@@ -62,7 +62,7 @@ CREATE TABLE "invoices" (
   "due_date" DATE NOT NULL,
   "currency" CHAR(3) NOT NULL,
   "fx_rate" NUMERIC(18,8) NOT NULL DEFAULT 1,
-  "status" "sales_invoice_status" NOT NULL DEFAULT 'DRAFT',
+  "status" "SalesInvoiceStatus" NOT NULL DEFAULT 'DRAFT',
   "subtotal" NUMERIC(18,4) NOT NULL DEFAULT 0,
   "tax_amount" NUMERIC(18,4) NOT NULL DEFAULT 0,
   "total_amount" NUMERIC(18,4) NOT NULL DEFAULT 0,
@@ -106,7 +106,7 @@ CREATE TABLE "customer_payments" (
   "amount" NUMERIC(18,4) NOT NULL DEFAULT 0,
   "currency" CHAR(3) NOT NULL,
   "fx_rate" NUMERIC(18,8) NOT NULL DEFAULT 1,
-  "method" "sales_customer_payment_method" NOT NULL,
+  "method" "SalesCustomerPaymentMethod" NOT NULL,
   "reference" TEXT,
   "memo" TEXT,
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT NOW(),
@@ -139,7 +139,7 @@ CREATE TABLE "credit_notes" (
   "remaining_amount" NUMERIC(18,4) NOT NULL DEFAULT 0,
   "reason" TEXT,
   "memo" TEXT,
-  "status" "sales_credit_note_status" NOT NULL DEFAULT 'DRAFT',
+  "status" "SalesCreditNoteStatus" NOT NULL DEFAULT 'DRAFT',
   "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT NOW(),
   "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT NOW()
 );

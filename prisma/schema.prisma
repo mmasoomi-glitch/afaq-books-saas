@@ -133,8 +133,8 @@ model JournalLine {
   journalEntryId  String        @map("journal_entry_id") @db.Uuid
   accountId       String        @map("account_id") @db.Uuid
   lineNumber      Int           @map("line_number")
-  debit           Decimal       @default(0) @db.Decimal(18, 4)
-  credit          Decimal       @default(0) @db.Decimal(18, 4)
+  debit           Decimal       @default(0) @map("debit") @db.Decimal(18, 4)
+  credit          Decimal       @default(0) @map("credit") @db.Decimal(18, 4)
   currency        String        @db.Char(3)
   fxRate          Decimal       @default(1) @map("fx_rate") @db.Decimal(18, 8)
   reportingAmount Decimal       @map("reporting_amount") @db.Decimal(18, 4)
@@ -525,8 +525,8 @@ model CreditNote {
   creditNoteNumber Int?                @map("credit_note_number")
   issueDate        DateTime            @map("issue_date") @db.Date
   currency         String              @db.Char(3)
-  totalAmount      Decimal             @default(0) @db.Decimal(18, 4)
-  remainingAmount  Decimal             @default(0) @db.Decimal(18, 4)
+  totalAmount      Decimal             @default(0) @map("total_amount") @db.Decimal(18, 4)
+  remainingAmount  Decimal             @default(0) @map("remaining_amount") @db.Decimal(18, 4)
   reason           String?
   memo             String?
   status           SalesCreditNoteStatus @default(DRAFT)
@@ -550,9 +550,9 @@ model CreditNoteLine {
   lineNumber     Int       @map("line_number")
   description    String
   accountId      String    @map("account_id") @db.Uuid
-  quantity       Decimal   @default(0) @db.Decimal(18, 4)
-  unitPrice      Decimal   @default(0) @db.Decimal(18, 4)
-  lineTotal      Decimal   @default(0) @db.Decimal(18, 4)
+  quantity       Decimal   @default(0) @map("quantity") @db.Decimal(18, 4)
+  unitPrice      Decimal   @default(0) @map("unit_price") @db.Decimal(18, 4)
+  lineTotal      Decimal   @default(0) @map("line_total") @db.Decimal(18, 4)
 
   creditNote     CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
   account        Account    @relation(fields: [accountId], references: [id], onDelete: Restrict)

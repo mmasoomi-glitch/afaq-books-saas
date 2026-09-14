@@ -97,8 +97,16 @@ const BOOKKEEPER_ACTIONS: readonly Action[] = [
   "sales.customer.update",
   "sales.customer.delete",
   "sales.invoice.create",
+  "sales.invoice.read",
+  "sales.invoice.post",
+  "sales.invoice.cancel",
   "sales.payment.create",
   "sales.payment.read",
+  "sales.payment.apply",
+  "sales.creditNote.create",
+  "sales.creditNote.read",
+  "sales.creditNote.apply",
+  "sales.creditNote.expire",
   "sales.report.read",
 ];
 

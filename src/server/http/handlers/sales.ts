@@ -180,7 +180,7 @@ export function getCustomerHandler(customerId: string): ScopedHandler {
 export function listCustomersHandler(): ScopedHandler {
   return guarded(async (req, scope) => {
     const customers = await guardedListCustomers(scope);
-    return json(200, customers);
+    return json(200, { customers });
   });
 }
 
@@ -363,7 +363,7 @@ export function listInvoicesHandler(): ScopedHandler {
     if (customerId !== undefined) filters.customerId = customerId;
 
     const invoices = await guardedListInvoices(scope, filters);
-    return json(200, invoices);
+    return json(200, { invoices });
   });
 }
 
@@ -398,16 +398,16 @@ export function voidInvoiceHandler(invoiceId: string): ScopedHandler {
 // ── Payments ───────────────────────────────────────────────────────────
 
 /** `POST /api/[orgSlug]/payments` — create a payment. */
-export function createPaymentHandler(): ScopedHandler {
-  return guarded(async (req, scope) => {
-    const customerId = readString(req.body, "customerId");
-    const invoiceId = readString(req.body, "invoiceId");
-    const paymentDateRaw = readString(req.body, "paymentDate");
-    const amountRaw = readString(req.body, "amount");
-    const currency = readString(req.body, "currency");
-    const exchangeRate = readString(req.body, "exchangeRate");
-    const methodRaw = readString(req.body, "method");
-    const reference = readString(req.body, "reference");
+ export function createPaymentHandler(): ScopedHandler {
+   return guarded(async (req, scope) => {
+     const customerId = readString(req.body, "customerId");
+     const invoiceId = readString(req.body, "invoiceId");
+     const paymentDateRaw = readString(req.body, "paymentDate");
+     const amountRaw = Object.getOwnPropertyDescriptor(req.body, "amount")?.value;
+     const currency = readString(req.body, "currency") ?? "USD";
+     const exchangeRate = Object.getOwnPropertyDescriptor(req.body, "exchangeRate")?.value;
+     const methodRaw = readString(req.body, "method");
+     const reference = readString(req.body, "reference");
     const memo = readString(req.body, "memo");
 
     if (

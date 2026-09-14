@@ -34,7 +34,21 @@ export type Action =
   | "sales.payment.apply"
   | "sales.creditNote.create"
   | "sales.creditNote.apply"
-  | "sales.report.read";
+  | "sales.report.read"
+  | "banking.accounts.create"
+  | "banking.accounts.read"
+  | "banking.accounts.update"
+  | "banking.transactions.create"
+  | "banking.transactions.read"
+  | "banking.transactions.update"
+  | "banking.reconciliation.create"
+  | "banking.reconciliation.read"
+  | "banking.reconciliation.update"
+  | "banking.rules.create"
+  | "banking.rules.read"
+  | "banking.rules.update"
+  | "banking.rules.delete"
+  | "banking.statements.read";
 
 /**
  * `member.read` sits with VIEWER deliberately. Knowing who else is in an
@@ -50,6 +64,11 @@ const VIEWER_ACTIONS: readonly Action[] = [
   "ledger.account.read",
   "report.read",
   "member.read",
+  "banking.accounts.read",
+  "banking.transactions.read",
+  "banking.reconciliation.read",
+  "banking.rules.read",
+  "banking.statements.read",
 ];
 
 const BOOKKEEPER_ACTIONS: readonly Action[] = [
@@ -58,6 +77,15 @@ const BOOKKEEPER_ACTIONS: readonly Action[] = [
   "ledger.period.create",
   "ledger.post",
   "ledger.reverse",
+  "banking.accounts.create",
+  "banking.accounts.update",
+  "banking.transactions.create",
+  "banking.transactions.update",
+  "banking.reconciliation.create",
+  "banking.reconciliation.update",
+  "banking.rules.create",
+  "banking.rules.update",
+  "banking.rules.delete",
   "sales.customer.create",
   "sales.customer.read",
   "sales.invoice.create",

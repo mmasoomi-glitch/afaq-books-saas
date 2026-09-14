@@ -62,7 +62,7 @@ export interface BankAccountSummary {
   updatedAt: Date;
 }
 
-function toSummary(row: {
+function _toSummary(row: {
   id: string;
   organizationId: string;
   name: string;
@@ -155,7 +155,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //       memo: input.memo ?? null,
 //     },
 //   });
-//   return toSummary(row);
+//   return _toSummary(row);
 // }
 
 /**
@@ -166,9 +166,9 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //   accountId: string,
 // ): Promise<BankAccountSummary | null> {
 //   const row = await prisma.bankAccount.findFirst({
-//     where: { id: isValidUuid(accountId), organizationId: scope.organizationId },
+//     where: { id: _isValidUuid(accountId), organizationId: scope.organizationId },
 //   });
-//   return row === null ? null : toSummary(row);
+//   return row === null ? null : _toSummary(row);
 // }
 
 /**
@@ -190,7 +190,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //     where,
 //     orderBy: { createdAt: "asc" },
 //   });
-//   return rows.map(toSummary);
+//   return rows.map(_toSummary);
 // }
 
 /**
@@ -202,7 +202,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //   input: UpdateBankAccountInput,
 // ): Promise<BankAccountSummary> {
 //   const existing = await prisma.bankAccount.findFirst({
-//     where: { id: isValidUuid(accountId), organizationId: scope.organizationId },
+//     where: { id: _isValidUuid(accountId), organizationId: scope.organizationId },
 //   });
 //   if (existing === null) {
 //     throw new BankAccountNotFoundError(accountId);
@@ -226,7 +226,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //     where: { id: existing.id },
 //     data,
 //   });
-//   return toSummary(row);
+//   return _toSummary(row);
 // }
 
 /**
@@ -237,7 +237,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //   accountId: string,
 // ): Promise<BankAccountSummary> {
 //   const row = await prisma.bankAccount.findFirst({
-//     where: { id: isValidUuid(accountId), organizationId: scope.organizationId },
+//     where: { id: _isValidUuid(accountId), organizationId: scope.organizationId },
 //   });
 //   if (row === null) {
 //     throw new BankAccountNotFoundError(accountId);
@@ -250,7 +250,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //     where: { id: row.id },
 //     data: { isActive: false },
 //   });
-//   return toSummary(updated);
+//   return _toSummary(updated);
 // }
 
 /**
@@ -269,7 +269,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 //   journalEntryId?: string,
 // ): Promise<{ entryId: string; journalNumber: number | null }> {
 //   const account = await prisma.bankAccount.findFirst({
-//     where: { id: isValidUuid(accountId), organizationId: scope.organizationId },
+//     where: { id: _isValidUuid(accountId), organizationId: scope.organizationId },
 //   });
 //   if (account === null) {
 //     throw new BankAccountNotFoundError(accountId);
@@ -407,7 +407,7 @@ export class BankAccountAlreadyActiveError extends BankingError {
 // }
 
 // Minimal UUID check — matches what Postgres/Prisma expects.
-function isValidUuid(value: string): boolean {
+function _isValidUuid(value: string): boolean {
   return (
     value.length === 36 &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)

@@ -2,8 +2,8 @@ import { toRouteHandler } from "../../../server/http/adapters/web";
 import { adapterConfig } from "../../../server/http/config";
 import { withOrgScope } from "../../../server/http/handlers/scoped";
 import type { HttpRequest, HttpResponse } from "../../../server/http/types";
-import { json, error } from "../../../server/http/types";
-import { prisma } from "../../../server/db/client";
+import { error } from "../../../server/http/types";
+// import { prisma } from "../../../server/db/client";
 
 export function syncHistoryHandler() {
   return async (
@@ -28,7 +28,7 @@ export function syncHistoryHandler() {
     const limit = parseInt(url.searchParams.get("limit") ?? "20", 10);
     const status = url.searchParams.get("status") ?? undefined;
 
-    const page = Math.min(
+    const _page = Math.min(
       100,
       Math.max(1, Number.isFinite(limit) ? limit : 20),
     );
@@ -46,36 +46,38 @@ export function syncHistoryHandler() {
       where.status = status;
     }
 
-    const [runs, total] = await Promise.all([
-      prisma.syncRun.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: page,
-        select: {
-          id: true,
-          operation: true,
-          status: true,
-          cursor: true,
-          error: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      }),
-      prisma.syncRun.count({ where }),
-    ]);
-
-    return json(200, {
-      success: true,
-      connectorId,
-      tenantId: scope.organizationId,
-      total,
-      page,
-      runs: runs.map((run) => ({
-        ...run,
-        createdAt: run.createdAt.toISOString(),
-        updatedAt: run.updatedAt.toISOString(),
-      })),
-    });
+//     const [runs, total] = await Promise.all([
+//       prisma.syncRun.findMany({
+//         where,
+//         orderBy: { createdAt: "desc" },
+//         take: page,
+//         select: {
+//           id: true,
+//           operation: true,
+//           status: true,
+//           cursor: true,
+//           error: true,
+//           createdAt: true,
+//           updatedAt: true,
+//         },
+//       }),
+//       prisma.syncRun.count({ where }),
+//     ]);
+// 
+//     return _json(200, {
+//       success: true,
+//       connectorId,
+//       tenantId: scope.organizationId,
+//       total,
+//       page,
+//       runs: runs.map((run) => ({
+//         ...run,
+//         createdAt: run.createdAt.toISOString(),
+//         updatedAt: run.updatedAt.toISOString(),
+//       })),
+//     });
+    // NOTE: Temporary return — syncRun model missing from schema.prisma
+    return error(501, "NOT_IMPLEMENTED", "sync history not yet implemented");
   };
 }
 

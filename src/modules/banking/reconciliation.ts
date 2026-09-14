@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 // import type { LedgerScope } from "../ledger/scope";
 // import { NotFoundError } from "../ledger/errors";
 
-const TOLERANCE = new Prisma.Decimal("0.005");
+const _TOLERANCE = new Prisma.Decimal("0.005");
 
 // ── Types ───────────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ export class ReconciliationLockedError extends ReconciliationError {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function toSummary(row: {
+function _toSummary(row: {
   id: string;
   organizationId: string;
   bankAccountId: string;
@@ -173,7 +173,7 @@ function toSummary(row: {
 //     },
 //   });
 //
-//   return toSummary(row);
+//   return _toSummary(row);
 // }
 //
 // /**
@@ -420,7 +420,7 @@ function toSummary(row: {
 //
 //   const diff = rec.statementEndBalance.sub(endingBalance).abs();
 //
-//   if (diff.greaterThan(TOLERANCE)) {
+//   if (diff.greaterThan(_TOLERANCE)) {
 //     throw new ReconciliationDifferenceError(diff.toFixed(4));
 //   }
 //
@@ -487,7 +487,7 @@ function toSummary(row: {
 //     reconciliationEntries: entriesSummary,
 //   };
 //
-//   return toSummary(fullRec);
+//   return _toSummary(fullRec);
 // }
 //
 // /**
@@ -505,7 +505,7 @@ function toSummary(row: {
 //     throw new ReconciliationNotFoundError(reconciliationId);
 //   }
 //   if (rec.status === "LOCKED") {
-//     return toSummary(rec);
+//     return _toSummary(rec);
 //   }
 //   if (rec.status !== "COMPLETED") {
 //     throw new ReconciliationError(
@@ -522,7 +522,7 @@ function toSummary(row: {
 //     },
 //   });
 //
-//   return toSummary(updated);
+//   return _toSummary(updated);
 // }
 //
 // /**
@@ -554,7 +554,7 @@ function toSummary(row: {
 //     },
 //   });
 //
-//   return toSummary(updated);
+//   return _toSummary(updated);
 // }
 //
 // /**

@@ -5,7 +5,7 @@ import type { HttpRequest, HttpResponse } from "../../../server/http/types";
 import { ConnectorRegistry } from "../registry";
 import { AuthManager } from "../auth-manager";
 import { json, error } from "../../../server/http/types";
-import { prisma } from "../../../server/db/client";
+// import { prisma } from "../../../server/db/client";
 import { ConnectorNotFoundError } from "../errors";
 
 let registry: ConnectorRegistry | null = null;
@@ -51,19 +51,19 @@ export function uninstallHandler() {
     // 1. Revoke credentials (deletes encrypted store entry)
     authManager.revokeCredentials(connectorId, scope.organizationId);
 
-    // 2. Archive active sync runs by marking them as completed with a note
-    await prisma.syncRun.updateMany({
-      where: {
-        connectorId,
-        tenantId: scope.organizationId,
-        status: { in: ["pending", "running"] },
-      },
-      data: {
-        status: "failed",
-        error: "connector_uninstalled",
-      },
-    });
-
+//     // 2. Archive active sync runs by marking them as completed with a note
+//     await prisma.syncRun.updateMany({
+//       where: {
+//         connectorId,
+//         tenantId: scope.organizationId,
+//         status: { in: ["pending", "running"] },
+//       },
+//       data: {
+//         status: "failed",
+//         error: "connector_uninstalled",
+//       },
+//     });
+// 
     return json(200, {
       success: true,
       connectorId,

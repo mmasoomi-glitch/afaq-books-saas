@@ -11,11 +11,12 @@ import type {
   ReconciliationSummary,
   ReconciliationEntrySummary,
 } from "./reconciliation";
-import type {
-  CategorizationRuleSummary,
-  CreateRuleInput,
-  UpdateRuleInput,
-} from "./categorization-rules";
+// NOTE: commented out — all exports from categorization-rules.ts are commented out (BankFeedRule model missing from schema.prisma)
+// import type {
+//   CategorizationRuleSummary,
+//   CreateRuleInput,
+//   UpdateRuleInput,
+// } from "./categorization-rules";
 import type {
   BankStatementSummary,
   BankStatementFilters,
@@ -51,13 +52,14 @@ export interface GuardedReconciliation {
   getReconciliationEntries(reconciliationId: string): Promise<ReconciliationEntrySummary[]>;
 }
 
-export interface GuardedCategorizationRules {
-  createRule(data: CreateRuleInput): Promise<CategorizationRuleSummary>;
-  updateRule(id: string, data: UpdateRuleInput): Promise<CategorizationRuleSummary>;
-  deleteRule(id: string): Promise<void>;
-  listRules(bankAccountId?: string): Promise<CategorizationRuleSummary[]>;
-  testRule(id: string, description: string): Promise<{ matches: boolean; description: string; actionType: string; actionTarget: string }>;
-}
+// NOTE: commented out — types from categorization-rules are commented out
+// export interface GuardedCategorizationRules {
+//   createRule(data: CreateRuleInput): Promise<CategorizationRuleSummary>;
+//   updateRule(id: string, data: UpdateRuleInput): Promise<CategorizationRuleSummary>;
+//   deleteRule(id: string): Promise<void>;
+//   listRules(bankAccountId?: string): Promise<CategorizationRuleSummary[]>;
+//   testRule(id: string, description: string): Promise<{ matches: boolean; description: string; actionType: string; actionTarget: string }>;
+// }
 
 export interface GuardedBankStatements {
   generateBankStatement(bankAccountId: string, filters?: BankStatementFilters): Promise<BankStatementSummary | null>;
@@ -70,7 +72,8 @@ export type GuardedBankingModule = {
   "bank-accounts": GuardedBankAccounts;
   "bank-transactions": GuardedBankTransactions;
   reconciliation: GuardedReconciliation;
-  "categorization-rules": GuardedCategorizationRules;
+  // NOTE: "categorization-rules" commented out (types from categorization-rules.ts are commented out)
+  // "categorization-rules": GuardedCategorizationRules;
   "bank-statements": GuardedBankStatements;
 };
 

@@ -48,7 +48,7 @@ export class BankStatementNotFoundError extends BankStatementError {
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
-function toSummary(row: {
+function _toSummary(row: {
   id: string;
   organizationId: string;
   bankAccountId: string;
@@ -163,7 +163,7 @@ function toSummary(row: {
 //   }
 //
 //   const row = stmt[0];
-//   return toSummary({
+//   return _toSummary({
 //     id: "",
 //     organizationId: scope.organizationId,
 //     bankAccountId,

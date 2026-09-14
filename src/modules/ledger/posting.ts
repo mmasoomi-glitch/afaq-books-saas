@@ -137,7 +137,7 @@ function assertBalanced(lines: NormalisedLine[]): void {
  * NOT MAX()+1: under concurrency two transactions would read the same maximum
  * and produce a duplicate or a gap. The row lock serialises them — the second
  * transaction blocks until the first commits, then reads the updated value.
-  */
+   */
 export async function nextJournalNumber(
   tx: TxClient,
   organizationId: string,

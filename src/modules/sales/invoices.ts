@@ -369,7 +369,6 @@ export async function postInvoice(
         currency: invoice.currency,
         sourceModule: "sales",
         sourceId: invoice.id,
-        journalNumber,
       },
     });
 
@@ -391,10 +390,11 @@ export async function postInvoice(
       })),
     });
 
-    // Post the entry (set postedAt/postedBy to activate it).
+    // Activate: set journalNumber + postedAt together (satisfies je_number_iff_posted).
     await tx.journalEntry.update({
       where: { id: journalEntry.id },
       data: {
+        journalNumber,
         postedAt: new Date(),
         postedBy: scope.userId,
       },
@@ -404,7 +404,7 @@ export async function postInvoice(
     await tx.invoice.update({
       where: { id: invoiceId },
       data: {
-        status: "SENT",
+        status: "ISSUED",
         amountDue: invoice.totalAmount,
       },
     });

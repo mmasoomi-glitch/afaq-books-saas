@@ -257,7 +257,6 @@ export async function applyPayment(
         currency: payment.currency,
         sourceModule: "sales",
         sourceId: paymentId,
-        journalNumber,
       },
     });
 
@@ -300,9 +299,11 @@ export async function applyPayment(
       ],
     });
 
+    // Activate: set journalNumber + postedAt together.
     await tx.journalEntry.update({
       where: { id: journalEntry.id },
       data: {
+        journalNumber,
         postedAt: new Date(),
         postedBy: scope.userId,
       },

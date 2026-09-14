@@ -223,7 +223,6 @@ export async function issueCreditNote(
         currency: cn.currency,
         sourceModule: "sales",
         sourceId: creditNoteId,
-        journalNumber,
       },
     });
 
@@ -244,9 +243,11 @@ export async function issueCreditNote(
       })),
     });
 
+    // Activate: set journalNumber + postedAt together.
     await tx.journalEntry.update({
       where: { id: journalEntry.id },
       data: {
+        journalNumber,
         postedAt: new Date(),
         postedBy: scope.userId,
       },
@@ -424,7 +425,6 @@ export async function expireCreditNote(
             currency: cn.currency,
             sourceModule: "sales",
             sourceId: creditNoteId,
-            journalNumber,
           },
         });
 
@@ -444,9 +444,11 @@ export async function expireCreditNote(
           })),
         });
 
+        // Activate: set journalNumber + postedAt together.
         await tx.journalEntry.update({
           where: { id: reversalEntry.id },
           data: {
+            journalNumber,
             postedAt: new Date(),
             postedBy: scope.userId,
           },

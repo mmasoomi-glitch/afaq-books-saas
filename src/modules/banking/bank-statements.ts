@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "../../server/db/client";
-import type { LedgerScope } from "../ledger/scope";
-import { NotFoundError } from "../ledger/errors";
+// NOTE: prisma, LedgerScope, and NotFoundError are unused here because all
+// service functions are commented out (bankAccount/bankStatement models
+// missing from schema.prisma). Kept for when migration is applied.
+// import { prisma } from "../../server/db/client";
+// import type { LedgerScope } from "../ledger/scope";
+// import { NotFoundError } from "../ledger/errors";
 
 // ── Types ───────────────────────────────────────────────────────────────
 
